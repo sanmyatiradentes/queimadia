@@ -21,3 +21,5 @@ motor/chave_ssh.pub
 .vercel
 public/dados/
 .env*
+motor/node_modules/
+motor/package*.json
