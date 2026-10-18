@@ -2,16 +2,13 @@
 pelo QueimadIA. O modelo só organiza e explica o que foi medido: não acrescenta
 fatos, não atribui autoria e declara as limitações.
 
-Provedor (o primeiro com chave configurada no ambiente):
-  GEMINI_API_KEY     → Google Gemini (padrão do NIPED; modelo em GEMINI_MODELO)
-  ANTHROPIC_API_KEY  → Claude (alternativa; modelo em QUEIMADIA_MODELO)
+Provedor: Google Gemini. Chave em GEMINI_API_KEY; modelo em GEMINI_MODELO.
 """
 import json
 import os
 
 import requests
 
-MODELO = os.environ.get("QUEIMADIA_MODELO", "claude-opus-5-5")
 GEMINI_MODELO = os.environ.get("GEMINI_MODELO", "gemini-2.5-flash")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 
@@ -26,19 +23,8 @@ Regras:
 - Estrutura: 1. Objeto; 2. Dados e método (fontes, satélites, período, critério de quebra); 3. Resultados (série de NDVI, quebra e intervalo de data, dNBR e área queimada, indicadores do evento); 4. Interpretação técnica; 5. Limitações; 6. Diligências sugeridas (ex.: perícia de local, consulta ao CAR/SIGEF, embargos, imagens de maior resolução).
 - Texto corrido em português, sem markdown, sem tabelas. Máximo de 700 palavras."""
 
-_cliente = None
-
-
 class ParecerIndisponivel(Exception):
     pass
-
-
-def cliente():
-    global _cliente
-    if _cliente is None:
-        import anthropic
-        _cliente = anthropic.Anthropic(timeout=180.0)
-    return _cliente
 
 
 def _resumir(dados):
@@ -59,11 +45,9 @@ def _resumir(dados):
 def gerar(dados):
     msg = json.dumps(_resumir(dados), ensure_ascii=False)
     pedido = f"Dados da análise (JSON):\n{msg}\n\nRedija o parecer técnico preliminar."
-    if os.environ.get("GEMINI_API_KEY"):
-        return _gemini(pedido)
-    if os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN"):
-        return _claude(pedido)
-    raise ParecerIndisponivel("chave de IA não configurada (GEMINI_API_KEY)")
+    if not os.environ.get("GEMINI_API_KEY"):
+        raise ParecerIndisponivel("chave do Gemini não configurada (GEMINI_API_KEY)")
+    return _gemini(pedido)
 
 
 def _gemini(pedido):
@@ -89,31 +73,3 @@ def _gemini(pedido):
     if not texto:
         raise ParecerIndisponivel("resposta vazia do modelo")
     return {"texto": texto, "modelo": d.get("modelVersion", GEMINI_MODELO)}
-
-
-def _claude(pedido):
-    import anthropic
-    try:
-        resp = cliente().beta.messages.create(
-            model=MODELO,
-            max_tokens=16000,
-            system=SISTEMA,
-            output_config={"effort": "medium"},
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            messages=[{"role": "user", "content": pedido}],
-        )
-    except anthropic.RateLimitError:
-        raise ParecerIndisponivel("limite de uso da API atingido; tente de novo em alguns minutos")
-    except anthropic.AuthenticationError:
-        raise ParecerIndisponivel("chave da API Claude inválida")
-    except anthropic.APIStatusError as e:
-        raise ParecerIndisponivel(f"erro da API Claude ({e.status_code})")
-    except anthropic.APIConnectionError:
-        raise ParecerIndisponivel("sem conexão com a API Claude")
-    if resp.stop_reason == "refusal":
-        raise ParecerIndisponivel("o modelo recusou gerar este parecer")
-    texto = "".join(b.text for b in resp.content if b.type == "text").strip()
-    if not texto:
-        raise ParecerIndisponivel("resposta vazia do modelo")
-    return {"texto": texto, "modelo": resp.model}

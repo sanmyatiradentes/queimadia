@@ -10,4 +10,3 @@ pystac-client==0.8.5
 planetary-computer==1.0.0
 pillow==11.0.0
 requests==2.32.3
-anthropic  # opcional (parecer com Claude); o padrão é Gemini via HTTP
