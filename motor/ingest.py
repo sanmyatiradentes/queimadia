@@ -39,7 +39,23 @@ def salvar_status(**kw):
 def _get(url, **kw):
     r = S.get(url, timeout=kw.pop("timeout", 120), **kw)
     r.raise_for_status()
+    # o INPE não informa o charset; os CSV vêm em UTF-8 (sem isso, "MAUÉS" vira "MAUÃ‰S")
+    try:
+        r.content.decode("utf-8")
+        r.encoding = "utf-8"
+    except UnicodeDecodeError:
+        r.encoding = "latin-1"
     return r
+
+
+def consertar_acentos(texto):
+    """Desfaz textos UTF-8 que foram lidos como Latin-1 ("MAUÃ\x89S" → "MAUÉS")."""
+    if not isinstance(texto, str) or "Ã" not in texto and "Â" not in texto:
+        return texto
+    try:
+        return texto.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return texto
 
 
 def _listar(url, padrao):
@@ -85,7 +101,9 @@ def _padronizar(df, fonte):
 
 def carregar_recentes():
     if RECENTES.exists():
-        return pd.read_csv(RECENTES)
+        df = pd.read_csv(RECENTES)
+        df["municipio"] = df["municipio"].map(consertar_acentos)
+        return df
     return pd.DataFrame(columns=COLS)
 
 

@@ -1,0 +1,2 @@
+libexpat 2.8.1 (conda-forge, licença MIT), carregada antes do rasterio na função da Vercel,
+cujo ambiente Python não traz essa biblioteca do sistema.

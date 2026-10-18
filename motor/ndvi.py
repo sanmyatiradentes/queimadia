@@ -20,12 +20,26 @@ import io
 import json
 import math
 import os
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 from statistics import median
 
 import numpy as np
+
+# A função Python da Vercel não tem a libexpat do sistema, exigida pelo GDAL do
+# rasterio. Carregamos a cópia em motor/lib antes de importar o rasterio.
+if sys.platform.startswith("linux"):
+    import ctypes
+    from pathlib import Path as _P
+    _expat = _P(__file__).resolve().parent / "lib" / "libexpat.so.1"
+    if _expat.exists():
+        try:
+            ctypes.CDLL("libexpat.so.1")
+        except OSError:
+            ctypes.CDLL(str(_expat), mode=ctypes.RTLD_GLOBAL)
+
 import planetary_computer as pc
 import pystac_client
 import rasterio

@@ -42,7 +42,9 @@ def carregar_focos():
     df["data"] = pd.to_datetime(df["data"].astype(str).str.strip())
     df["lat"] = df["lat"].astype(float)
     df["lon"] = df["lon"].astype(float)
-    df["municipio"] = df["municipio"].fillna("").astype(str).str.strip().str.title()
+    minusc = {"Da", "De", "Do", "Das", "Dos", "E"}
+    nome = lambda m: " ".join(p if i == 0 or p not in minusc else p.lower() for i, p in enumerate(m.title().split()))
+    df["municipio"] = df["municipio"].fillna("").astype(str).str.strip().map(ingest.consertar_acentos).map(nome)
     df["ano"] = df["data"].dt.year
     df = df.drop_duplicates(["lat", "lon", "satelite", "data"])
     df["ref"] = df["satelite"] == config.SAT_REFERENCIA
