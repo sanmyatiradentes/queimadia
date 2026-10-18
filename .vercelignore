@@ -1,0 +1,11 @@
+motor/dados
+motor/cache
+public/dados
+data
+out
+painel
+pipeline
+deploy
+.github
+.claude
+*.md

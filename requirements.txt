@@ -1,0 +1,9 @@
+# Dependências da função de análise na Vercel (leves)
+fastapi==0.115.6
+numpy==2.1.3
+rasterio==1.4.3
+pystac-client==0.8.5
+planetary-computer==1.0.0
+pillow==11.0.0
+requests==2.32.3
+anthropic  # opcional (parecer com Claude); o padrão é Gemini via HTTP

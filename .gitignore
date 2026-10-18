@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+motor/cache/
+motor/dados/estado/
+motor/dados/deter/
+public/dados/*.json
+.DS_Store
+motor/dados/areas/
+motor/dados/inpe/
+# protótipo inicial (copiado da sessão)
+/data/
+/out/
+motor/destino.conf
+motor/chave_ssh
+motor/chave_ssh.pub
+/painel/
+/pipeline/
+.claude/
+.vercel
+public/dados/
