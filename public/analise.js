@@ -42,7 +42,7 @@
     $("#aLat").value = r.area.lat; $("#aLon").value = r.area.lon; $("#aRaio").value = r.area.raio_m; $("#aLado").value = r.area.lado_m / 1000;
     [$("#aIni").value, $("#aFim").value] = r.periodo; [$("#aRefIni").value, $("#aRefFim").value] = r.linha_base;
     A.med = r.cenas; A.quebra = quebra(validas(), r.linha_base[0], r.linha_base[1]); A.dnbrRes = r.dnbr; A.pronta = r;
-    $("#aTitulo").textContent = `${r.evento.municipio} · evento ${id} · calculada em ${dBR(r.gerado_em)}`;
+    $("#aTitulo").textContent = `${A.evento.mun || r.evento.municipio} · evento ${id} · calculada em ${dBR(r.gerado_em)}`;
     prog(1, 1, `${r.n_validas} observações válidas de ${r.cenas.length} cenas · ${r.metodo}`);
     $("#aSerieC").hidden = false; serie(); kpis(); calculo();
     // galeria estática
@@ -69,6 +69,7 @@
       ? `<div style="white-space:pre-wrap;color:var(--texto);font-size:14.5px">${p.texto.replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]))}</div><p class="nota" style="margin-top:8px">Texto gerado por IA (${p.modelo}) a partir dos números acima. Revise antes de usar.</p>`
       : `Parecer por IA não gerado para este evento${p.indisponivel ? " (" + p.indisponivel + ")" : ""}.`;
     window.miniMapa();
+    window.rolarPara($("#aStatus"), true);
   };
 })();
   for (const g of ["#aProd", "#aIdx"]) $(g).addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return;
@@ -142,6 +143,7 @@
     $("#aStatus").hidden = false; ["#aSerieC", "#aQuebraC", "#aGalC", "#aDnbrC", "#aTabC", "#aParecerC"].forEach(s => $(s).hidden = true);
     $("#aKpis").innerHTML = ""; A.med = []; A.quebra = null;
     $("#aTitulo").textContent = `Análise em ${lat.toFixed(4)}, ${lon.toFixed(4)} · raio ${raio} m`;
+    window.rolarPara($("#aStatus"), true);
     try {
       prog(0, 1, "Buscando cenas no catálogo STAC…");
       const q = new URLSearchParams({lat, lon, inicio: $("#aIni").value, fim: $("#aFim").value, colecoes: cols.join(","), modo: $("#aModo").value, nuvem_max: $("#aNuvem").value});
@@ -160,6 +162,7 @@
       prog(1, 1, `Concluído: ${validas().length} observações válidas de ${A.cenas.length} cenas.`);
       serie(); kpis(); calculo(); galeria(); prepararDnbr(); tabela();
       $("#aParecerC").hidden = false;
+      window.rolarPara($("#aConclusao"));
     } catch (e) {
       prog(0, 1, "Erro: " + e.message);
     } finally { A.rodando = false; $("#aRodar").disabled = false; }
@@ -407,7 +410,7 @@
     $("#aLat").value = r.area.lat; $("#aLon").value = r.area.lon; $("#aRaio").value = r.area.raio_m; $("#aLado").value = r.area.lado_m / 1000;
     [$("#aIni").value, $("#aFim").value] = r.periodo; [$("#aRefIni").value, $("#aRefFim").value] = r.linha_base;
     A.med = r.cenas; A.quebra = quebra(validas(), r.linha_base[0], r.linha_base[1]); A.dnbrRes = r.dnbr; A.pronta = r;
-    $("#aTitulo").textContent = `${r.evento.municipio} · evento ${id} · calculada em ${dBR(r.gerado_em)}`;
+    $("#aTitulo").textContent = `${A.evento.mun || r.evento.municipio} · evento ${id} · calculada em ${dBR(r.gerado_em)}`;
     prog(1, 1, `${r.n_validas} observações válidas de ${r.cenas.length} cenas · ${r.metodo}`);
     $("#aSerieC").hidden = false; serie(); kpis(); calculo();
     // galeria estática
@@ -434,5 +437,6 @@
       ? `<div style="white-space:pre-wrap;color:var(--texto);font-size:14.5px">${p.texto.replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]))}</div><p class="nota" style="margin-top:8px">Texto gerado por IA (${p.modelo}) a partir dos números acima. Revise antes de usar.</p>`
       : `Parecer por IA não gerado para este evento${p.indisponivel ? " (" + p.indisponivel + ")" : ""}.`;
     window.miniMapa();
+    window.rolarPara($("#aStatus"), true);
   };
 })();

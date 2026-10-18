@@ -198,3 +198,6 @@ body:not(.estatico) .so-estatico{display:none!important}
 .glossario{margin:6px 0;display:grid;gap:6px;font-size:13.5px}
 .glossario dt{font-weight:700;color:var(--azul-escuro)}
 .glossario dd{margin:0 0 4px;color:var(--texto)}
+
+/* rolagem automática: deixa o alvo abaixo da barra fixa do topo */
+#ficha,#aStatus,#aConclusao,#abas,[data-painel]{scroll-margin-top:72px}

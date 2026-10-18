@@ -22,6 +22,19 @@ const IND_TXT = {
 const manaus = utc => { const d = new Date(utc.replace(" ", "T") + "Z"); d.setUTCHours(d.getUTCHours() - 4);
   return d.toISOString().slice(0, 16).replace("T", " "); };
 
+// leva a tela até o conteúdo que acabou de abrir (no celular ele fica longe do clique)
+function rolarPara(el, sempre) {
+  if (!el) return;
+  const estreito = matchMedia("(max-width:1100px)").matches;
+  const r = el.getBoundingClientRect();
+  if (!(sempre || estreito || r.top > innerHeight - 120 || r.top < 60)) return;
+  const alvo = Math.max(0, r.top + scrollY - 72), inicio = scrollY, vez = (rolarPara.vez = (rolarPara.vez || 0) + 1);
+  const suave = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  scrollTo({top: alvo, behavior: suave ? "smooth" : "auto"});
+  // plano B: se a rolagem suave não andar (aba em segundo plano, navegador antigo), salta direto
+  setTimeout(() => { if (vez === rolarPara.vez && Math.abs(scrollY - inicio) < 2 && Math.abs(alvo - inicio) > 2) scrollTo(0, alvo); }, 700);
+}
+window.rolarPara = rolarPara;
 function toast(msg, ms = 5000) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(t._t); t._t = setTimeout(() => t.hidden = true, ms); }
 
 async function json(url) { if (url.startsWith("dados/")) url = window.QUEIMADIA_DADOS + url.slice(6); const r = await fetch(url + (url.includes("?") ? "&" : "?") + "v=" + (Q.versao || Date.now())); if (!r.ok) throw new Error(url + " " + r.status); return r.json(); }
@@ -141,7 +154,7 @@ function fila() {
     + (f.length > 300 ? `<p class="nota" style="padding:10px 14px">Mostrando 300 de ${fmt(f.length)}. Refine os filtros ou veja todas em Ocorrências.</p>` : "")
     + (!f.length ? `<p class="nota" style="padding:14px">Nenhum evento com esses filtros. Reduza a pontuação mínima ou amplie o período.</p>` : "");
 }
-$("#fila").addEventListener("click", e => { const b = e.target.closest(".linha"); if (b) selecionar(b.dataset.id, true); });
+$("#fila").addEventListener("click", e => { const b = e.target.closest(".linha"); if (b) { selecionar(b.dataset.id, true); rolarPara($("#ficha")); } });
 
 // ------------------------------------------------------------ ficha
 function selecionar(id, voar) {
@@ -269,7 +282,7 @@ async function iniciarMapa() {
 
   const pop = new maplibregl.Popup({closeButton: false, offset: 8});
   for (const id of ["eventos", "alertas"]) {
-    m.on("click", id, ev => { if (Q.modoPonto) return; selecionar(ev.features[0].properties.id, false); });
+    m.on("click", id, ev => { if (Q.modoPonto) return; selecionar(ev.features[0].properties.id, false); rolarPara($("#ficha")); });
     m.on("mouseenter", id, ev => { m.getCanvas().style.cursor = "pointer"; const p = ev.features[0].properties;
       pop.setLngLat(ev.lngLat).setHTML(`<b>${esc(p.mun)}</b> · ${dBR(p.ini)}<br>Pontuação <b>${p.score}</b> · ${p.n} foco(s)`).addTo(m); });
     m.on("mouseleave", id, () => { m.getCanvas().style.cursor = ""; pop.remove(); });
@@ -347,7 +360,7 @@ function ocorrencias() {
 }
 $("#tabOcor").addEventListener("click", e => {
   const th = e.target.closest("th"); if (th) { const k = th.dataset.ordem; OC.dir = OC.ord === k ? -OC.dir : -1; OC.ord = k; return ocorrencias(); }
-  const tr = e.target.closest("tr[data-id]"); if (tr) { trocarAba("mapa"); selecionar(tr.dataset.id, true); }
+  const tr = e.target.closest("tr[data-id]"); if (tr) { trocarAba("mapa"); selecionar(tr.dataset.id, true); rolarPara($("#ficha"), true); }
 });
 $("#pagOcor").addEventListener("click", e => { const b = e.target.closest("button"); if (b) { OC.pag += +b.dataset.p; ocorrencias(); } });
 function baixar(nome, txt, tipo) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], {type: tipo})); a.download = nome; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
@@ -377,7 +390,7 @@ function tempoReal() {
     + rec.slice(0, 300).map(f => `<tr><td class="mono">${manaus(f[2])}</td><td>${esc(f[3])}</td><td>${esc(f[4])}</td><td class="n">${f[0]}</td><td class="n">${f[1]}</td></tr>`).join("") + "</tbody>";
   if (!$('[data-painel="temporeal"]').hidden) graficosTR();
 }
-$("#tabTR").addEventListener("click", e => { const tr = e.target.closest("tr[data-id]"); if (tr) { trocarAba("mapa"); selecionar(tr.dataset.id, true); } });
+$("#tabTR").addEventListener("click", e => { const tr = e.target.closest("tr[data-id]"); if (tr) { trocarAba("mapa"); selecionar(tr.dataset.id, true); rolarPara($("#ficha"), true); } });
 function graficosTR() {
   const porDia = d3.rollups(Q.focos, v => v.length, f => manaus(f[2]).slice(0, 10)).sort();
   barras("#gTRdia", porDia.map(([d, n]) => [dBR(d).slice(0, 5), n]), css("--s2"));
@@ -517,6 +530,7 @@ function trocarAba(a) {
   if (a === "mapa" && Q.mapa) Q.mapa.resize();
   if (a === "analise") { window.miniMapa?.(); window.listarProntas?.(); }
   try { history.replaceState(null, "", "#" + a); } catch (e) {}
+  if ($("#abas").getBoundingClientRect().top < 0) rolarPara($("#abas"), true);
 }
 $("#abas").addEventListener("click", e => { const a = e.target.closest("a[data-aba]"); if (a) trocarAba(a.dataset.aba); });
 window.trocarAba = trocarAba;
