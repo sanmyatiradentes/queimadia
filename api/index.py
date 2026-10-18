@@ -11,3 +11,9 @@ from motor.api_analise import router  # noqa: E402
 
 app = FastAPI(title="QueimadIA", docs_url="/api/docs", openapi_url="/api/openapi.json")
 app.include_router(router)
+
+
+@app.api_route("/{caminho:path}", methods=["GET", "POST"], include_in_schema=False)
+def _diagnostico(caminho: str):
+    from fastapi import HTTPException
+    raise HTTPException(404, f"rota não encontrada: /{caminho}")
