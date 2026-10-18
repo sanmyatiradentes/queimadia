@@ -145,8 +145,39 @@ def analisar(ev):
     return res
 
 
+def religar(eventos, idx):
+    """Liga análises cujo identificador não existe mais ao evento equivalente
+    (mesmo dia de início, a menos de 2 km) e renomeia os arquivos."""
+    import math
+    ids = {e["id"] for e in eventos}
+    mudou = False
+    for antigo in [k for k in idx if k not in ids]:
+        arq = DIR / f"{antigo}.json"
+        if not arq.exists():
+            idx.pop(antigo); mudou = True; continue
+        r = json.load(open(arq))
+        ev0 = r["evento"]
+        def dist(e):
+            return math.hypot((e["lat"] - ev0["lat"]) * 111, (e["lon"] - ev0["lon"]) * 111 * math.cos(math.radians(e["lat"])))
+        cands = [e for e in eventos if e["inicio"][:10] == ev0["inicio"][:10] and dist(e) < 2]
+        if not cands:
+            continue
+        novo = min(cands, key=dist)["id"]
+        if novo in idx:
+            continue
+        txt = arq.read_text().replace(f"{antigo}/", f"{novo}/").replace(f'"id":"{antigo}"', f'"id":"{novo}"')
+        (DIR / f"{novo}.json").write_text(txt); arq.unlink()
+        if (DIR / antigo).exists():
+            (DIR / antigo).rename(DIR / novo)
+        idx[novo] = idx.pop(antigo); mudou = True
+        print(f"análise religada: {antigo} → {novo}")
+    if mudou:
+        _grava("indice.json", idx)
+    return idx
+
+
 def ciclo(eventos, limite=MAX_POR_CICLO, ids=None):
-    idx = indice()
+    idx = religar(eventos, indice())
     agora = time.time()
     if ids:
         fila = [e for e in eventos if e["id"] in ids]

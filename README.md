@@ -21,7 +21,7 @@ Desenvolvido pelo **NIPED/PCAM**, Núcleo de Inovação, Pesquisa e Desenvolvime
   - Fundos: OpenStreetMap, satélite Esri, topográfico, claro, escuro, e Sentinel-2 dos últimos 45 dias (cor real, NDVI e falsa-cor) gerado na hora.
   - Camadas: eventos, alertas VIIRS, focos, mapa de calor, DETER, TIs, UCs e municípios.
 - **Filtros** por período, pontuação, município, distância de Manaus, tipo de área, indicadores e busca. Valem para mapa, tabela, estatísticas e exportações.
-- **Acesso aberto**, com o layout do Integra DPTC.
+- **Acesso aberto**, com guia "Como usar", glossário e explicações em linguagem simples em cada evento e análise.
 
 ## Estrutura
 
@@ -40,7 +40,7 @@ deploy/integra/   instalação no servidor do Integra (systemd + nginx)
 .github/workflows atualizador a cada 10 min para a hospedagem na Vercel
 ```
 
-## Como funciona a publicação (arquitetura adotada)
+## Alternativa: servidor próprio, com processamento no Mac
 
 O processamento (coleta, pontuação, IA, NDVI, parecer) roda **no Mac do NIPED**. O servidor do Integra só recebe e serve arquivos estáticos (HTML, JS, JSON e PNG): **nenhum programa nem IA roda no servidor da PCAM**.
 
@@ -84,16 +84,21 @@ Um endereço próprio, como `queimadia.dptc.am.gov.br`, depende de um registro d
 
 Alternativas mantidas no projeto: `deploy/servidor-python/`, para um servidor que aceite rodar o motor, e a Vercel (abaixo).
 
-## Publicar na Vercel (alternativa)
+## Publicação adotada: Vercel + GitHub Actions + Vercel Blob
 
-A Vercel serve o painel e a API de análise. Os dados são atualizados pelo GitHub Actions a cada 10 minutos e publicados no ramo `dados` do repositório.
+```
+GitHub Actions (a cada 10 min, repositório privado)        Vercel
+  coleta INPE/DETER → eventos → IA → NDVI → parecer  ──▶  Blob (dados públicos do painel)
+                                                           Site + API de análise (Python)
+```
 
-1. Crie um repositório público no GitHub (ex.: `queimadia`) e envie esta pasta.
-2. Em **Settings → Actions → General**, dê permissão de escrita ao workflow. Depois rode **Atualizar dados** manualmente uma vez.
-3. Em `public/config.js`, aponte para os dados: `window.QUEIMADIA_DADOS = "https://raw.githubusercontent.com/USUARIO/queimadia/dados/";`
-4. Na Vercel, importe o repositório com o nome do projeto `queimadia` (endereço queimadia.vercel.app). Opcional: variável de ambiente `ANTHROPIC_API_KEY`.
-
-No plano gratuito a função de análise tem limite de 60 s por chamada. O painel faz uma chamada por cena, em paralelo, então cabe nesse limite.
+- **Site:** projeto `queimadia` na Vercel, ligado ao repositório privado `sanmyatiradentes/queimadia`. Cada `git push` publica uma nova versão.
+- **Dados:** o workflow `.github/workflows/atualizar.yml` roda a cada 10 minutos, recalcula tudo e envia `public/dados` para o Vercel Blob (`motor/enviar_blob.sh`). O painel lê os dados do Blob (endereço em `public/config.js`). Se o Actions começar sem o estado em cache, `motor/baixar_blob.py` recupera as análises já publicadas.
+- **Análise livre de NDVI:** roda na função Python da Vercel (`api/index.py`), uma cena por chamada, dentro do limite de 60 s.
+- **Segredos:**
+  - GitHub (Settings → Secrets → Actions): `BLOB_READ_WRITE_TOKEN` (já configurado) e `GEMINI_API_KEY` (para o parecer por IA).
+  - Vercel (Settings → Environment Variables): `GEMINI_API_KEY`, para o parecer da análise livre.
+- **Mac:** não precisa ficar ligado. Para testar localmente: `.venv/bin/python -m motor.servidor`.
 
 ## Método (resumo)
 

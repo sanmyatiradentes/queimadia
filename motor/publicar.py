@@ -76,7 +76,8 @@ def publicar(df, eventos, alertas):
     except Exception:
         mosaico = None
     try:
-        analises = json.load(open(config.PUBLICO / "analises" / "indice.json"))
+        from . import precalcular
+        analises = precalcular.religar(eventos, precalcular.indice())
     except Exception:
         analises = {}
     estat = {

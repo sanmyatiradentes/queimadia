@@ -10,6 +10,7 @@ const fmt = n => (n ?? 0).toLocaleString("pt-BR");
 const br = (v, d = 3) => v == null || Number.isNaN(v) ? "–" : Number(v).toLocaleString("pt-BR", {maximumFractionDigits: d});
 const dBR = s => s ? s.slice(0, 10).split("-").reverse().join("/") : "–";
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const nivel = s => s >= 85 ? "muito alta" : s >= 70 ? "alta" : s >= 50 ? "atenção" : "baixa";
 const corScore = s => s >= 85 ? css("--s4") : s >= 70 ? css("--s3") : s >= 50 ? css("--s2") : css("--s1");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const IND_TXT = {
@@ -77,7 +78,10 @@ function montarFiltros() {
   $("#fPreset").onchange = e => { if (e.target.value !== "custom") { [F.ini, F.fim] = periodo(e.target.value); $("#fIni").value = F.ini; $("#fFim").value = F.fim; aplicar(); } };
   $("#fIni").onchange = e => { F.ini = e.target.value; $("#fPreset").value = "custom"; aplicar(); };
   $("#fFim").onchange = e => { F.fim = e.target.value; $("#fPreset").value = "custom"; aplicar(); };
-  $("#fScore").oninput = e => { F.score = +e.target.value; $("#fScoreV").textContent = e.target.value; aplicar(); };
+  const mostraNivel = v => { const n = $("#fScoreN"); n.textContent = nivel(v); n.style.background = corScore(v); };
+  mostraNivel(F.score);
+  $("#fScore").oninput = e => { F.score = +e.target.value; $("#fScoreV").textContent = e.target.value; mostraNivel(F.score); aplicar(); };
+  $("#btnMais").onclick = () => { const m = $("#filtrosMais"); m.hidden = !m.hidden; $("#btnMais").setAttribute("aria-expanded", !m.hidden); $("#btnMais").textContent = m.hidden ? "Mais filtros" : "Menos filtros"; };
   $("#fMun").onchange = e => { F.mun = e.target.value; aplicar(true); };
   $("#fDist").onchange = e => { F.dist = +e.target.value; aplicar(true); };
   $("#fArea").onchange = e => { F.area = e.target.value; aplicar(); };
@@ -116,13 +120,13 @@ function kpis() {
   const perto = todos.filter(e => e.score >= 70 && e.dist <= 250).length;
   const prot = f.filter(e => e.det.ti || e.det.uc).length;
   $("#kpis").innerHTML = [
-    [fmt(focos), "focos de referência no período", "azul"],
-    [fmt(todos.length), "eventos de fogo agrupados", "azul"],
-    [fmt(alta), "eventos com pontuação ≥ 70", "vermelho fogo"],
-    [fmt(perto), "desses, até 250 km de Manaus", "vermelho fogo"],
-    [fmt(prot), "eventos filtrados em TI/UC", "ouro"],
-    [fmt(Q.alertasF ? Q.alertasF.length : 0), "alertas VIIRS (7 dias)", "ouro"],
-  ].map(([v, t, c]) => `<div class="indicador ${c}"><b>${v}</b><span>${t}</span></div>`).join("");
+    [fmt(focos), "focos de calor no período", "azul", "Pontos de calor detectados pelo satélite de referência do INPE."],
+    [fmt(todos.length), "eventos de fogo", "azul", "Focos próximos no espaço e no tempo foram agrupados: cada evento é um incêndio."],
+    [fmt(alta), "com suspeita alta (70+)", "vermelho fogo", "Eventos com vários sinais de ação intencional."],
+    [fmt(perto), "suspeitos perto de Manaus", "vermelho fogo", "Suspeita alta a até 250 km de Manaus, onde a fumaça mais afeta a população."],
+    [fmt(prot), "em terra indígena ou reserva", "ouro", "Eventos da lista atual dentro de TI ou unidade de conservação."],
+    [fmt(Q.alertasF ? Q.alertasF.length : 0), "alertas dos últimos 7 dias", "ouro", "Detecções recentes dos satélites VIIRS, atualizadas a cada 10 minutos."],
+  ].map(([v, t, c, d]) => `<div class="indicador ${c}" title="${d}"><b>${v}</b><span>${t} <span class="info" aria-label="${d}">?</span></span></div>`).join("");
 }
 
 // ------------------------------------------------------------ fila
@@ -157,6 +161,18 @@ function selecionar(id, voar) {
     if (k === "cicatriz_deter" && d.cicatriz_km2 != null) extra = ` · ${br(d.cicatriz_km2)} km² em ${dBR(d.cicatriz_data)}`;
     return `<div class="ind-linha ${on ? "" : "off"}"><span class="mk">${on ? "✓" : "–"}</span><span>${D[k][0]}<small>${D[k][1]}${on ? extra : ""}</small></span><span class="w">${on ? "+" : ""}${P[k]}</span></div>`; }).join("");
   const calc = e.ind.map(k => `${P[k]} (${IND_TXT[k]})`).join(" + ") || "0";
+  const motivos = [];
+  if (d.desmatamento) motivos.push(`houve desmatamento detectado pelo DETER ${d.desmatamento.dias_antes <= 0 ? "no mesmo período do fogo" : d.desmatamento.dias_antes + " dias antes do fogo"} (${br(d.desmatamento.area_km2 * 100, 1)} ha)`);
+  if (d.ti) motivos.push(`fica dentro da ${d.ti}`);
+  else if (d.uc) motivos.push(`fica dentro da ${d.uc}${d.uc_grupo === "PI" ? ", área de proteção integral" : " (uso sustentável, onde a roça tradicional é permitida)"}`);
+  if (d.anos_anteriores?.length >= 2) motivos.push(`o mesmo local já pegou fogo em ${d.anos_anteriores.join(", ")}`);
+  if (e.maxDia >= 3) motivos.push(`${e.maxDia} focos surgiram no mesmo dia`);
+  if (e.ind.includes("cicatriz_deter")) motivos.push("o DETER confirmou a cicatriz de queimada");
+  if (e.ind.includes("periodo_proibitivo")) motivos.push("começou no período de proibição do fogo");
+  const junta = l => l.length > 1 ? l.slice(0, -1).join("; ") + " e " + l[l.length - 1] : l[0];
+  const porque = motivos.length
+    ? `<div class="porque"><b>Por que está na lista:</b> ${junta(motivos)}. Suspeita <b>${nivel(e.score)}</b> (${e.score} de 100 pontos).</div>`
+    : `<div class="porque calmo">Nenhum sinal forte de ação intencional foi encontrado nas bases públicas. Suspeita <b>${nivel(e.score)}</b> (${e.score} de 100).</div>`;
   const lat = e.lat.toFixed(5), lon = e.lon.toFixed(5);
   $("#ficha").hidden = false;
   $("#ficha").innerHTML = `
@@ -167,6 +183,7 @@ function selecionar(id, voar) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">${Q.est.analises?.[e.id] ? `<button type="button" class="botao fogo" id="fPronta">Ver análise NDVI${Q.est.analises[e.id].quebra ? " · quebra " + dBR(Q.est.analises[e.id].quebra) : ""}</button>` : ""}
       ${Q.estatico ? (Q.est.analises?.[e.id] ? "" : `<span class="selo pend" title="O motor calcula a análise de NDVI dos eventos com pontuação ≥ 70, começando pelos mais recentes e mais perto de Manaus.">NDVI na fila de cálculo</span>`) : `<button type="button" class="botao ${Q.est.analises?.[e.id] ? "secundario" : "fogo"}" id="fAnalisar">Analisar NDVI agora</button>`}
       <button type="button" class="botao secundario" id="fCopiar">Copiar resumo</button></div></div>
+    ${porque}
     <div class="fatos">
       <div><span>Focos</span><b>${e.n}</b></div><div><span>Máx. no mesmo dia</span><b>${e.maxDia}</b></div>
       <div><span>Primeiro foco (UTC)</span><b>${e.ini}</b></div><div><span>Último foco (UTC)</span><b>${e.fim}</b></div>
@@ -175,7 +192,7 @@ function selecionar(id, voar) {
       ${e.ia != null ? `<div><span>Atipicidade (IA)</span><b>${e.ia}/100</b></div>` : ""}
     </div>
     <div class="painel-grade">
-      <div><h3 style="margin-bottom:6px">Indicadores e pesos</h3>${linhas}
+      <div><h3 style="margin-bottom:6px">Os sinais verificados, um a um</h3>${linhas}
         <div class="formula">pontuação = ${calc} = <b>${e.score}</b></div></div>
       <div><h3 style="margin-bottom:6px">Conferir nas fontes públicas</h3>
         <div class="links">
@@ -308,8 +325,8 @@ function montarControles() {
   });
   $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "+" : "−"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };
   if (matchMedia("(max-width:640px)").matches) $("#ctlRec").click();
-  $("#legenda").innerHTML = [["--s4", "Pontuação ≥ 85"], ["--s3", "70–84"], ["--s2", "50–69"], ["--s1", "< 50"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
-    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta tempo real</div>`;
+  $("#legenda").innerHTML = `<b style="font-size:12px">Nível de suspeita</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
+    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
 }
 
 // ------------------------------------------------------------ ocorrências (tabela)
@@ -503,6 +520,15 @@ function trocarAba(a) {
 }
 $("#abas").addEventListener("click", e => { const a = e.target.closest("a[data-aba]"); if (a) trocarAba(a.dataset.aba); });
 window.trocarAba = trocarAba;
+const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+const ler = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+if (ler("qia_bv_fechado") === "1") $("#boasVindas").hidden = true;
+$("#bvFechar").onclick = () => { $("#boasVindas").hidden = true; guardar("qia_bv_fechado", "1"); };
+const ajuda = $("#ajuda");
+$("#btnAjuda").onclick = () => { ajuda.hidden = false; $("#ajudaFechar").focus(); };
+$("#ajudaFechar").onclick = () => { ajuda.hidden = true; $("#btnAjuda").focus(); };
+ajuda.addEventListener("click", e => { if (e.target === ajuda) ajuda.hidden = true; });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !ajuda.hidden) ajuda.hidden = true; });
 
 async function detectarModo() {
   try { const c = new AbortController(); setTimeout(() => c.abort(), 4000);

@@ -20,3 +20,4 @@ motor/chave_ssh.pub
 .claude/
 .vercel
 public/dados/
+.env*

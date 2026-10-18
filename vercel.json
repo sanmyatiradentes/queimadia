@@ -2,6 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "outputDirectory": "public",
   "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }],
-  "functions": { "api/index.py": { "maxDuration": 60, "memory": 1024 } },
-  "git": { "deploymentEnabled": { "dados": false } }
+  "functions": { "api/index.py": { "maxDuration": 60, "memory": 1024 } }
 }

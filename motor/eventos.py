@@ -112,7 +112,8 @@ def pontuar(g, anos_por_cel, desmat, cicat, tis, ucs):
             break
 
     primeiro = g.iloc[0]
-    chave = f'{ini:%Y%m%d%H%M}|{primeiro["lat"]:.3f}|{primeiro["lon"]:.3f}'
+    # dia + posição a ~1 km: estável quando o arquivo diário substitui o de 10 min
+    chave = f'{ini:%Y%m%d}|{primeiro["lat"]:.2f}|{primeiro["lon"]:.2f}'
     return {
         "chave": chave,
         "lat": round(lat, 5), "lon": round(lon, 5),

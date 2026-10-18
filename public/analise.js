@@ -242,7 +242,23 @@
       [br(d3.mean(ndvi)), "NDVI médio", "ouro"],
     ].map(([a, b, c]) => `<div class="indicador ${c}"><b style="${a.length > 9 ? "font-size:19px" : ""}">${a}</b><span>${b}</span></div>`).join("");
   }
+  function conclusao() {
+    const q = A.quebra, v = validas(), d = A.dnbrRes;
+    let t = "";
+    if (!v.length) t = "Não houve imagens sem nuvem suficientes para avaliar a vegetação neste local e período.";
+    else if (q?.detectada) {
+      t = `<b>A vegetação foi perdida.</b> O "verde" (NDVI) no local era ${br(q.base, 2)}, típico de ${q.base >= 0.75 ? "floresta" : "vegetação"}, e caiu para ${br(q.apos, 2)} entre ${dBR(q.ultimaOk)} e ${dBR(q.primeira)}.`;
+      if (A.evento) { const ini = A.evento.ini.slice(0, 10);
+        t += q.primeira < addDias(ini, -5) ? ` Isso aconteceu <b>antes</b> dos focos de calor (${dBR(ini)}): a vegetação já tinha sido derrubada quando o fogo apareceu, padrão típico de desmatamento seguido de queima.`
+          : ` A queda coincide com os focos de calor (${dBR(ini)}).`; }
+    } else t = `<b>Não houve perda sustentada de vegetação</b> no círculo de ${$("#aRaio").value} m. O "verde" (NDVI) ficou em torno de ${br(q?.base, 2)}. Pode ter sido fogo rasteiro, ou a queima ocorreu fora do círculo analisado.`;
+    if (d?.queimado_ha != null) t += ` As imagens antes e depois indicam cerca de <b>${br(d.queimado_ha, 0)} hectares queimados</b> com intensidade moderada ou maior no recorte de ${$("#aLado").value} × ${$("#aLado").value} km.`;
+    let el = $("#aConclusao");
+    if (!el) { el = document.createElement("div"); el.id = "aConclusao"; el.className = "conclusao"; $("#aKpis").before(el); }
+    el.innerHTML = t + `<div class="como-ler">Como ler: NDVI perto de 0,85 é floresta; abaixo de 0,5 é solo exposto ou área queimada. É um indício para orientar a investigação, não prova de crime.</div>`;
+  }
   function calculo() {
+    conclusao();
     const q = A.quebra; $("#aQuebraC").hidden = false;
     if (!q || q.motivo && !q.base) { $("#aCalc").textContent = q?.motivo || "–"; return; }
     const lista = q.baseVals.map((v, i) => `${dBR(q.baseDatas[i])}: ${br(v, 4)}`).join(" · ");
@@ -319,7 +335,7 @@
     try {
       const r = await (await fetch("api/dnbr?" + q)).json();
       if (!r.png) throw new Error(r.detail || "falha");
-      A.dnbrRes = {...r, antes: a.data, depois: b.data}; delete A.dnbrRes.png;
+      A.dnbrRes = {...r, antes: a.data, depois: b.data}; delete A.dnbrRes.png; conclusao();
       const cores = {"Não queimado": "#1a9850", "Baixa": "#fee08b", "Moderada-baixa": "#fdae61", "Moderada-alta": "#f46d43", "Alta": "#a50026"};
       $("#dRes").innerHTML = `<div class="painel-grade"><figure style="margin:0"><img style="width:100%;border-radius:8px;border:1px solid var(--cinza-borda)" src="data:image/png;base64,${r.png}" alt="dNBR">
         <div class="leg-dnbr">${Object.entries(cores).map(([k, c]) => `<span><i style="background:${c}"></i>${k}</span>`).join("")}<span><i style="background:#787c84"></i>Nuvem/sem dado</span></div></figure>

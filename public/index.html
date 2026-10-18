@@ -17,19 +17,33 @@
     <span class="nome">NIPED<small>QueimadIA · Radar de Queimadas Suspeitas · PCAM/DPTC</small></span>
   </a>
   <span class="espaco"></span>
+  <button type="button" class="botao claro pequeno" id="btnAjuda" aria-haspopup="dialog">Como usar</button>
   <span class="ao-vivo" id="aoVivo" title="Estado da atualização automática"><i></i><span id="aoVivoTxt">Conectando…</span></span>
 </header>
 
 <main class="conteudo">
   <nav class="abas" id="abas" aria-label="Seções">
     <a data-aba="mapa" class="ativa">Mapa</a>
-    <a data-aba="ocorrencias">Ocorrências</a>
-    <a data-aba="temporeal">Tempo real <span class="selo tr" id="nAlertas">–</span></a>
-    <a data-aba="estatisticas">Estatísticas</a>
-    <a data-aba="analise">Análise NDVI</a>
-    <a data-aba="metodo">Metodologia e cálculos</a>
-    <a data-aba="fontes">Fontes e atualização</a>
+    <a data-aba="ocorrencias">Lista de ocorrências</a>
+    <a data-aba="temporeal">Agora (tempo real) <span class="selo tr" id="nAlertas">–</span></a>
+    <a data-aba="estatisticas">Números</a>
+    <a data-aba="analise">Análise de satélite</a>
+    <a data-aba="metodo">Como funciona</a>
+    <a data-aba="fontes">Fontes</a>
   </nav>
+
+  <section class="boas-vindas" id="boasVindas" aria-label="Apresentação">
+    <div class="bv-texto">
+      <h1>Onde o fogo no Amazonas pode ter sido criminoso</h1>
+      <p>Satélites detectam focos de calor todos os dias. O QueimadIA junta esses focos em <b>eventos</b> e cruza cada um com desmatamento, terras indígenas, reservas e o histórico do local. Quanto mais sinais de ação humana intencional, maior a <b>pontuação</b> e mais alto o evento aparece na fila. Atualizado a cada 10 minutos.</p>
+    </div>
+    <ol class="bv-passos">
+      <li><span><b>Veja o mapa.</b> Cada círculo é um evento de fogo. Vermelho-escuro é o mais suspeito.</span></li>
+      <li><span><b>Clique num evento</b> ou na fila ao lado para ver por que ele foi marcado.</span></li>
+      <li><span><b>Abra a análise de satélite</b> para ver a vegetação antes e depois do fogo.</span></li>
+    </ol>
+    <button type="button" class="bv-fechar" id="bvFechar" aria-label="Fechar apresentação">×</button>
+  </section>
 
   <!-- filtros globais -->
   <form class="filtros" id="filtros" onsubmit="return false">
@@ -47,14 +61,17 @@
       </select></div>
     <div class="campo"><label for="fIni">De</label><input type="date" id="fIni"></div>
     <div class="campo"><label for="fFim">Até</label><input type="date" id="fFim"></div>
-    <div class="campo"><label for="fScore">Pontuação mínima <b id="fScoreV" class="num">50</b></label><input type="range" id="fScore" min="0" max="100" step="5" value="50"></div>
+    <div class="campo"><label for="fScore">Mostrar a partir de <b id="fScoreV" class="num">50</b> pontos <span class="nivel" id="fScoreN"></span></label><input type="range" id="fScore" min="0" max="100" step="5" value="50"></div>
     <div class="campo"><label for="fMun">Município</label><select id="fMun"><option value="">Todos</option></select></div>
     <div class="campo"><label for="fDist">Região</label>
       <select id="fDist"><option value="0">Todo o estado</option><option value="100">Até 100 km de Manaus</option><option value="250">Até 250 km de Manaus</option><option value="500">Até 500 km de Manaus</option></select></div>
+    <button type="button" class="botao secundario pequeno" id="btnMais" aria-expanded="false" style="align-self:end">Mais filtros</button>
+    <div class="filtros-mais" id="filtrosMais" hidden>
     <div class="campo"><label for="fArea">Área</label>
       <select id="fArea"><option value="">Qualquer</option><option value="ti">Terra indígena</option><option value="uc">Unidade de conservação</option><option value="fora">Fora de TI/UC</option></select></div>
     <div class="campo"><label for="fBusca">Busca</label><input type="search" id="fBusca" placeholder="Município, TI, UC, nº"></div>
-    <div class="campo" style="flex-basis:100%"><label>Exigir indicadores</label><div class="chips" id="fInd"></div></div>
+    <div class="campo" style="flex-basis:100%"><label>Mostrar só eventos com estes sinais</label><div class="chips" id="fInd"></div></div>
+    </div>
   </form>
 
   <!-- MAPA -->
@@ -70,7 +87,7 @@
         <div class="mapa-legenda" id="legenda"></div>
       </div>
       <aside class="cartao fila">
-        <div class="cab"><h2>Fila de prioridades</h2><span class="nota" id="nFila"></span></div>
+        <div class="cab"><div><h2>Fila de prioridades</h2><span class="nota">Os mais suspeitos primeiro. Clique para ver o porquê.</span></div><span class="nota" id="nFila"></span></div>
         <div class="lista" id="fila" role="listbox" aria-label="Eventos por prioridade"></div>
       </aside>
     </div>
@@ -160,7 +177,7 @@
         <div class="cartao" id="aSerieC" hidden><div class="cab"><h2>Série temporal (mediana no núcleo)</h2>
           <div class="chips" id="aIdx"><span class="chip" role="button" tabindex="0" aria-pressed="true" data-i="ndvi">NDVI</span><span class="chip" role="button" tabindex="0" aria-pressed="false" data-i="nbr">NBR</span><span class="chip" role="button" tabindex="0" aria-pressed="false" data-i="ndmi">NDMI</span></div></div>
           <div class="grafico"><svg id="gSerie"></svg></div></div>
-        <div class="cartao" id="aQuebraC" hidden><h2>Detecção de quebra, passo a passo</h2><div class="calculo" id="aCalc"></div></div>
+        <div class="cartao" id="aQuebraC" hidden><h2>A conta, passo a passo</h2><p class="nota" style="margin:4px 0 8px">Para quem quiser conferir: como o sistema decide se e quando a vegetação foi perdida (método do PolicIA).</p><div class="calculo" id="aCalc"></div></div>
         <div class="cartao" id="aGalC" hidden><div class="cab"><h2>Imagens por período</h2><span class="nota">Clique numa imagem para ampliar</span></div><div class="galeria" id="aGal"></div></div>
         <div class="cartao" id="aDnbrC" hidden>
           <div class="cab"><h2>Severidade da queima (dNBR)</h2>
@@ -195,6 +212,35 @@
   </footer>
 </main>
 <div class="toast" id="toast" hidden></div>
+<div class="modal-fundo" id="ajuda" hidden role="dialog" aria-modal="true" aria-labelledby="ajudaTit">
+  <div class="modal">
+    <div class="cab"><h2 id="ajudaTit">Como usar o QueimadIA</h2><button type="button" class="botao secundario pequeno" id="ajudaFechar">Fechar</button></div>
+    <div class="ajuda-grade">
+      <section><h3>Em 4 passos</h3><ol>
+        <li><b>Escolha o período e a região</b> nos filtros (por padrão: temporada atual, todo o estado).</li>
+        <li><b>Olhe o mapa e a fila de prioridades.</b> A cor do círculo indica o nível de suspeita; o tamanho, a quantidade de focos.</li>
+        <li><b>Clique num evento.</b> A ficha explica em uma frase por que ele foi marcado e lista cada sinal encontrado.</li>
+        <li><b>Abra a análise de satélite</b> para ver imagens antes e depois do fogo, o gráfico da vegetação e a área queimada.</li></ol></section>
+      <section><h3>O que significa a pontuação</h3>
+        <div class="niveis"><span class="pontos" style="background:var(--s4)">85+</span> Muito alta: vários sinais fortes juntos</div>
+        <div class="niveis"><span class="pontos" style="background:var(--s3)">70–84</span> Alta: merece ser verificada</div>
+        <div class="niveis"><span class="pontos" style="background:var(--s2)">50–69</span> Atenção: alguns sinais</div>
+        <div class="niveis"><span class="pontos" style="background:var(--s1)">0–49</span> Baixa: poucos sinais</div>
+        <p class="nota">A pontuação soma sinais objetivos de bases públicas. Ela indica onde investigar primeiro; não prova crime nem aponta autor.</p></section>
+      <section><h3>Glossário</h3><dl class="glossario">
+        <dt>Foco de calor</dt><dd>Ponto onde o satélite detectou temperatura alta, em geral fogo.</dd>
+        <dt>Evento</dt><dd>Grupo de focos próximos no espaço (até 1,5 km) e no tempo (até 5 dias): o mesmo incêndio.</dd>
+        <dt>DETER</dt><dd>Alertas de desmatamento do INPE. Desmatar e depois queimar é o padrão mais comum de conversão ilegal.</dd>
+        <dt>TI / UC</dt><dd>Terra indígena e unidade de conservação (reservas, parques, APAs).</dd>
+        <dt>Reincidência</dt><dd>O mesmo lugar já pegou fogo em 2 ou mais anos anteriores.</dd>
+        <dt>NDVI</dt><dd>Índice de "verde" da vegetação, de 0 a 1. Floresta fica perto de 0,85; solo exposto ou queimado, abaixo de 0,5.</dd>
+        <dt>Quebra</dt><dd>Momento em que o NDVI cai e não volta: a vegetação foi removida ou queimada.</dd>
+        <dt>dNBR</dt><dd>Mede quanto a área queimou, comparando imagens antes e depois do fogo.</dd>
+        <dt>IA (atipicidade)</dt><dd>Nota de 0 a 100 dada por inteligência artificial: quanto o evento foge do padrão normal de fogo no Amazonas.</dd>
+        <dt>Tempo real (VIIRS)</dt><dd>Satélites que passam várias vezes ao dia e detectam focos menores. São os alertas dos últimos 7 dias.</dd></dl></section>
+    </div>
+  </div>
+</div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://unpkg.com/d3@7.8.5/dist/d3.min.js"></script>

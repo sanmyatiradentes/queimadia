@@ -1,5 +1,5 @@
-# Atualiza os dados do QueimadIA a cada 10 minutos e publica no ramo `dados`,
-# de onde o painel na Vercel lê os JSON (raw.githubusercontent.com).
+# Atualiza os dados do QueimadIA a cada 10 minutos e envia para o Vercel Blob,
+# de onde o painel publicado na Vercel lê os dados.
 name: Atualizar dados
 on:
   schedule:
@@ -9,11 +9,11 @@ concurrency:
   group: atualizar-dados
   cancel-in-progress: false
 permissions:
-  contents: write
+  contents: read
 jobs:
   atualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,6 +30,12 @@ jobs:
             public/dados
           key: estado-${{ github.run_id }}
           restore-keys: estado-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install -g vercel@59.12.0
+      - name: Recuperar análises já publicadas (se o estado não veio do cache)
+        run: python -m motor.baixar_blob
       - name: Ciclo de atualização
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -40,6 +46,10 @@ jobs:
           else
             python -m motor.atualizar --rapido
           fi
+      - name: Enviar dados ao Vercel Blob
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+        run: bash motor/enviar_blob.sh
       - name: Guardar estado do motor
         if: always()
         uses: actions/cache/save@v4
@@ -48,12 +58,3 @@ jobs:
             motor/dados
             public/dados
           key: estado-${{ github.run_id }}
-      - name: Publicar no ramo dados
-        run: |
-          cd public/dados
-          git init -q -b dados
-          git config user.name "QueimadIA"
-          git config user.email "queimadia@users.noreply.github.com"
-          git add -A
-          git commit -q -m "dados $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" dados
