@@ -15,62 +15,6 @@
     const hoje = iso(new Date());
     $("#aFim").value = hoje; $("#aIni").value = addDias(hoje, -730);
     $("#aRefIni").value = $("#aIni").value; $("#aRefFim").value = addDias(hoje, -240);
-  
-  // ------------------------------------------------------------ análises pré-calculadas (modo estático)
-  window.listarProntas = function () {
-    const idx = window.Q?.est?.analises || {}, evs = window.Q?.eventos || [];
-    const linhas = Object.entries(idx).map(([id, r]) => ({id, r, e: evs.find(x => x.id === id)})).filter(x => x.e)
-      .sort((a, b) => b.e.ini.localeCompare(a.e.ini));
-    $("#tabProntas").innerHTML = `<thead><tr><th>Prior.</th><th>Município</th><th>1º foco</th><th>Quebra</th><th>Relação</th><th>Queimado</th></tr></thead><tbody>`
-      + linhas.map(({id, r, e}) => `<tr class="clicavel" data-id="${id}"><td><span class="pontos" style="background:${e.score >= 85 ? css("--s4") : css("--s3")}">${e.score}</span></td>
-        <td>${e.mun}</td><td class="mono">${dBR(e.ini)}</td><td class="mono">${r.quebra ? dBR(r.quebra) + (r.situacao === "provavel" ? " (provável)" : "") : "–"}</td>
-        <td>${{antes_do_fogo: '<span class="selo erro">antes do fogo</span>', no_fogo: '<span class="selo pend">junto com o fogo</span>'}[r.relacao] || ""}</td>
-        <td class="n">${r.queimado_ha != null ? br(r.queimado_ha, 1) + " ha" : "–"}</td></tr>`).join("")
-      + (linhas.length ? "" : `<tr><td colspan="6" class="nota">Nenhuma análise publicada ainda.</td></tr>`) + "</tbody>";
-  };
-  document.addEventListener("click", ev => { const tr = ev.target.closest("#tabProntas tr[data-id]"); if (tr) window.mostrarAnalisePronta(tr.dataset.id); });
-
-  window.mostrarAnalisePronta = async function (id) {
-    window.trocarAba("analise"); window.listarProntas();
-    const base = window.QUEIMADIA_DADOS + "analises/";
-    $("#aStatus").hidden = false; prog(0.3, 1, "Carregando análise pronta…");
-    let r;
-    try { r = await (await fetch(base + id + ".json?v=" + (window.Q?.versao || ""))).json(); }
-    catch (e) { prog(0, 1, "Análise não encontrada."); return; }
-    const ev = window.Q.eventos.find(x => x.id === id) || window.Q.alertas.find(x => x.id === id);
-    A.evento = ev || {id, ini: r.evento.inicio, fim: r.evento.fim, mun: r.evento.municipio, score: r.evento.score};
-    $("#aLat").value = r.area.lat; $("#aLon").value = r.area.lon; $("#aRaio").value = r.area.raio_m; $("#aLado").value = r.area.lado_m / 1000;
-    [$("#aIni").value, $("#aFim").value] = r.periodo; [$("#aRefIni").value, $("#aRefFim").value] = r.linha_base;
-    A.med = r.cenas; A.quebra = quebra(validas(), r.linha_base[0], r.linha_base[1]); A.dnbrRes = r.dnbr; A.pronta = r;
-    $("#aTitulo").textContent = `${A.evento.mun || r.evento.municipio} · evento ${id} · calculada em ${dBR(r.gerado_em)}`;
-    prog(1, 1, `${r.n_validas} observações válidas de ${r.cenas.length} cenas · ${r.metodo}`);
-    $("#aSerieC").hidden = false; serie(); kpis(); calculo();
-    // galeria estática
-    const nomes = {rgb: "Cor real", ndvi: "NDVI"};
-    $("#aGalC").hidden = false;
-    $("#aGal").innerHTML = r.imagens.map(i => `<figure><a href="${base + i.arquivo}" target="_blank" rel="noopener"><img loading="lazy" src="${base + i.arquivo}" alt="${nomes[i.produto]} em ${dBR(i.data)}"></a>
-      <figcaption><b>${nomes[i.produto] || i.produto}</b> · ${dBR(i.data)}${i.rotulo ? " · " + i.rotulo : ""}<br>${i.colecao.startsWith("sentinel") ? "Sentinel-2" : "Landsat"} · NDVI ${br(i.ndvi)}</figcaption></figure>`).join("");
-    // dNBR estático
-    $("#aDnbrC").hidden = !r.dnbr; $$("#aDnbrC .cab > div").forEach(d => d.hidden = true);
-    if (r.dnbr) {
-      const d = r.dnbr, cores = {"Não queimado": "#1a9850", "Baixa": "#fee08b", "Moderada-baixa": "#fdae61", "Moderada-alta": "#f46d43", "Alta": "#a50026"};
-      $("#dRes").innerHTML = `<div class="painel-grade"><figure style="margin:0"><img style="width:100%;border-radius:8px;border:1px solid var(--cinza-borda)" src="${base + d.arquivo}" alt="dNBR">
-        <div class="leg-dnbr">${Object.entries(cores).map(([k, c]) => `<span><i style="background:${c}"></i>${k}</span>`).join("")}<span><i style="background:#787c84"></i>Nuvem/sem dado</span></div></figure>
-        <div><div class="indicadores"><div class="indicador vermelho"><b>${br(d.queimado_ha, 1)} ha</b><span>queimado (dNBR ≥ 0,27)</span></div>
-        <div class="indicador azul"><b>${br(d.dnbr_mediana_nucleo)}</b><span>dNBR mediano no núcleo</span></div>
-        <div class="indicador azul"><b>${Math.round(d.cobertura_valida * 100)}%</b><span>recorte com dado válido</span></div></div>
-        <table class="tabela"><thead><tr><th>Classe (USGS)</th><th>Área (ha)</th></tr></thead><tbody>${Object.entries(d.areas_ha).map(([k, v]) => `<tr><td>${k}</td><td class="n">${br(v, 1)}</td></tr>`).join("")}</tbody></table>
-        <div class="formula">dNBR = NBR(${dBR(d.antes)}) − NBR(${dBR(d.depois)})</div></div></div>`;
-    }
-    tabela();
-    $("#aParecerC").hidden = false; $("#aParecer").hidden = true;
-    const p = r.parecer || {};
-    $("#aParecerTxt").innerHTML = p.texto
-      ? `<div style="white-space:pre-wrap;color:var(--texto);font-size:14.5px">${p.texto.replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]))}</div><p class="nota" style="margin-top:8px">Texto gerado por IA (${p.modelo}) a partir dos números acima. Revise antes de usar.</p>`
-      : `Parecer por IA não gerado para este evento${p.indisponivel ? " (" + p.indisponivel + ")" : ""}.`;
-    window.miniMapa();
-    window.rolarPara($("#aStatus"), true);
-  };
 })();
   for (const g of ["#aProd", "#aIdx"]) $(g).addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return;
     if (g === "#aIdx") { $$("#aIdx .chip").forEach(x => x.setAttribute("aria-pressed", x === c)); return serie(); }
@@ -336,10 +280,40 @@
     $("#aGalC").hidden = false;
     $("#aGal").innerHTML = per.flatMap(p => prods.map(pr => {
       const u = `api/imagem?colecao=${p.colecao}&id=${encodeURIComponent(p.id)}&lat=${lat}&lon=${lon}&lado_m=${lado}&produto=${pr}&raio_m=${raio}`;
-      return `<figure><a href="${u}" target="_blank" rel="noopener"><img loading="lazy" src="${u}" alt="${nomes[pr]} em ${dBR(p.data)}"></a>
+      return `<figure data-prod="${pr}" data-data="${p.data}"><a href="${u}" target="_blank" rel="noopener"><img loading="lazy" src="${u}" alt="${nomes[pr]} em ${dBR(p.data)}"></a>
         <figcaption><b>${nomes[pr]}</b> · ${dBR(p.data)}${p.rotulo ? " · " + p.rotulo : ""}<br>${p.colecao.startsWith("sentinel") ? "Sentinel-2" : "Landsat"} · NDVI ${br(p.ndvi)}</figcaption></figure>`;
     })).join("") || `<p class="nota">Nenhum período com imagem válida.</p>`;
+    pararTL(); linhaDoTempo();
   }
+
+  // ------------------------------------------------------------ linha do tempo animada
+  const TL = {quadros: [], i: 0, timer: null, prod: "rgb"};
+  const NOMES_P = {rgb: "Cor real", falsacor: "Falsa-cor", ndvi: "NDVI", nbr: "NBR", ndmi: "NDMI"};
+  function linhaDoTempo() {
+    const figs = $$("#aGal figure[data-prod]");
+    const prods = [...new Set(figs.map(f => f.dataset.prod))];
+    $("#aTlC").hidden = !figs.length;
+    if (!figs.length) return;
+    if (!prods.includes(TL.prod)) TL.prod = prods[0];
+    $("#tlProd").innerHTML = prods.map(p => `<span class="chip" role="button" tabindex="0" aria-pressed="${p === TL.prod}" data-p="${p}">${NOMES_P[p] || p}</span>`).join("");
+    TL.quadros = figs.filter(f => f.dataset.prod === TL.prod).map(f => ({src: f.querySelector("img").src, data: f.dataset.data,
+      rot: (f.querySelector("figcaption")?.innerText || "").split("\n")[0]})).sort((a, b) => a.data.localeCompare(b.data));
+    TL.quadros.forEach(q => { const im = new Image(); im.src = q.src; });   // pré-carrega
+    $("#tlSl").max = TL.quadros.length - 1; mostrarQuadro(0);
+  }
+  function mostrarQuadro(i) {
+    if (!TL.quadros.length) return;
+    TL.i = (i + TL.quadros.length) % TL.quadros.length;
+    const q = TL.quadros[TL.i];
+    $("#tlImg").src = q.src; $("#tlData").textContent = dBR(q.data); $("#tlSl").value = TL.i;
+    $("#tlPos").textContent = `${TL.i + 1} de ${TL.quadros.length}`;
+  }
+  function pararTL() { clearInterval(TL.timer); TL.timer = null; $("#tlPlay").textContent = "▶ Reproduzir"; }
+  $("#tlPlay").onclick = () => { if (TL.timer) return pararTL();
+    TL.timer = setInterval(() => mostrarQuadro(TL.i + 1), 1200); $("#tlPlay").textContent = "❚❚ Pausar"; };
+  $("#tlSl").oninput = e => { pararTL(); mostrarQuadro(+e.target.value); };
+  $("#tlProd").addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return; pararTL(); TL.prod = c.dataset.p; linhaDoTempo(); });
+  $("#tlProd").addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("chip")) { e.preventDefault(); e.target.click(); } });
 
   // ------------------------------------------------------------ dNBR
   function prepararDnbr() {
@@ -445,8 +419,9 @@
     // galeria estática
     const nomes = {rgb: "Cor real", ndvi: "NDVI"};
     $("#aGalC").hidden = false;
-    $("#aGal").innerHTML = r.imagens.map(i => `<figure><a href="${base + i.arquivo}" target="_blank" rel="noopener"><img loading="lazy" src="${base + i.arquivo}" alt="${nomes[i.produto]} em ${dBR(i.data)}"></a>
+    $("#aGal").innerHTML = r.imagens.map(i => `<figure data-prod="${i.produto}" data-data="${i.data}"><a href="${base + i.arquivo}" target="_blank" rel="noopener"><img loading="lazy" src="${base + i.arquivo}" alt="${nomes[i.produto]} em ${dBR(i.data)}"></a>
       <figcaption><b>${nomes[i.produto] || i.produto}</b> · ${dBR(i.data)}${i.rotulo ? " · " + i.rotulo : ""}<br>${i.colecao.startsWith("sentinel") ? "Sentinel-2" : "Landsat"} · NDVI ${br(i.ndvi)}</figcaption></figure>`).join("");
+    pararTL(); linhaDoTempo();
     // dNBR estático
     $("#aDnbrC").hidden = !r.dnbr; $$("#aDnbrC .cab > div").forEach(d => d.hidden = true);
     if (r.dnbr) {

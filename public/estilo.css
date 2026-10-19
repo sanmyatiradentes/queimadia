@@ -230,3 +230,14 @@ body:not(.estatico) .so-estatico{display:none!important}
 
 .confronto .inconclusivo{border-top:3px solid var(--cinza-texto)}
 .confronto .inconclusivo h4{color:var(--cinza-texto)}
+
+.mapa-ctl .recolher{font-size:13.5px}
+.mapa-ctl .recolher span{font-size:12px;color:var(--azul);font-weight:600}
+.ctl-dica{margin:2px 0 6px;font-size:12px;color:var(--cinza-texto);background:#f2f5fb;border-radius:6px;padding:5px 7px}
+
+/* linha do tempo animada */
+.tl-quadro{position:relative;max-width:520px;margin:10px auto 8px}
+.tl-quadro img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--cinza-borda);background:var(--grade);display:block}
+.tl-data{position:absolute;top:8px;right:8px;background:rgba(10,31,86,.85);color:#fff;font-family:var(--mono);font-size:14px;padding:3px 8px;border-radius:6px}
+.tl-ctl{display:flex;gap:10px;align-items:center;max-width:520px;margin:0 auto}
+.tl-ctl input{flex:1}

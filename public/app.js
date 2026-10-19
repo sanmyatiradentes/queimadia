@@ -220,6 +220,7 @@ function selecionar(id, voar) {
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://plataforma.brasil.mapbiomas.org/">MapBiomas</a>
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://apps.sentinel-hub.com/eo-browser/?zoom=14&lat=${lat}&lng=${lon}">EO Browser (Sentinel)</a>
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://www.google.com/maps/@${lat},${lon},2000m/data=!3m1!1e3">Google Satélite</a>
+          ${copernicus(e)}
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://www.windy.com/${lat}/${lon}?wind,${lat},${lon},9">Windy (vento)</a>
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://consultapublica.car.gov.br/publico/imoveis/index">Consulta CAR</a>
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://servicos.ibama.gov.br/ctf/publico/areasembargadas/ConsultaPublicaAreasEmbargadas.php">Embargos IBAMA</a>
@@ -251,6 +252,7 @@ function blocoConfronto(e) {
   if (e.n <= 2 && (f.dias_com_fogo || 1) <= 1 && (f.frp_max == null || f.frp_max < 20)) acid.push("Fogo pequeno e curto, de baixa intensidade");
   if (an && !an.quebra) acid.push("A vegetação não foi perdida de forma sustentada (NDVI)");
   if (!(e.maxDia >= 3) && e.n > 2) acid.push("Focos espalhados ao longo dos dias, sem detecções simultâneas");
+  if (d.lixao) acid.push(`A ${br(d.lixao.dist_m, 0)} m de um lixão/vazadouro (${d.lixao.nome}): possível fonte térmica não vegetal ou queima de resíduos; fumaça tóxica`);
   // inconclusivos e lacunas: o que ainda não permite discriminar
   if (!an) inconc.push("Análise de vegetação (NDVI) ainda não calculada para este evento");
   else if (an.situacao === "provavel") inconc.push(`Queda de vegetação desde ${dBR(an.quebra)} ainda não confirmada (faltam imagens)`);
@@ -266,6 +268,18 @@ function blocoConfronto(e) {
       ${col("inconclusivo", "Inconclusivos e lacunas", inconc)}
     </div>
     <p class="nota">Sem pesos ou percentuais: a quantidade de itens não decide a hipótese. Elementos derivados da mesma fonte (ex.: o mesmo foco no INPE e no FIRMS) não são independentes. Origem, causa e autoria exigem demonstrações próprias, com perícia de local.</p></div>`;
+}
+
+// Copernicus Browser: abre no local e no período do evento, já na camada escolhida.
+// A linha do tempo animada fica no ícone "Timelapse" do próprio Copernicus.
+function copernicus(e) {
+  const d0 = new Date(e.ini.slice(0, 10) + "T00:00:00Z"), d1 = new Date(e.fim.slice(0, 10) + "T00:00:00Z");
+  d0.setUTCDate(d0.getUTCDate() - 10); d1.setUTCDate(d1.getUTCDate() + 20);
+  const hoje = new Date(); if (d1 > hoje) d1.setTime(hoje.getTime());
+  const base = `https://browser.dataspace.copernicus.eu/?zoom=14&lat=${e.lat.toFixed(5)}&lng=${e.lon.toFixed(5)}&themeId=DEFAULT-THEME&datasetId=S2_L2A_CDAS`
+    + `&dateMode=TIME%20RANGE&fromTime=${d0.toISOString().slice(0, 10)}T00%3A00%3A00.000Z&toTime=${d1.toISOString().slice(0, 10)}T23%3A59%3A59.999Z&mosaickingOrder=leastCC`;
+  return [["3-WILDFIRES", "Copernicus: incêndios"], ["6-SWIR", "Copernicus: SWIR"], ["1_TRUE_COLOR", "Copernicus: cor real"], ["3_NDVI", "Copernicus: NDVI"]]
+    .map(([l, t]) => `<a class="botao secundario pequeno" target="_blank" rel="noopener" href="${base}&layerId=${l}">${t}</a>`).join("");
 }
 
 function blocoCronologia(e) {
@@ -326,7 +340,8 @@ const CAMADAS = [
   ["desmat", "DETER desmatamento", "#8e44ad", false], ["cicat", "DETER cicatriz de queimada", "#5d4037", false],
   ["tis", "Terras indígenas", "#b8860b", true], ["ucs", "Unidades de conservação", "#0a7a36", true],
   ["mun", "Municípios", "#5b6675", true],
-  ["vento", "Vento (previsão)", "#1e88e5", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
+  ["vento", "Vento (previsão, setas)", "#1e88e5", true], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
+  ["lixoes", "Lixões e vazadouros (fumaça tóxica)", "#8e24aa", true],
 ];
 async function iniciarMapa() {
   const m = Q.mapa = new maplibregl.Map({container: "mapa", center: [-62.5, -4.3], zoom: 5, maxZoom: 18, attributionControl: {compact: true},
@@ -341,7 +356,7 @@ async function iniciarMapa() {
   const [mun, tis, ucs] = await Promise.all(["municipios", "tis", "ucs"].map(n => json(`dados/${n}.json`)));
   m.addSource("mun", {type: "geojson", data: mun}); m.addSource("tis", {type: "geojson", data: tis}); m.addSource("ucs", {type: "geojson", data: ucs});
   m.addSource("deter", {type: "geojson", data: vazio});
-  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
+  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca", "lixoes", "perto-lixao"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
   m.addLayer({id: "tis", type: "fill", source: "tis", paint: {"fill-color": "#b8860b", "fill-opacity": .08, "fill-outline-color": "#b8860b"}});
   m.addLayer({id: "tis-l", type: "line", source: "tis", paint: {"line-color": "#d4a017", "line-width": 1.3, "line-dasharray": [3, 2]}});
   m.addLayer({id: "ucs", type: "fill", source: "ucs", paint: {"fill-color": "#0a7a36", "fill-opacity": .07}});
@@ -359,13 +374,21 @@ async function iniciarMapa() {
   m.addLayer({id: "alertas", type: "circle", source: "alertas", paint: {"circle-radius": raio, "circle-color": "rgba(255,122,0,.15)", "circle-stroke-color": "#ff7a00", "circle-stroke-width": 2}});
   m.addLayer({id: "area", type: "line", source: "area", paint: {"line-color": "#ffdf00", "line-width": 2.5}});
   m.addLayer({id: "fumaca", type: "line", source: "fumaca", paint: {"line-color": "#8d6e63", "line-width": 2, "line-opacity": .8, "line-dasharray": [2, 2]}});
-  m.addLayer({id: "vento", type: "line", source: "vento", layout: {visibility: "none", "line-cap": "round"},
+  m.addLayer({id: "lixoes", type: "circle", source: "lixoes", paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 5, 12, 9],
+    "circle-color": "#8e24aa", "circle-stroke-color": "#fff", "circle-stroke-width": 1.5}});
+  m.addLayer({id: "lixoes-anel", type: "circle", source: "perto-lixao", paint: {"circle-radius": 16, "circle-color": "rgba(0,0,0,0)",
+    "circle-stroke-color": "#ba68c8", "circle-stroke-width": 3, "circle-stroke-opacity": 0.9}});
+  m.addLayer({id: "vento", type: "line", source: "vento", layout: {"line-cap": "round"},
     paint: {"line-width": 1.6, "line-color": ["interpolate", ["linear"], ["get", "v"], 0, "#90caf9", 10, "#1e88e5", 20, "#3949ab", 35, "#b71c1c"]}});
   m.addLayer({id: "sel", type: "circle", source: "sel", paint: {"circle-radius": 16, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#ffdf00", "circle-stroke-width": 3}});
   Q.layersOk = true;
   montarControles();
   atualizarCamadasDados();
-  json("dados/vento.json").then(v => { Q.vento = v; desenharVento(); }).catch(() => {});
+  json("dados/vento.json").then(v => { Q.vento = v; const sl = $("#ventoSl"); if (sl) { sl.max = v.horas_utc.length - 1; } desenharVento(); if (sl) sl.value = Q.ventoHora; }).catch(() => {});
+  json("dados/lixoes.json").then(l => { Q.lixoes = l.pontos; m.getSource("lixoes").setData({type: "FeatureCollection",
+    features: l.pontos.map(p => ({type: "Feature", properties: {nome: p.nome, mun: p.municipio}, geometry: {type: "Point", coordinates: [p.lon, p.lat]}}))}); }).catch(() => {});
+  m.on("click", "lixoes", ev => { const p = ev.features[0].properties; new maplibregl.Popup().setLngLat(ev.lngLat)
+    .setHTML(`<b>${esc(p.nome)}</b><br>${esc(p.mun)}<br><span class="nota">Lixão/vazadouro (OpenStreetMap). Fogo aqui gera fumaça tóxica.</span>`).addTo(m); });
   json("dados/deter.json").then(d => m.getSource("deter").setData(d));
 
   const pop = new maplibregl.Popup({closeButton: false, offset: 8});
@@ -391,6 +414,7 @@ function atualizarCamadasDados() {
   const m = Q.mapa; if (!m) return;
   m.getSource("eventos").setData(geo(Q.filtrados));
   m.getSource("alertas").setData(geo(Q.alertasF || []));
+  m.getSource("perto-lixao")?.setData(geo([...(Q.alertasF || []), ...Q.filtrados].filter(e => e.det.lixao)));
   m.getSource("fumaca")?.setData(fumaca([...(Q.alertasF || []), ...Q.filtrados.filter(e => Date.now() - new Date(e.fim.replace(" ", "T") + "Z") < 30 * 864e5)]));
   m.getSource("focos").setData({type: "FeatureCollection", features: Q.focos.map(f => ({type: "Feature", geometry: {type: "Point", coordinates: [f[1], f[0]]}, properties: {}}))});
 }
@@ -436,23 +460,25 @@ async function trocarBase(k) {
 }
 function montarControles() {
   const el = $("#mapaCtl");
-  el.innerHTML = `<button type="button" class="recolher" id="ctlRec" aria-expanded="true"><b>Camadas</b><span>−</span></button><div id="ctlCorpo">
+  el.innerHTML = `<button type="button" class="recolher" id="ctlRec" aria-expanded="true"><b>☰ Camadas do mapa</b><span>ocultar</span></button><div id="ctlCorpo">
+    <p class="ctl-dica">Marque ou desmarque para <b>ligar ou desligar</b> cada camada.</p>
     <h4>Mapa de fundo</h4>${Object.entries(BASES).map(([k, b]) => `<label><input type="radio" name="base" value="${k}" ${k === "satelite" ? "checked" : ""}> ${b.nome}</label>`).join("")}
     <h4>Camadas</h4>${CAMADAS.map(([k, t, c, on]) => `<label><input type="checkbox" data-c="${k}" ${on ? "checked" : ""}><span class="sw" style="background:${c}"></span>${t}</label>`).join("")}
-    <div id="ventoCtl" hidden><h4>Hora do vento</h4><input type="range" id="ventoSl" min="0" max="47" value="0" style="width:100%"><div class="nota" id="ventoHora"></div></div></div>`;
+    <div id="ventoCtl"><h4>Hora do vento</h4><input type="range" id="ventoSl" min="0" max="47" value="0" style="width:100%"><div class="nota" id="ventoHora"></div></div></div>`;
   el.addEventListener("change", e => {
     if (e.target.name === "base") return trocarBase(e.target.value);
     const k = e.target.dataset.c; if (!k) return;
     const ids = {tis: ["tis", "tis-l"], ucs: ["ucs", "ucs-l"]}[k] || [k];
     ids.forEach(id => Q.mapa.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none"));
+    if (k === "lixoes") Q.mapa.setLayoutProperty("lixoes-anel", "visibility", e.target.checked ? "visible" : "none");
     if (k === "vento") { $("#ventoCtl").hidden = !e.target.checked; const sl = $("#ventoSl");
       if (Q.vento) { sl.max = Q.vento.horas_utc.length - 1; sl.value = Q.ventoHora || 0; } desenharVento(); }
   });
   el.addEventListener("input", e => { if (e.target.id === "ventoSl") { Q.ventoHora = +e.target.value; desenharVento(); } });
-  $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "+" : "−"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };
+  $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "mostrar" : "ocultar"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };
   if (matchMedia("(max-width:640px)").matches) $("#ctlRec").click();
   $("#legenda").innerHTML = `<b style="font-size:12px">Nível de suspeita</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
-    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
+    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div><i style="background:#8e24aa"></i>Lixão/vazadouro</div><div><i style="background:transparent;border:2px solid #ba68c8"></i>Fogo a até 1 km de lixão</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
 }
 
 // ------------------------------------------------------------ ocorrências (tabela)

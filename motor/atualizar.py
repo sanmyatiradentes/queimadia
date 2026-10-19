@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 
-from . import clima, ingest, eventos, publicar, precalcular
+from . import clima, ingest, eventos, lixoes, publicar, precalcular
 
 
 def ciclo(rapido=False):
@@ -35,6 +35,10 @@ def ciclo(rapido=False):
     except Exception:
         traceback.print_exc()
     eventos.aplicar_clima(evs + alertas)
+    try:
+        print("eventos perto de lixão:", lixoes.marcar(evs + alertas, lixoes.atualizar()))
+    except Exception:
+        traceback.print_exc()
     evs.sort(key=lambda e: (-e["score"], -e["n_focos"]))
     alertas.sort(key=lambda e: (-e["score"], -e["n_focos"]))
     est = publicar.publicar(df, evs, alertas)
