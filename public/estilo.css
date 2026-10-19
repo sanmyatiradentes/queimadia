@@ -244,3 +244,6 @@ body:not(.estatico) .so-estatico{display:none!important}
 
 .base-legenda{position:absolute;left:10px;bottom:28px;z-index:3;max-width:min(330px,calc(100% - 180px));background:rgba(255,255,255,.95);border:1px solid var(--cinza-borda);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.4}
 @media (max-width:640px){.base-legenda{max-width:calc(100% - 20px);bottom:auto;top:56px}}
+
+.topo a.botao{text-decoration:none}
+@media (max-width:800px){.so-desktop{display:none!important}}

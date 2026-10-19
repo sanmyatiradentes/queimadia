@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fogo Forense — Telão</title>
+<link rel="icon" href="img/dptc.png">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+:root{--fundo:#060d1f;--painel:rgba(10,24,58,.86);--borda:rgba(120,150,210,.25);--texto:#eef3ff;--suave:#9fb0d0;
+  --ouro:#ffdf00;--fogo:#ff5a36;--s4:#7a1420;--s3:#c8302f;--s2:#e07b2a;--s1:#e9b949;--azul:#1b3faa;
+  --fonte:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--fundo);color:var(--texto);font-family:var(--fonte);overflow:hidden}
+#mapa{position:fixed;inset:0}
+.topo{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;gap:1.2vw;padding:1.1vh 1.6vw;
+  background:linear-gradient(180deg,rgba(6,13,31,.95),rgba(6,13,31,.55) 75%,rgba(6,13,31,0))}
+.topo img{height:5.2vh}
+.topo .nome{font-size:3.1vh;font-weight:800;letter-spacing:.02em}
+.topo .nome small{display:block;font-size:1.5vh;font-weight:500;color:var(--suave);letter-spacing:.04em}
+.topo .esp{flex:1}
+.relogio{text-align:right;font-family:var(--mono)}
+.relogio b{display:block;font-size:3.4vh}
+.relogio span{font-size:1.4vh;color:var(--suave)}
+.vivo{display:inline-flex;align-items:center;gap:.5vw;font-size:1.5vh;color:var(--suave)}
+.vivo i{width:1.1vh;height:1.1vh;border-radius:50%;background:#3ddc84;animation:p 2s infinite}
+@keyframes p{0%{box-shadow:0 0 0 0 rgba(61,220,132,.6)}70%{box-shadow:0 0 0 1.2vh rgba(61,220,132,0)}100%{box-shadow:0 0 0 0 rgba(61,220,132,0)}}
+.kpis{position:fixed;left:1.6vw;top:10vh;z-index:5;display:grid;gap:1.1vh;width:17vw}
+.kpi{background:var(--painel);border:1px solid var(--borda);border-left:.45vw solid var(--azul);border-radius:1vh;padding:1.2vh 1vw;backdrop-filter:blur(4px)}
+.kpi b{display:block;font-size:4.6vh;line-height:1.05;font-variant-numeric:tabular-nums}
+.kpi span{font-size:1.55vh;color:var(--suave)}
+.kpi.fogo{border-left-color:var(--fogo)} .kpi.fogo b{color:#ff8a65}
+.kpi.ouro{border-left-color:var(--ouro)}
+.destaque{position:fixed;right:1.6vw;top:10vh;z-index:5;width:27vw;background:var(--painel);border:1px solid var(--borda);border-radius:1.2vh;padding:1.6vh 1.2vw;backdrop-filter:blur(4px)}
+.destaque .rot{font-size:1.4vh;color:var(--ouro);letter-spacing:.12em;text-transform:uppercase;font-weight:700}
+.destaque .linha1{display:flex;gap:1vw;align-items:center;margin:.9vh 0}
+.pontos{min-width:6.5vh;height:6.5vh;border-radius:1vh;display:grid;place-items:center;font-size:3.2vh;font-weight:800}
+.destaque h2{margin:0;font-size:2.9vh;line-height:1.15}
+.destaque .sub{font-size:1.7vh;color:var(--suave)}
+.destaque ul{margin:1vh 0 0;padding-left:1.4vw;font-size:1.75vh;line-height:1.4}
+.destaque ul li{margin:.35vh 0}
+.destaque .extra{display:grid;grid-template-columns:1fr 1fr;gap:.8vh 1vw;margin-top:1.2vh;font-size:1.6vh}
+.destaque .extra span{color:var(--suave);display:block;font-size:1.3vh}
+.destaque .extra b{font-family:var(--mono);font-weight:600}
+.barra{height:.45vh;background:rgba(255,255,255,.12);border-radius:1vh;margin-top:1.4vh;overflow:hidden}
+.barra i{display:block;height:100%;width:0;background:var(--ouro)}
+.fila{position:fixed;right:1.6vw;bottom:5vh;z-index:5;width:27vw;background:var(--painel);border:1px solid var(--borda);border-radius:1.2vh;padding:1.2vh 1vw}
+.fila h3{margin:0 0 .8vh;font-size:1.5vh;color:var(--suave);letter-spacing:.1em;text-transform:uppercase}
+.fila .it{display:grid;grid-template-columns:4.8vh 1fr auto;gap:.8vw;align-items:center;padding:.55vh 0;border-top:1px solid var(--borda);font-size:1.7vh}
+.fila .it .pontos{min-width:4.2vh;height:3.4vh;font-size:1.8vh;border-radius:.6vh}
+.fila .it.ativo{background:rgba(255,223,0,.08)}
+.fila .it small{color:var(--suave);font-family:var(--mono);font-size:1.4vh}
+.legenda{position:fixed;left:1.6vw;bottom:5vh;z-index:5;background:var(--painel);border:1px solid var(--borda);border-radius:1vh;padding:1vh 1vw;font-size:1.5vh;display:grid;gap:.4vh}
+.legenda i{display:inline-block;width:1.4vh;height:1.4vh;border-radius:50%;margin-right:.5vw;vertical-align:-.15vh}
+.rodape{position:fixed;left:0;right:0;bottom:0;z-index:5;padding:.8vh 1.6vw;font-size:1.35vh;color:var(--suave);display:flex;justify-content:space-between;
+  background:linear-gradient(0deg,rgba(6,13,31,.92),rgba(6,13,31,0))}
+.ctl{position:fixed;top:1.4vh;right:50%;transform:translateX(50%);z-index:6;display:flex;gap:.5vw;opacity:0;transition:opacity .3s}
+body:hover .ctl{opacity:1}
+.ctl button{background:rgba(255,255,255,.12);color:var(--texto);border:1px solid var(--borda);border-radius:.8vh;padding:.6vh 1vw;font:inherit;font-size:1.5vh;cursor:pointer}
+.maplibregl-ctrl-attrib{background:rgba(6,13,31,.6)!important;color:#9fb0d0} .maplibregl-ctrl-attrib a{color:#9fb0d0}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="mapa" aria-label="Mapa do Amazonas com eventos de fogo"></div>
+<header class="topo">
+  <img src="img/pcam.png" alt="PCAM"><img src="img/dptc.png" alt="DPTC">
+  <div class="nome">FOGO FORENSE<small>NIPED · PCAM/DPTC · Radar de queimadas suspeitas no Amazonas</small></div>
+  <div class="esp"></div>
+  <span class="vivo"><i></i><span id="atual">conectando…</span></span>
+  <div class="relogio"><b id="hora">--:--</b><span id="data"></span></div>
+</header>
+<div class="ctl"><button id="bTela">Tela cheia</button><button id="bPausa">Pausar rotação</button><a href="./"><button>Voltar ao painel</button></a></div>
+<section class="kpis" id="kpis"></section>
+<section class="destaque" id="destaque"></section>
+<section class="fila"><h3>Maior prioridade de verificação · últimos 30 dias</h3><div id="fila"></div></section>
+<div class="legenda">
+  <div><i style="background:var(--s4)"></i>Prioridade 85+</div><div><i style="background:var(--s3)"></i>70–84</div><div><i style="background:var(--s2)"></i>50–69</div>
+  <div><i style="background:transparent;border:.25vh solid #ff7a00"></i>Alerta VIIRS (7 dias)</div>
+  <div><i style="background:#ffd600;border-radius:.2vh"></i>Alerta de mudança</div>
+  <div><i style="background:transparent;border-top:.3vh dashed #8d6e63;border-radius:0;height:0;vertical-align:.4vh"></i>Fumaça rumo a Manaus (48 h, prioridade 50+)</div>
+</div>
+<footer class="rodape"><span>Fontes: INPE (focos, DETER) · ESA Copernicus Sentinel-1/2 · NASA/USGS · Open-Meteo · FUNAI · ICMBio</span>
+  <span>A prioridade orienta a verificação; não é prova nem grau de certeza · fogoforense.vercel.app</span></footer>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="config.js"></script>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const fmt = n => (n ?? 0).toLocaleString("pt-BR");
+const br = (v, d = 1) => v == null ? "–" : Number(v).toLocaleString("pt-BR", {maximumFractionDigits: d});
+const dBR = s => s ? s.slice(0, 10).split("-").reverse().join("/") : "–";
+const cor = s => s >= 85 ? "#7a1420" : s >= 70 ? "#c8302f" : s >= 50 ? "#e07b2a" : "#e9b949";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const IND = {desmatamento_previo: "Desmatamento DETER antes do fogo", area_protegida: "Terra indígena / UC de proteção integral",
+  uso_sustentavel: "Reserva de uso sustentável", reincidencia: "Reincidência no local", multiplos_focos_dia: "3+ focos no mesmo dia",
+  periodo_proibitivo: "Período proibitivo", cicatriz_deter: "Cicatriz de queimada no DETER", ignicao_desfavoravel: "Ignição em tempo desfavorável"};
+const T = {versao: null, eventos: [], alertas: [], top: [], i: 0, pausa: false, mud: null};
+const ROT_MS = 12000;
+
+async function json(n) { const r = await fetch(window.QUEIMADIA_DADOS + n + "?v=" + (T.versao || Date.now())); if (!r.ok) throw new Error(n); return r.json(); }
+function desc(d) { return d.eventos.map(a => ({id: a[0], lat: a[1], lon: a[2], score: a[3], n: a[4], maxDia: a[5], ini: a[6], fim: a[7], mun: a[8], dist: a[9],
+  det: a[11] || {}, ind: d.indicadores.filter((k, i) => a[10] & (1 << i))})); }
+const geo = l => ({type: "FeatureCollection", features: l.map(e => ({type: "Feature", properties: {score: e.score, n: e.n}, geometry: {type: "Point", coordinates: [e.lon, e.lat]}}))});
+
+function relogio() {
+  const d = new Date(), m = new Date(d.getTime() - 4 * 3600e3);
+  $("#hora").textContent = m.toISOString().slice(11, 16);
+  $("#data").textContent = m.toISOString().slice(0, 10).split("-").reverse().join("/") + " · hora de Manaus";
+}
+setInterval(relogio, 10000); relogio();
+
+const mapa = new maplibregl.Map({container: "mapa", center: [-62.5, -4.5], zoom: 5.3, attributionControl: {compact: true}, interactive: true,
+  style: {version: 8, sources: {s: {type: "raster", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], tileSize: 256, attribution: "Esri, Maxar"}},
+    layers: [{id: "s", type: "raster", source: "s", paint: {"raster-brightness-max": 0.55, "raster-saturation": -0.3}}]}});
+
+async function carregar(primeira) {
+  const est = await json("estatisticas.json");
+  if (est.versao === T.versao && !primeira) return marcarHora(est);
+  T.versao = est.versao; T.est = est;
+  const [ev, al] = await Promise.all([json("eventos.json"), json("alertas.json")]);
+  T.eventos = desc(ev); T.alertas = desc(al);
+  try { T.mud = await json("mudancas.json"); } catch (e) { T.mud = null; }
+  const lim = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const rec = T.eventos.filter(e => e.ini.slice(0, 10) >= lim);
+  T.top = [...T.alertas.filter(e => e.score >= 70), ...rec.filter(e => e.score >= 70)].sort((a, b) => b.score - a.score || b.fim.localeCompare(a.fim)).slice(0, 8);
+  kpis(rec); fila(); marcarHora(est);
+  quandoEstilo(() => camadas(rec));
+  if (primeira) mostrar(0);
+}
+function marcarHora(est) {
+  const min = Math.round((Date.now() - new Date(est.gerado_em)) / 60000);
+  $("#atual").textContent = min <= 1 ? "Ao vivo · atualizado agora" : `Ao vivo · atualizado há ${min} min`;
+}
+function kpis(rec) {
+  const ult24 = T.alertas.filter(e => Date.now() - new Date(e.fim.replace(" ", "T") + "Z") < 864e5).length;
+  const fum = T.alertas.filter(e => e.det.clima?.fumaca_rumo_manaus).length;
+  const mudHa = T.mud ? T.mud.features.reduce((t, f) => t + f.properties.ha, 0) : null;
+  $("#kpis").innerHTML = [
+    [fmt(T.alertas.length), "alertas de fogo nos últimos 7 dias", ""],
+    [fmt(ult24), "com atividade nas últimas 24 h", "fogo"],
+    [fmt(T.alertas.filter(e => e.score >= 70).length + rec.filter(e => e.score >= 70).length), "com prioridade alta (70+)", "fogo"],
+    [fmt(fum), "alertas com fumaça rumo a Manaus", "ouro"],
+    [mudHa != null ? fmt(Math.round(mudHa)) + " ha" : "–", "alterados após o fogo (satélite)", "ouro"],
+  ].map(([v, t, c]) => `<div class="kpi ${c}"><b>${v}</b><span>${t}</span></div>`).join("");
+}
+function fila() {
+  $("#fila").innerHTML = T.top.slice(0, 6).map((e, i) => `<div class="it${i === T.i ? " ativo" : ""}"><span class="pontos" style="background:${cor(e.score)}">${e.score}</span>
+    <span>${esc(e.mun)}${e.det.ti ? " · " + esc(e.det.ti.replace("TI ", "TI ")) : ""}</span><small>${dBR(e.ini)}</small></div>`).join("")
+    || `<div class="it"><span></span><span>Nenhum evento de prioridade alta nos últimos 30 dias.</span><span></span></div>`;
+}
+function camadas(rec) {
+  const set = (id, data, layer) => { if (mapa.getSource(id)) return mapa.getSource(id).setData(data); mapa.addSource(id, {type: "geojson", data}); mapa.addLayer({id, source: id, ...layer}); };
+  const fum48 = T.alertas.filter(e => e.det.clima?.fumaca_rumo_manaus && e.score >= 50 && Date.now() - new Date(e.fim.replace(" ", "T") + "Z") < 2 * 864e5);
+  set("fumaca", {type: "FeatureCollection", features: fum48.map(e => ({type: "Feature", geometry: {type: "LineString", coordinates: [[e.lon, e.lat], [-60.021, -3.119]]}}))},
+    {type: "line", paint: {"line-color": "#8d6e63", "line-width": 1.6, "line-opacity": .7, "line-dasharray": [2, 2]}});
+  set("mud", T.mud ? {type: "FeatureCollection", features: T.mud.features} : {type: "FeatureCollection", features: []},
+    {type: "fill", paint: {"fill-color": ["match", ["get", "fonte"], "ambos", "#ff1744", "radar", "#00b8d4", "#ffd600"], "fill-opacity": .55}});
+  set("eventos", geo(rec.filter(e => e.score >= 50)), {type: "circle", paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, ["+", 3, ["sqrt", ["get", "n"]]], 11, ["+", 8, ["*", 2, ["sqrt", ["get", "n"]]]]],
+    "circle-color": ["step", ["get", "score"], "#e9b949", 50, "#e07b2a", 70, "#c8302f", 85, "#7a1420"], "circle-stroke-color": "#fff", "circle-stroke-width": .8, "circle-opacity": .92}});
+  set("alertas", geo(T.alertas), {type: "circle", paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 4, 11, 12], "circle-color": "rgba(255,122,0,.18)", "circle-stroke-color": "#ff7a00", "circle-stroke-width": 1.8}});
+  set("manaus", {type: "FeatureCollection", features: [{type: "Feature", geometry: {type: "Point", coordinates: [-60.021, -3.119]}}]},
+    {type: "circle", paint: {"circle-radius": 7, "circle-color": "#fff", "circle-stroke-color": "#1b3faa", "circle-stroke-width": 3}});
+  set("sel", {type: "FeatureCollection", features: []}, {type: "circle", paint: {"circle-radius": 26, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#ffdf00", "circle-stroke-width": 3.5}});
+}
+function mostrar(i) {
+  if (!T.top.length) { $("#destaque").innerHTML = `<div class="rot">Situação</div><h2>Sem eventos de prioridade alta nos últimos 30 dias</h2>`; return; }
+  T.i = (i + T.top.length) % T.top.length; const e = T.top[T.i], d = e.det, cl = d.clima || {};
+  const mudF = (T.mud?.features || []).filter(f => f.properties.evento === e.id), mudHa = mudF.reduce((t, f) => t + f.properties.ha, 0);
+  $("#destaque").innerHTML = `<div class="rot">Em destaque · ${T.i + 1} de ${T.top.length}</div>
+    <div class="linha1"><span class="pontos" style="background:${cor(e.score)}">${e.score}</span>
+      <div><h2>${esc(e.mun)}</h2><div class="sub">${esc(d.ti || d.uc || "Fora de terra indígena/UC")} · ${dBR(e.ini)}${e.fim.slice(0, 10) !== e.ini.slice(0, 10) ? " a " + dBR(e.fim) : ""}</div></div></div>
+    <ul>${e.ind.slice(0, 5).map(k => `<li>${IND[k] || k}</li>`).join("") || "<li>Sem indicadores fortes</li>"}</ul>
+    <div class="extra">
+      <div><span>Focos</span><b>${e.n}</b></div><div><span>Distância de Manaus</span><b>${fmt(e.dist)} km</b></div>
+      <div><span>Vento no início</span><b>${cl.vento_kmh != null ? br(cl.vento_kmh, 0) + " km/h" : "–"}</b></div>
+      <div><span>Fumaça rumo a Manaus</span><b>${cl.fumaca_rumo_manaus ? "sim, ~" + br(cl.horas_ate_manaus, 0) + " h" : "não"}</b></div>
+      ${mudHa ? `<div><span>Área alterada (satélite)</span><b>${br(mudHa)} ha</b></div>` : ""}
+      ${d.desmatamento ? `<div><span>Desmatamento prévio</span><b>${br(d.desmatamento.area_km2 * 100)} ha</b></div>` : ""}
+    </div><div class="barra"><i id="barra"></i></div>`;
+  fila();
+  quandoEstilo(() => mapa.getSource("sel")?.setData({type: "FeatureCollection", features: [{type: "Feature", geometry: {type: "Point", coordinates: [e.lon, e.lat]}}]}));
+  mapa.flyTo({center: [e.lon - 0.35, e.lat], zoom: 9.2, speed: .6, curve: 1.4, essential: true});
+  const b = $("#barra"); if (b && !T.pausa) { b.style.transition = "none"; b.style.width = "0"; requestAnimationFrame(() => { b.style.transition = `width ${ROT_MS}ms linear`; b.style.width = "100%"; }); }
+}
+setInterval(() => { if (!T.pausa) mostrar(T.i + 1); }, ROT_MS);
+setInterval(() => carregar(false).catch(() => {}), 60000);
+$("#bTela").onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+$("#bPausa").onclick = () => { T.pausa = !T.pausa; $("#bPausa").textContent = T.pausa ? "Retomar rotação" : "Pausar rotação"; };
+document.addEventListener("keydown", e => { if (e.key === "ArrowRight") mostrar(T.i + 1); if (e.key === "ArrowLeft") mostrar(T.i - 1);
+  if (e.key === " ") { e.preventDefault(); $("#bPausa").click(); } if (e.key === "f") $("#bTela").click(); });
+// o estilo (vetorial local) fica pronto rápido; não esperar as imagens de fundo terminarem
+function quandoEstilo(f) { if (mapa.isStyleLoaded()) return f(); setTimeout(() => quandoEstilo(f), 300); }
+carregar(true).catch(e => { $("#atual").textContent = "sem dados"; console.error(e); });
+</script>
+</body>
+</html>
