@@ -176,8 +176,34 @@ def religar(eventos, idx):
     return idx
 
 
+def completar_pareceres(idx, limite=5):
+    """Gera o parecer das análises já publicadas que ainda não têm (ex.: feitas
+    antes de a chave do Gemini ser cadastrada)."""
+    feitos = 0
+    for id_, info in sorted(idx.items(), key=lambda kv: -kv[1].get("t", 0)):
+        if info.get("parecer") or feitos >= limite:
+            continue
+        arq = DIR / f"{id_}.json"
+        if not arq.exists():
+            continue
+        r = json.load(open(arq))
+        try:
+            r["parecer"] = parecer.gerar(r)
+        except parecer.ParecerIndisponivel as e:
+            print("parecer indisponível:", e)
+            break
+        _grava(f"{id_}.json", r)
+        info["parecer"] = True
+        feitos += 1
+        print(f"parecer gerado: {id_}")
+    if feitos:
+        _grava("indice.json", idx)
+
+
 def ciclo(eventos, limite=MAX_POR_CICLO, ids=None):
     idx = religar(eventos, indice())
+    if not ids:
+        completar_pareceres(idx)
     agora = time.time()
     if ids:
         fila = [e for e in eventos if e["id"] in ids]

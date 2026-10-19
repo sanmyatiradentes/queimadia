@@ -9,7 +9,7 @@ import os
 
 import requests
 
-GEMINI_MODELO = os.environ.get("GEMINI_MODELO")   # vazio: escolhe o Flash mais recente da conta
+GEMINI_MODELO = os.environ.get("GEMINI_MODELO")   # vazio: escolhe o Flash-Lite mais recente da conta
 GEMINI_LISTA = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
 _modelo_escolhido = None
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
@@ -53,7 +53,7 @@ def gerar(dados):
 
 
 def _escolher_modelo(chave):
-    """O mais recente da família Flash (texto) disponível para a chave."""
+    """O mais recente da família Flash-Lite (texto) disponível para a chave."""
     global _modelo_escolhido
     if GEMINI_MODELO:
         return GEMINI_MODELO
@@ -68,14 +68,14 @@ def _escolher_modelo(chave):
         nome = m["name"].split("/")[-1]
         if "generateContent" not in m.get("supportedGenerationMethods", []):
             continue
-        if not nome.startswith("gemini-") or "flash" not in nome:
+        if not nome.startswith("gemini-") or "flash-lite" not in nome:
             continue
-        if re.search(r"lite|image|tts|audio|live|thinking|exp|preview|embedding|8b", nome):
+        if re.search(r"image|tts|audio|live|thinking|exp|preview|embedding", nome):
             continue
         versao = tuple(int(x) for x in re.findall(r"\d+", nome.split("flash")[0]))
         candidatos.append((versao, -len(nome), nome))
     if not candidatos:
-        raise ParecerIndisponivel("nenhum modelo Gemini Flash disponível para esta chave")
+        raise ParecerIndisponivel("nenhum modelo Gemini Flash-Lite disponível para esta chave")
     _modelo_escolhido = max(candidatos)[2]
     return _modelo_escolhido
 
