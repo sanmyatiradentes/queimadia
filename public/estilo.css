@@ -201,3 +201,13 @@ body:not(.estatico) .so-estatico{display:none!important}
 
 /* rolagem automática: deixa o alvo abaixo da barra fixa do topo */
 #ficha,#aStatus,#aConclusao,#abas,[data-painel]{scroll-margin-top:72px}
+
+/* gráfico de focos por mês */
+.leg-anos{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 6px}
+.leg-ano{background:#fff;color:var(--texto);border:1px solid var(--cinza-borda);font-weight:500;font-size:13px;padding:4px 10px;border-radius:99px;gap:6px}
+.leg-ano i{width:14px;height:4px;border-radius:2px;display:inline-block}
+.leg-ano .num{color:var(--cinza-texto);font-size:12px}
+.leg-ano[aria-pressed="true"]{border-color:var(--azul-escuro);box-shadow:inset 0 0 0 1px var(--azul-escuro);font-weight:700}
+.info-mes{min-height:40px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:13px;margin-top:6px}
+.info-ano{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.info-ano i{width:12px;height:4px;border-radius:2px;display:inline-block}

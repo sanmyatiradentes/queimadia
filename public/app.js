@@ -431,22 +431,7 @@ function estatisticas() {
   const anoSel = (F.ini || "").slice(0, 4);
   $("#kpisEst").innerHTML = anos.slice(-4).map(a => `<div class="indicador ${a === anoSel ? "vermelho" : "azul"}"><b>${fmt(st.total_focos_ref[a])}</b><span>focos de referência em ${a}${a == new Date().getFullYear() ? " (parcial)" : ""}</span></div>`).join("")
     + `<div class="indicador ouro"><b>${fmt(f.length)}</b><span>eventos no filtro atual</span></div><div class="indicador ouro"><b>${f.length ? br(d3.mean(f, e => e.score), 1) : "–"}</b><span>pontuação média no filtro</span></div>`;
-  // linhas por mês
-  const svg = d3.select("#gMes"), w = Math.max(360, svg.node().parentNode.clientWidth), h = 250, m = {l: 50, r: 70, t: 10, b: 26};
-  svg.attr("width", w).attr("height", h).selectAll("*").remove();
-  const meses = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-  const x = d3.scalePoint().domain(d3.range(12)).range([m.l, w - m.r]);
-  const y = d3.scaleLinear().domain([0, d3.max(anos, a => d3.max(st.focos_por_mes[a]))]).nice().range([h - m.b, m.t]);
-  svg.append("g").attr("transform", `translate(0,${h - m.b})`).call(d3.axisBottom(x).tickFormat(i => meses[i])).call(a => a.select(".domain").attr("stroke", css("--cinza-borda")));
-  svg.append("g").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(w - m.l - m.r)).tickFormat(d => fmt(d))).call(a => a.select(".domain").remove()).call(a => a.selectAll("line").attr("stroke", css("--grade")));
-  const cores = d3.scaleOrdinal().domain(anos).range(["#9aa5b4", "#7f8ea3", "#5b6675", css("--azul"), css("--pcam-ouro"), css("--s2"), css("--dptc-vermelho")].slice(-anos.length));
-  const anoAtual = String(new Date().getFullYear()), mesAtual = new Date().getMonth();
-  anos.forEach(a => {
-    const v = st.focos_por_mes[a].map((n, i) => ({i, n})).filter(p => a !== anoAtual || p.i <= mesAtual);
-    const forte = a === anoAtual || a === anoSel;
-    svg.append("path").datum(v).attr("d", d3.line().x(p => x(p.i)).y(p => y(p.n))).attr("fill", "none").attr("stroke", cores(a)).attr("stroke-width", forte ? 2.6 : 1.3);
-    const u = v[v.length - 1]; svg.append("text").attr("x", x(u.i) + 5).attr("y", y(u.n) + 4).text(a).style("fill", cores(a)).style("font-weight", forte ? 700 : 400);
-  });
+  graficoMeses(st, anos);
   const porMun = d3.rollups(f, v => v.length, e => e.mun).sort((a, b) => b[1] - a[1]).slice(0, 12);
   barras("#gMun", porMun, css("--dptc-vermelho"), true);
   const hist = d3.range(0, 101, 5).map(s => [String(s), f.filter(e => e.score === s).length]).filter(d => +d[0] >= F.score);
@@ -459,6 +444,48 @@ function estatisticas() {
 }
 
 // ------------------------------------------------------------ metodologia e fontes
+// Focos por mês: uma linha por ano, legenda clicável e valores ao tocar num mês
+const CORES_ANOS = ["#9aa3af", "#5fa8d3", "#2a9d8f", "#1b3faa", "#c9a227", "#8e5cc4", "#c8302f", "#e07b2a", "#3a7d44"];
+function graficoMeses(st, anos) {
+  const anoAtual = String(new Date().getFullYear()), mesAtual = new Date().getMonth();
+  const cor = a => CORES_ANOS[(anos.indexOf(a) + CORES_ANOS.length - anos.length) % CORES_ANOS.length];
+  if (!anos.includes(Q.anoDestaque)) Q.anoDestaque = anoAtual;
+  const meses = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const serie = a => st.focos_por_mes[a].map((n, i) => ({i, n})).filter(p => a !== anoAtual || p.i <= mesAtual);
+  // legenda
+  $("#legMes").innerHTML = anos.map(a => `<button type="button" class="leg-ano" data-a="${a}" aria-pressed="${a === Q.anoDestaque}">
+      <i style="background:${cor(a)}"></i>${a}${a === anoAtual ? " (parcial)" : ""} <span class="num">${fmt(st.total_focos_ref[a])}</span></button>`).join("");
+  $("#legMes").onclick = e => { const b = e.target.closest(".leg-ano"); if (!b) return; Q.anoDestaque = b.dataset.a; graficoMeses(st, anos); };
+  const svg = d3.select("#gMes"), w = Math.max(260, svg.node().parentNode.clientWidth), h = 260, m = {l: 44, r: 16, t: 14, b: 26};
+  svg.attr("width", w).attr("height", h).selectAll("*").remove();
+  const x = d3.scalePoint().domain(d3.range(12)).range([m.l, w - m.r]);
+  const y = d3.scaleLinear().domain([0, d3.max(anos, a => d3.max(st.focos_por_mes[a]))]).nice().range([h - m.b, m.t]);
+  svg.append("g").attr("transform", `translate(0,${h - m.b})`).call(d3.axisBottom(x).tickFormat(i => meses[i])).call(g => g.select(".domain").attr("stroke", css("--cinza-borda")));
+  svg.append("g").attr("transform", `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(w - m.l - m.r)).tickFormat(d => fmt(d))).call(g => g.select(".domain").remove()).call(g => g.selectAll("line").attr("stroke", css("--grade")));
+  const linha = d3.line().x(p => x(p.i)).y(p => y(p.n));
+  // anos em segundo plano primeiro; o destacado por cima, mais grosso, com pontos e rótulo
+  anos.filter(a => a !== Q.anoDestaque).forEach(a =>
+    svg.append("path").datum(serie(a)).attr("d", linha).attr("fill", "none").attr("stroke", cor(a)).attr("stroke-width", 1.4).attr("stroke-opacity", .45));
+  const d = serie(Q.anoDestaque), c = cor(Q.anoDestaque);
+  svg.append("path").datum(d).attr("d", linha).attr("fill", "none").attr("stroke", c).attr("stroke-width", 3);
+  svg.selectAll(".pt").data(d).join("circle").attr("cx", p => x(p.i)).attr("cy", p => y(p.n)).attr("r", 3.5).attr("fill", c);
+  const pico = d.reduce((a, b) => b.n > a.n ? b : a, d[0]);
+  if (pico) svg.append("text").attr("x", x(pico.i)).attr("y", y(pico.n) - 8).attr("text-anchor", "middle").style("fill", c).style("font-weight", 700)
+    .text(`${Q.anoDestaque}: ${fmt(pico.n)} em ${meses[pico.i]}`);
+  // toque/passagem num mês: valores de todos os anos
+  const guia = svg.append("line").attr("y1", m.t).attr("y2", h - m.b).attr("stroke", css("--cinza-texto")).attr("stroke-dasharray", "3 3").style("display", "none");
+  const info = $("#infoMes");
+  const mostrar = ev => {
+    const [px] = d3.pointer(ev); const i = Math.max(0, Math.min(11, Math.round((px - m.l) / ((w - m.l - m.r) / 11))));
+    guia.attr("x1", x(i)).attr("x2", x(i)).style("display", null);
+    info.innerHTML = `<b>${meses[i]}</b> · ` + anos.slice().reverse().map(a => { const v = st.focos_por_mes[a][i];
+      const fut = a === anoAtual && i > mesAtual; return `<span class="info-ano"><i style="background:${cor(a)}"></i>${a}: <b class="num">${fut ? "–" : fmt(v)}</b></span>`; }).join("");
+  };
+  svg.append("rect").attr("x", m.l - 10).attr("y", m.t).attr("width", w - m.l - m.r + 20).attr("height", h - m.t - m.b).attr("fill", "transparent")
+    .style("cursor", "crosshair").on("mousemove", mostrar).on("click", mostrar).on("touchstart", mostrar, {passive: true});
+  info.innerHTML = `<span class="nota">Toque ou passe o mouse sobre um mês para ver os valores de todos os anos. Toque num ano acima para destacá-lo.</span>`;
+}
+
 function metodologia() {
   const st = Q.est, p = st.parametros, P = st.pesos, D = st.descricao_indicadores;
   $("#metodo").innerHTML = `
