@@ -1,20 +1,27 @@
 # Atualiza os dados do QueimadIA a cada 10 minutos e envia para o Vercel Blob,
 # de onde o painel publicado na Vercel lê os dados.
 name: Atualizar dados
+# Ciclo encadeado: ao terminar, cada execução espera completar 10 min desde o
+# início e dispara a próxima (workflow_dispatch). O agendamento a cada 30 min é
+# só reserva, para religar a corrente se ela cair; a fila (concurrency) impede
+# execuções duplicadas.
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "7,37 * * * *"
   workflow_dispatch:
 concurrency:
   group: atualizar-dados
   cancel-in-progress: false
 permissions:
   contents: read
+  actions: write
 jobs:
   atualizar:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      - name: Marcar início
+        run: echo "INICIO=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -57,3 +64,11 @@ jobs:
             motor/dados
             public/dados
           key: estado-${{ github.run_id }}
+      - name: Disparar o próximo ciclo (10 min após o início deste)
+        if: always() && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ESPERA=$(( 600 - ($(date +%s) - INICIO) ))
+          if [ "$ESPERA" -gt 0 ]; then echo "aguardando ${ESPERA}s"; sleep "$ESPERA"; fi
+          gh workflow run atualizar.yml -R "${{ github.repository }}" --ref main
