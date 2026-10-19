@@ -330,9 +330,17 @@ const BASES = {
   topo: {nome: "Topográfico (Esri)", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"], attr: "Esri"},
   claro: {nome: "Claro (CARTO)", tiles: ["https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"], attr: "© CARTO © OSM"},
   escuro: {nome: "Escuro (CARTO)", tiles: ["https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"], attr: "© CARTO © OSM"},
-  s2rgb: {nome: "Sentinel-2 recente (cor real)", pc: "rgb"},
-  s2ndvi: {nome: "Sentinel-2 recente (NDVI)", pc: "ndvi"},
-  s2falsa: {nome: "Sentinel-2 recente (falsa-cor SWIR)", pc: "falsacor"},
+  s2rgb: {nome: "Sentinel-2: cor real", pc: "rgb", grupo: "sat"},
+  s2fogo: {nome: "Sentinel-2: incêndios (fogo ativo)", pc: "fogo", grupo: "sat", per: "periodo_fogo",
+    leg: "Cor real com o fogo ativo em vermelho/laranja (SWIR alto). Imagens mais recentes dos últimos 15 dias: só mostra o fogo que queimava na passagem do satélite."},
+  s2falsa: {nome: "Sentinel-2: SWIR (cicatriz de queimada)", pc: "falsacor", grupo: "sat",
+    leg: "B12-B08-B04. Vegetação em verde; área queimada e solo exposto em tons marrons/vermelhos."},
+  s2ndvi: {nome: "Sentinel-2: NDVI (vigor da vegetação)", pc: "ndvi", grupo: "sat", leg: "Vermelho = sem vegetação ou queimado · amarelo = pouca · verde = floresta."},
+  s2ndmi: {nome: "Sentinel-2: umidade da vegetação (NDMI)", pc: "ndmi", grupo: "sat", leg: "Vermelho = vegetação seca, mais inflamável · azul = úmida."},
+  s2ndwi: {nome: "Sentinel-2: água (NDWI)", pc: "ndwi", grupo: "sat", leg: "Azul escuro = água; útil para várzeas e rios em seca."},
+  s2veg: {nome: "Sentinel-2: falsa-cor (vegetação)", pc: "vegetacao", grupo: "sat", leg: "B08-B04-B03. Vegetação sadia em vermelho; desmatamento em ciano/cinza."},
+  s1radar: {nome: "Sentinel-1: radar (vê através de nuvem e fumaça)", pc: "radar", grupo: "sat", per: "periodo_radar",
+    leg: "Radar dos últimos 30 dias, em dB: floresta em verde-amarelo, clareiras e pasto em roxo, água em preto. Funciona com nuvem e fumaça."},
 };
 const CAMADAS = [
   ["eventos", "Eventos (referência)", "#c8302f", true], ["alertas", "Alertas tempo real (VIIRS)", "#ff7a00", true],
@@ -450,19 +458,25 @@ async function trocarBase(k) {
       if (!Q.mosaico) Q.mosaico = Q.estatico ? Q.est.mosaico : await (await fetch("api/mosaico")).json();
       if (!Q.mosaico) throw new Error("sem mosaico");
       const id = "base-" + k;
+      if (!Q.mosaico[b.pc]) throw new Error("camada indisponível");
       if (!m.getSource(id)) m.addSource(id, {type: "raster", tiles: [Q.mosaico[b.pc]], tileSize: 256, attribution: "ESA Copernicus · Microsoft Planetary Computer", minzoom: 8, maxzoom: 15});
       m.removeLayer("base"); m.addLayer({id: "base", type: "raster", source: id}, "tis");
-      if (m.getZoom() < 9) toast(`Sentinel-2 de ${dBR(Q.mosaico.periodo[0])} a ${dBR(Q.mosaico.periodo[1])}. Aproxime (zoom ≥ 9) para ver as imagens.`, 6000);
-    } catch (e) { toast("Não foi possível gerar o mosaico Sentinel-2 agora. Tente de novo em alguns minutos."); }
+      const per = Q.mosaico[b.per || "periodo"] || Q.mosaico.periodo;
+      $("#baseLeg").innerHTML = `<b>${b.nome}</b><br>${b.leg || ""}<br><span class="nota">Imagens de ${dBR(per[0])} a ${dBR(per[1])}. ${m.getZoom() < 9 ? "Aproxime (zoom 9 ou mais) para ver." : ""}</span>`;
+      $("#baseLeg").hidden = false;
+      if (m.getZoom() < 9) toast(`Aproxime o mapa (zoom 9 ou mais) para ver ${b.nome}.`, 5000);
+    } catch (e) { toast("Não foi possível gerar essa camada de satélite agora. Tente de novo em alguns minutos."); }
     return;
   }
   m.removeLayer("base"); m.addLayer({id: "base", type: "raster", source: "base-" + k}, "tis");
+  $("#baseLeg").hidden = true;
 }
 function montarControles() {
   const el = $("#mapaCtl");
   el.innerHTML = `<button type="button" class="recolher" id="ctlRec" aria-expanded="true"><b>☰ Camadas do mapa</b><span>ocultar</span></button><div id="ctlCorpo">
     <p class="ctl-dica">Marque ou desmarque para <b>ligar ou desligar</b> cada camada.</p>
-    <h4>Mapa de fundo</h4>${Object.entries(BASES).map(([k, b]) => `<label><input type="radio" name="base" value="${k}" ${k === "satelite" ? "checked" : ""}> ${b.nome}</label>`).join("")}
+    <h4>Mapa de fundo</h4>${Object.entries(BASES).filter(([, b]) => !b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}" ${k === "satelite" ? "checked" : ""}> ${b.nome}</label>`).join("")}
+    <h4>Imagens de satélite recentes</h4>${Object.entries(BASES).filter(([, b]) => b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}"> ${b.nome}</label>`).join("")}
     <h4>Camadas</h4>${CAMADAS.map(([k, t, c, on]) => `<label><input type="checkbox" data-c="${k}" ${on ? "checked" : ""}><span class="sw" style="background:${c}"></span>${t}</label>`).join("")}
     <div id="ventoCtl"><h4>Hora do vento</h4><input type="range" id="ventoSl" min="0" max="47" value="0" style="width:100%"><div class="nota" id="ventoHora"></div></div></div>`;
   el.addEventListener("change", e => {
@@ -477,7 +491,7 @@ function montarControles() {
   el.addEventListener("input", e => { if (e.target.id === "ventoSl") { Q.ventoHora = +e.target.value; desenharVento(); } });
   $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "mostrar" : "ocultar"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };
   if (matchMedia("(max-width:640px)").matches) $("#ctlRec").click();
-  $("#legenda").innerHTML = `<b style="font-size:12px">Nível de suspeita</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
+  $("#legenda").innerHTML = `<b style="font-size:12px">Prioridade de verificação</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
     + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div><i style="background:#8e24aa"></i>Lixão/vazadouro</div><div><i style="background:transparent;border:2px solid #ba68c8"></i>Fogo a até 1 km de lixão</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
 }
 
@@ -679,6 +693,7 @@ function fontes() {
     ["Municípios", "IBGE via TerraBrasilis", "https://terrabrasilis.dpi.inpe.br/", "–", "estático", ""],
     ["Clima: vento, umidade, chuva", "Open-Meteo (ECMWF, GFS, ICON, ERA5)", "https://open-meteo.com/", Q.vento ? manaus(Q.vento.gerado_em.replace("T", " ").slice(0, 19)) : "–", "a cada 3 h (grade) · por evento", "vento no mapa e na ficha"],
     ["Sentinel-2 L2A (10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-2-l2a", "sob demanda", "~5 dias", "NDVI, NBR, NDMI, imagens"],
+    ["Sentinel-1 RTC (radar, 10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc", "a cada 6 h (mosaico)", "~6 a 12 dias", "vê através de nuvem e fumaça"],
     ["Landsat 8/9 C2 L2 (30 m)", "NASA/USGS · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/landsat-c2-l2", "sob demanda", "~8 dias", "série longa"],
   ];
   $("#fontes").innerHTML = `<div class="indicadores">

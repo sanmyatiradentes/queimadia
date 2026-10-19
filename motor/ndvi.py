@@ -422,27 +422,65 @@ def dnbr(col_a, id_a, col_b, id_b, lat, lon, lado_m=4000, raio_m=None):
 _mosaicos = {}
 
 
+AM_POLIGONO = {"type": "Polygon", "coordinates": [[[-74, -10], [-56, -10], [-56, 2.5], [-74, 2.5], [-74, -10]]]}
+
+
+def _registrar(colecao, ini, fim, ordem, nuvem=None):
+    args = [{"op": "anyinteracts", "args": [{"property": "datetime"},
+                                            {"interval": [ini.strftime("%Y-%m-%dT00:00:00Z"), fim.strftime("%Y-%m-%dT23:59:59Z")]}]},
+            {"op": "s_intersects", "args": [{"property": "geometry"}, AM_POLIGONO]}]
+    if nuvem is not None:
+        args.append({"op": "<=", "args": [{"property": "eo:cloud_cover"}, nuvem]})
+    corpo = {"collections": [colecao], "filter-lang": "cql2-json", "filter": {"op": "and", "args": args},
+             "sortby": [ordem]}
+    return requests.post(f"{PC_DATA}/mosaic/register", json=corpo, timeout=60).json()["searchid"]
+
+
+# Realce de fogo ativo (inspirado no "Wildfires" de P. Markuse, Sentinel Hub): cor real
+# e, onde o SWIR2 (B12) é muito alto e maior que SWIR1 e vermelho, pinta vermelho/laranja.
+# Reflectância L2A com offset de +1000 (baseline >= 04.00, todas as cenas recentes).
+_FOGO_COND = "(B12>3000)%26(B12>B11)%26(B12>B04*1.6)"
+_FOGO_EXPR = (f"where({_FOGO_COND},1,((B04-1000)/2200)**0.75);"
+              f"where({_FOGO_COND},(B11-1000)/6000,((B03-1000)/2200)**0.75);"
+              f"where({_FOGO_COND},0,((B02-1000)/2200)**0.75)")
+
+
 def mosaico(dias=45, nuvem=20):
-    """Registra no Planetary Computer uma busca Sentinel-2 recente sobre o AM e
-    devolve os modelos de URL de tiles (cor real e NDVI). Cache de 6 h."""
+    """Mosaicos Sentinel-2 e Sentinel-1 recentes sobre o AM (Planetary Computer) e
+    os modelos de URL de tiles de cada visualização. Cache de 6 h.
+
+    Sentinel-2 (menos nuvem primeiro): cor real, falsa-cor SWIR, NDVI, umidade
+    (NDMI), água (NDWI), falsa-cor vegetação. Sentinel-2 (mais recente primeiro):
+    fogo ativo. Sentinel-1 RTC (radar, enxerga através de nuvem e fumaça): composição
+    VV/VH/razão em dB."""
     chave = (dias, nuvem)
     if chave in _mosaicos and time.time() - _mosaicos[chave]["t"] < 6 * 3600:
         return _mosaicos[chave]["r"]
     fim = datetime.now(timezone.utc)
     ini = fim - timedelta(days=dias)
-    corpo = {"collections": ["sentinel-2-l2a"], "filter-lang": "cql2-json",
-             "filter": {"op": "and", "args": [
-                 {"op": "anyinteracts", "args": [{"property": "datetime"},
-                                                 {"interval": [ini.strftime("%Y-%m-%dT00:00:00Z"), fim.strftime("%Y-%m-%dT23:59:59Z")]}]},
-                 {"op": "<=", "args": [{"property": "eo:cloud_cover"}, nuvem]},
-                 {"op": "s_intersects", "args": [{"property": "geometry"},
-                                                 {"type": "Polygon", "coordinates": [[[-74, -10], [-56, -10], [-56, 2.5], [-74, 2.5], [-74, -10]]]}]}]},
-             "sortby": [{"field": "eo:cloud_cover", "direction": "asc"}]}
-    sid = requests.post(f"{PC_DATA}/mosaic/register", json=corpo, timeout=60).json()["searchid"]
+    sid = _registrar("sentinel-2-l2a", ini, fim, {"field": "eo:cloud_cover", "direction": "asc"}, nuvem)
     base = f"{PC_DATA}/mosaic/tiles/{sid}/WebMercatorQuad/{{z}}/{{x}}/{{y}}@1x?collection=sentinel-2-l2a&nodata=0"
+    expr = lambda e, faixa, cmap: base + f"&expression={e}&asset_as_band=true&rescale={faixa}&colormap_name={cmap}"
     r = {"searchid": sid, "periodo": [ini.strftime("%Y-%m-%d"), fim.strftime("%Y-%m-%d")], "nuvem_max": nuvem,
          "rgb": base + "&assets=B04&assets=B03&assets=B02&color_formula=Gamma+RGB+3.2+Saturation+0.8+Sigmoidal+RGB+25+0.35",
-         "ndvi": base + "&expression=(B08-B04)/(B08%2BB04)&asset_as_band=true&rescale=0,0.9&colormap_name=rdylgn",
-         "falsacor": base + "&assets=B12&assets=B08&assets=B04&color_formula=Gamma+RGB+2.2+Saturation+1.1+Sigmoidal+RGB+15+0.4"}
+         "ndvi": expr("(B08-B04)/(B08%2BB04)", "0,0.9", "rdylgn"),
+         "falsacor": base + "&assets=B12&assets=B08&assets=B04&color_formula=Gamma+RGB+2.2+Saturation+1.1+Sigmoidal+RGB+15+0.4",
+         "vegetacao": base + "&assets=B08&assets=B04&assets=B03&color_formula=Gamma+RGB+2.6+Saturation+1.0+Sigmoidal+RGB+15+0.35",
+         "ndmi": expr("(B8A-B11)/(B8A%2BB11)", "-0.4,0.6", "rdylbu"),
+         "ndwi": expr("(B03-B08)/(B03%2BB08)", "-0.6,0.6", "blues")}
+    try:   # fogo ativo: cenas mais recentes (até 60% de nuvem) nos últimos 15 dias
+        sf = _registrar("sentinel-2-l2a", fim - timedelta(days=15), fim, {"field": "datetime", "direction": "desc"}, 60)
+        r["fogo"] = (f"{PC_DATA}/mosaic/tiles/{sf}/WebMercatorQuad/{{z}}/{{x}}/{{y}}@1x?collection=sentinel-2-l2a&nodata=0"
+                     f"&asset_as_band=true&expression={_FOGO_EXPR}&rescale=0,1&rescale=0,1&rescale=0,1")
+        r["periodo_fogo"] = [(fim - timedelta(days=15)).strftime("%Y-%m-%d"), fim.strftime("%Y-%m-%d")]
+    except Exception:
+        pass
+    try:   # radar Sentinel-1 RTC: cenas mais recentes dos últimos 30 dias
+        s1 = _registrar("sentinel-1-rtc", fim - timedelta(days=30), fim, {"field": "datetime", "direction": "desc"})
+        r["radar"] = (f"{PC_DATA}/mosaic/tiles/{s1}/WebMercatorQuad/{{z}}/{{x}}/{{y}}@1x?collection=sentinel-1-rtc&nodata=-32768"
+                      "&asset_as_band=true&expression=10*log10(vv);10*log10(vh);vv/vh&rescale=-20,-3&rescale=-26,-10&rescale=2,14")
+        r["periodo_radar"] = [(fim - timedelta(days=30)).strftime("%Y-%m-%d"), fim.strftime("%Y-%m-%d")]
+    except Exception:
+        pass
     _mosaicos[chave] = {"t": time.time(), "r": r}
     return r
