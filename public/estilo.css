@@ -247,3 +247,6 @@ body:not(.estatico) .so-estatico{display:none!important}
 
 .topo a.botao{text-decoration:none}
 @media (max-width:800px){.so-desktop{display:none!important}}
+
+.txt-curto{display:none}
+@media (max-width:640px){.txt-longo{display:none}.txt-curto{display:inline}.topo{gap:8px}.topo .botao.pequeno{padding:5px 8px}}
