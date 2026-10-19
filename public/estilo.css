@@ -211,3 +211,8 @@ body:not(.estatico) .so-estatico{display:none!important}
 .info-mes{min-height:40px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:13px;margin-top:6px}
 .info-ano{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
 .info-ano i{width:12px;height:4px;border-radius:2px;display:inline-block}
+
+/* clima na ficha */
+.clima-bloco{border:1px solid var(--cinza-borda);border-radius:8px;padding:12px 14px;margin:6px 0 14px;background:#f9fbfe}
+.clima-bloco .fatos{margin:8px 0}
+.clima-leitura{font-size:14.5px;margin:6px 0}

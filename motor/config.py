@@ -46,6 +46,7 @@ PESOS = {
     "multiplos_focos_dia": 10,
     "periodo_proibitivo": 10,
     "cicatriz_deter": 15,
+    "ignicao_desfavoravel": 10,
 }
 INDICADORES = list(PESOS)
 DESCRICAO_INDICADORES = {
@@ -61,6 +62,9 @@ DESCRICAO_INDICADORES = {
     "periodo_proibitivo": ("Início em período proibitivo", "mês do 1º foco entre julho e novembro (parâmetro)"),
     "cicatriz_deter": ("Cicatriz de queimada no DETER",
                        "polígono CICATRIZ_DE_QUEIMADA a até 1 km, de 10 dias antes a 60 dias depois"),
+    "ignicao_desfavoravel": ("Ignição em condição desfavorável ao fogo",
+                             "no 1º foco: risco de fogo do INPE < 0,3, ou chuva ≥ 10 mm nas 72 h anteriores, ou umidade mínima das 24 h anteriores ≥ 80%: "
+                             "o fogo dificilmente começaria ou se espalharia sozinho"),
 }
 
 CREDITO = "Desenvolvido pelo NIPED/PCAM"

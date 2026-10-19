@@ -15,7 +15,8 @@ S = requests.Session()
 S.headers["User-Agent"] = "QueimadIA/1.0 (NIPED-PCAM-DPTC)"
 STATUS = config.ESTADO / "status.json"
 RECENTES = config.ESTADO / "focos_recentes.csv"
-COLS = ["lat", "lon", "data", "satelite", "municipio", "fonte"]
+COLS = ["lat", "lon", "data", "satelite", "municipio", "fonte", "dias_sem_chuva", "precipitacao", "risco_fogo", "frp"]
+EXTRAS = {"numero_dias_sem_chuva": "dias_sem_chuva", "precipitacao": "precipitacao", "risco_fogo": "risco_fogo", "frp": "frp"}
 
 
 def agora():
@@ -88,7 +89,9 @@ def historico_ref():
 
 
 def _padronizar(df, fonte):
-    df = df.rename(columns={"data_hora_gmt": "data", "data_pas": "data"})
+    df = df.rename(columns={"data_hora_gmt": "data", "data_pas": "data", **EXTRAS})
+    for c in EXTRAS.values():   # INPE usa -999 para "sem dado"
+        df[c] = pd.to_numeric(df[c], errors="coerce").where(lambda x: x > -900) if c in df else float("nan")
     df["lat"] = df["lat"].astype(float).round(5)
     df["lon"] = df["lon"].astype(float).round(5)
     df["data"] = pd.to_datetime(df["data"].astype(str).str.strip()).dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -116,10 +119,15 @@ def _gravar_recentes(df):
 def inicializar_ano_corrente():
     """Primeira execução do ano: baixa os arquivos mensais do ano corrente
     (todos os satélites, só AM)."""
-    if RECENTES.exists() and status().get("ano_inicializado") == agora().year:
+    sem_extras = RECENTES.exists() and "frp" not in pd.read_csv(RECENTES, nrows=1).columns
+    if RECENTES.exists() and status().get("ano_inicializado") == agora().year and not sem_extras:
         return
     ano = agora().year
     semente = config.DADOS / "inpe" / f"focos_br_am_ref_{ano}.csv"
+    if sem_extras:
+        # estado antigo, sem FRP/dias sem chuva/risco de fogo: refaz o ano pelos mensais
+        RECENTES.unlink()
+        semente = semente.with_suffix(".nao-usar")
     if semente.exists():   # ano corrente já reconstituído (satélite de referência)
         df = pd.read_csv(semente, skipinitialspace=True)
         df["municipio"] = df["municipio"].str.strip()

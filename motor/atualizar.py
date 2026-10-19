@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 
-from . import ingest, eventos, publicar, precalcular
+from . import clima, ingest, eventos, publicar, precalcular
 
 
 def ciclo(rapido=False):
@@ -26,6 +26,17 @@ def ciclo(rapido=False):
     except Exception:
         traceback.print_exc()
     df, evs, alertas = eventos.calcular()
+    try:   # alertas de tempo real primeiro: são os que importam agora
+        print("clima de eventos:", clima.enriquecer(alertas + evs))
+    except Exception:
+        traceback.print_exc()
+    try:
+        clima.grade_vento()
+    except Exception:
+        traceback.print_exc()
+    eventos.aplicar_clima(evs + alertas)
+    evs.sort(key=lambda e: (-e["score"], -e["n_focos"]))
+    alertas.sort(key=lambda e: (-e["score"], -e["n_focos"]))
     est = publicar.publicar(df, evs, alertas)
     if "--sem-ndvi" not in sys.argv:
         try:

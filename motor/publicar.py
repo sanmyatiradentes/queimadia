@@ -92,6 +92,8 @@ def publicar(df, eventos, alertas):
         "ultimo_foco_utc": df["data"].max().strftime("%Y-%m-%d %H:%M"),
         "focos_recentes": int(len(rec)),
         "n_eventos": len(eventos), "n_alertas": len(alertas), "n_deter": n_deter,
+        "fumaca_rumo_manaus": {"eventos": sum(1 for e in eventos if (e["det"].get("clima") or {}).get("fumaca_rumo_manaus")),
+                               "alertas": sum(1 for e in alertas if (e["det"].get("clima") or {}).get("fumaca_rumo_manaus"))},
         "pesos": config.PESOS,
         "descricao_indicadores": config.DESCRICAO_INDICADORES,
         "parametros": {"eps_km": config.EPS_KM, "eps_dias": config.EPS_DIAS,

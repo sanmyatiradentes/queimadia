@@ -17,6 +17,7 @@ const IND_TXT = {
   desmatamento_previo: "Desmatamento prévio (DETER)", area_protegida: "TI ou UC de proteção integral",
   uso_sustentavel: "UC de uso sustentável", reincidencia: "Reincidência", multiplos_focos_dia: "≥3 focos no mesmo dia",
   periodo_proibitivo: "Período proibitivo", cicatriz_deter: "Cicatriz DETER",
+  ignicao_desfavoravel: "Ignição em tempo desfavorável",
 };
 // hora de Manaus (UTC−4)
 const manaus = utc => { const d = new Date(utc.replace(" ", "T") + "Z"); d.setUTCHours(d.getUTCHours() - 4);
@@ -182,6 +183,7 @@ function selecionar(id, voar) {
   if (e.maxDia >= 3) motivos.push(`${e.maxDia} focos surgiram no mesmo dia`);
   if (e.ind.includes("cicatriz_deter")) motivos.push("o DETER confirmou a cicatriz de queimada");
   if (e.ind.includes("periodo_proibitivo")) motivos.push("começou no período de proibição do fogo");
+  if (d.ignicao_desfavoravel) motivos.push(`começou em condição desfavorável ao fogo (${d.ignicao_desfavoravel.join("; ")}), quando dificilmente pegaria sozinho`);
   const junta = l => l.length > 1 ? l.slice(0, -1).join("; ") + " e " + l[l.length - 1] : l[0];
   const porque = motivos.length
     ? `<div class="porque"><b>Por que está na lista:</b> ${junta(motivos)}. Suspeita <b>${nivel(e.score)}</b> (${e.score} de 100 pontos).</div>`
@@ -204,6 +206,7 @@ function selecionar(id, voar) {
       <div><span>Satélites</span><b>${esc(e.sats.join(", ") || "AQUA_M-T")}</b></div>
       ${e.ia != null ? `<div><span>Atipicidade (IA)</span><b>${e.ia}/100</b></div>` : ""}
     </div>
+    ${blocoClima(e)}
     <div class="painel-grade">
       <div><h3 style="margin-bottom:6px">Os sinais verificados, um a um</h3>${linhas}
         <div class="formula">pontuação = ${calc} = <b>${e.score}</b></div></div>
@@ -226,6 +229,37 @@ function selecionar(id, voar) {
     navigator.clipboard?.writeText(t).then(() => toast("Resumo copiado."), () => toast(t, 10000)); };
 }
 
+// ------------------------------------------------------------ clima e comportamento do fogo
+const ROSA = ["norte", "nordeste", "leste", "sudeste", "sul", "sudoeste", "oeste", "noroeste"];
+const rosa = g => ROSA[Math.round(((g % 360) + 360) % 360 / 45) % 8];
+function blocoClima(e) {
+  const cl = e.det.clima, f = e.det.fogo || {}, ctx = e.det.contexto || [];
+  if (!cl && f.frp_max == null && f.risco_fogo_inicio == null) return "";
+  const item = (r, v) => v == null ? "" : `<div><span>${r}</span><b>${v}</b></div>`;
+  const leitura = [];
+  if (e.det.ignicao_desfavoravel) leitura.push("O fogo começou em tempo desfavorável à queima: <b>pesa para ignição deliberada</b>.");
+  if (ctx.includes("escape_plausivel")) leitura.push("Havia seca forte e vento acima de 10 km/h: <b>é plausível que uma queima tenha escapado</b> do controle (acidente), o que deve ser considerado na investigação.");
+  if (ctx.includes("biomassa_alta")) leitura.push("Fogo intenso (FRP alto) e persistente, por mais de um dia ou à noite: indica <b>queima de muita biomassa</b>, típica de mata derrubada sendo queimada.");
+  if (cl?.fumaca_rumo_manaus) leitura.push(`O vento levava a fumaça <b>em direção a Manaus</b>, com chegada estimada em cerca de ${br(cl.horas_ate_manaus, 0)} h.`);
+  return `<div class="clima-bloco"><h3>Clima e comportamento do fogo</h3>
+    <div class="fatos">
+      ${cl ? item("Vento no 1º foco", `${br(cl.vento_kmh, 0)} km/h, de ${rosa(cl.vento_de_graus)}`) : ""}
+      ${cl ? item("Umidade mínima (24 h antes)", cl.umidade_min_24h != null ? br(cl.umidade_min_24h, 0) + "%" : null) : ""}
+      ${cl ? item("Umidade na hora do foco", cl.umidade != null ? br(cl.umidade, 0) + "%" : null) : ""}
+      ${cl ? item("Temperatura", cl.temperatura != null ? br(cl.temperatura, 1) + " °C" : null) : ""}
+      ${cl ? item("Chuva nas 72 h antes", br(cl.chuva_72h_mm, 1) + " mm") : ""}
+      ${item("Dias sem chuva (INPE)", f.dias_sem_chuva_mediana != null ? br(f.dias_sem_chuva_mediana, 0) : null)}
+      ${item("Risco de fogo (INPE, 0 a 1)", f.risco_fogo_inicio != null ? br(f.risco_fogo_inicio, 2) : null)}
+      ${item("Intensidade máx. (FRP)", f.frp_max != null ? br(f.frp_max, 1) + " MW" : null)}
+      ${item("Focos à noite", f.focos_noite)}
+      ${item("Dias com fogo", f.dias_com_fogo)}
+      ${cl ? item("Fumaça rumo a Manaus", cl.fumaca_rumo_manaus ? `sim, ~${br(cl.horas_ate_manaus, 0)} h` : "não") : ""}
+    </div>
+    ${leitura.length ? `<p class="clima-leitura">${leitura.join(" ")}</p>` : `<p class="nota">Sem sinal climático forte para acidente ou para ignição deliberada.</p>`}
+    <p class="nota">Clima: ${cl ? esc(cl.fonte) + ", na hora do 1º foco" : "indisponível para este evento"}. Risco de fogo, dias sem chuva e FRP: INPE, por foco (disponíveis a partir de ${new Date().getFullYear()}).</p>
+  </div>`;
+}
+
 // ------------------------------------------------------------ mapa
 const BASES = {
   mapa: {nome: "Mapa (OpenStreetMap)", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], attr: "© OpenStreetMap"},
@@ -243,6 +277,7 @@ const CAMADAS = [
   ["desmat", "DETER desmatamento", "#8e44ad", false], ["cicat", "DETER cicatriz de queimada", "#5d4037", false],
   ["tis", "Terras indígenas", "#b8860b", true], ["ucs", "Unidades de conservação", "#0a7a36", true],
   ["mun", "Municípios", "#5b6675", true],
+  ["vento", "Vento (previsão)", "#1e88e5", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
 ];
 async function iniciarMapa() {
   const m = Q.mapa = new maplibregl.Map({container: "mapa", center: [-62.5, -4.3], zoom: 5, maxZoom: 18, attributionControl: {compact: true},
@@ -257,7 +292,7 @@ async function iniciarMapa() {
   const [mun, tis, ucs] = await Promise.all(["municipios", "tis", "ucs"].map(n => json(`dados/${n}.json`)));
   m.addSource("mun", {type: "geojson", data: mun}); m.addSource("tis", {type: "geojson", data: tis}); m.addSource("ucs", {type: "geojson", data: ucs});
   m.addSource("deter", {type: "geojson", data: vazio});
-  ["eventos", "alertas", "focos", "sel", "area"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
+  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
   m.addLayer({id: "tis", type: "fill", source: "tis", paint: {"fill-color": "#b8860b", "fill-opacity": .08, "fill-outline-color": "#b8860b"}});
   m.addLayer({id: "tis-l", type: "line", source: "tis", paint: {"line-color": "#d4a017", "line-width": 1.3, "line-dasharray": [3, 2]}});
   m.addLayer({id: "ucs", type: "fill", source: "ucs", paint: {"fill-color": "#0a7a36", "fill-opacity": .07}});
@@ -274,10 +309,14 @@ async function iniciarMapa() {
     "circle-stroke-color": "#fff", "circle-stroke-width": .8, "circle-opacity": .9}});
   m.addLayer({id: "alertas", type: "circle", source: "alertas", paint: {"circle-radius": raio, "circle-color": "rgba(255,122,0,.15)", "circle-stroke-color": "#ff7a00", "circle-stroke-width": 2}});
   m.addLayer({id: "area", type: "line", source: "area", paint: {"line-color": "#ffdf00", "line-width": 2.5}});
+  m.addLayer({id: "fumaca", type: "line", source: "fumaca", paint: {"line-color": "#8d6e63", "line-width": 2, "line-opacity": .8, "line-dasharray": [2, 2]}});
+  m.addLayer({id: "vento", type: "line", source: "vento", layout: {visibility: "none", "line-cap": "round"},
+    paint: {"line-width": 1.6, "line-color": ["interpolate", ["linear"], ["get", "v"], 0, "#90caf9", 10, "#1e88e5", 20, "#3949ab", 35, "#b71c1c"]}});
   m.addLayer({id: "sel", type: "circle", source: "sel", paint: {"circle-radius": 16, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#ffdf00", "circle-stroke-width": 3}});
   Q.layersOk = true;
   montarControles();
   atualizarCamadasDados();
+  json("dados/vento.json").then(v => { Q.vento = v; desenharVento(); }).catch(() => {});
   json("dados/deter.json").then(d => m.getSource("deter").setData(d));
 
   const pop = new maplibregl.Popup({closeButton: false, offset: 8});
@@ -303,7 +342,28 @@ function atualizarCamadasDados() {
   const m = Q.mapa; if (!m) return;
   m.getSource("eventos").setData(geo(Q.filtrados));
   m.getSource("alertas").setData(geo(Q.alertasF || []));
+  m.getSource("fumaca")?.setData(fumaca([...(Q.alertasF || []), ...Q.filtrados.filter(e => Date.now() - new Date(e.fim.replace(" ", "T") + "Z") < 30 * 864e5)]));
   m.getSource("focos").setData({type: "FeatureCollection", features: Q.focos.map(f => ({type: "Feature", geometry: {type: "Point", coordinates: [f[1], f[0]]}, properties: {}}))});
+}
+function desenharVento() {
+  const v = Q.vento; if (!v || !Q.mapa) return;
+  const agora = new Date().toISOString().slice(0, 13) + ":00";
+  if (Q.ventoHora == null) Q.ventoHora = Math.max(0, v.horas_utc.indexOf(agora));
+  const h = Q.ventoHora, feats = [];
+  for (const [la, lo, vel, dir] of v.pontos) {
+    const s = vel[h], d = dir[h]; if (s == null || d == null) continue;
+    const para = (d + 180) * Math.PI / 180, L = 0.12 + Math.min(s, 40) / 40 * 0.45;
+    const x2 = lo + Math.sin(para) * L / Math.cos(la * Math.PI / 180), y2 = la + Math.cos(para) * L;
+    const pa = (ang) => [x2 - Math.sin(para + ang) * L * .3 / Math.cos(la * Math.PI / 180), y2 - Math.cos(para + ang) * L * .3];
+    feats.push({type: "Feature", properties: {v: s}, geometry: {type: "MultiLineString", coordinates: [[[lo, la], [x2, y2]], [pa(.5), [x2, y2], pa(-.5)]]}});
+  }
+  Q.mapa.getSource("vento").setData({type: "FeatureCollection", features: feats});
+  const rot = $("#ventoHora"); if (rot) rot.textContent = manaus(v.horas_utc[h].replace("T", " ")) + " (Manaus)";
+}
+function fumaca(lista) {
+  const [mLat, mLon] = [-3.119, -60.021];
+  return {type: "FeatureCollection", features: lista.filter(e => e.det.clima?.fumaca_rumo_manaus).map(e => ({type: "Feature",
+    properties: {id: e.id}, geometry: {type: "LineString", coordinates: [[e.lon, e.lat], [mLon, mLat]]}}))};
 }
 function enquadrarFiltro() {
   const f = Q.filtrados; if (!f.length || !Q.mapa) return;
@@ -329,13 +389,17 @@ function montarControles() {
   const el = $("#mapaCtl");
   el.innerHTML = `<button type="button" class="recolher" id="ctlRec" aria-expanded="true"><b>Camadas</b><span>−</span></button><div id="ctlCorpo">
     <h4>Mapa de fundo</h4>${Object.entries(BASES).map(([k, b]) => `<label><input type="radio" name="base" value="${k}" ${k === "satelite" ? "checked" : ""}> ${b.nome}</label>`).join("")}
-    <h4>Camadas</h4>${CAMADAS.map(([k, t, c, on]) => `<label><input type="checkbox" data-c="${k}" ${on ? "checked" : ""}><span class="sw" style="background:${c}"></span>${t}</label>`).join("")}</div>`;
+    <h4>Camadas</h4>${CAMADAS.map(([k, t, c, on]) => `<label><input type="checkbox" data-c="${k}" ${on ? "checked" : ""}><span class="sw" style="background:${c}"></span>${t}</label>`).join("")}
+    <div id="ventoCtl" hidden><h4>Hora do vento</h4><input type="range" id="ventoSl" min="0" max="47" value="0" style="width:100%"><div class="nota" id="ventoHora"></div></div></div>`;
   el.addEventListener("change", e => {
     if (e.target.name === "base") return trocarBase(e.target.value);
     const k = e.target.dataset.c; if (!k) return;
     const ids = {tis: ["tis", "tis-l"], ucs: ["ucs", "ucs-l"]}[k] || [k];
     ids.forEach(id => Q.mapa.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none"));
+    if (k === "vento") { $("#ventoCtl").hidden = !e.target.checked; const sl = $("#ventoSl");
+      if (Q.vento) { sl.max = Q.vento.horas_utc.length - 1; sl.value = Q.ventoHora || 0; } desenharVento(); }
   });
+  el.addEventListener("input", e => { if (e.target.id === "ventoSl") { Q.ventoHora = +e.target.value; desenharVento(); } });
   $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "+" : "−"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };
   if (matchMedia("(max-width:640px)").matches) $("#ctlRec").click();
   $("#legenda").innerHTML = `<b style="font-size:12px">Nível de suspeita</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
@@ -379,11 +443,14 @@ function tempoReal() {
   const ult24 = Q.focos.filter(f => Date.now() - new Date(f[2].replace(" ", "T") + "Z") < 864e5).length;
   $("#kpisTR").innerHTML = [[fmt(Q.focos.length), "focos (todos os satélites) em 7 dias", "azul"], [fmt(ult24), "focos nas últimas 24 h", "vermelho fogo"],
     [fmt(al.length), "alertas VIIRS agrupados", "ouro"], [fmt(al.filter(e => e.score >= 70).length), "alertas com pontuação ≥ 70", "vermelho fogo"],
+    [fmt(al.filter(e => e.det.clima?.fumaca_rumo_manaus).length), "alertas com fumaça rumo a Manaus", "vermelho fogo"],
     [Q.est ? manaus(Q.est.ultimo_foco_utc) : "–", "último foco recebido (Manaus)", "azul"]]
     .map(([v, t, c]) => `<div class="indicador ${c}"><b style="${v.length > 10 ? "font-size:18px" : ""}">${v}</b><span>${t}</span></div>`).join("");
-  $("#tabTR").innerHTML = `<thead><tr><th>Pont.</th><th>Município</th><th>Área</th><th>Primeiro foco (Manaus)</th><th>Último (Manaus)</th><th>Focos</th><th>Indicadores</th><th>Coord.</th></tr></thead><tbody>`
+  $("#tabTR").innerHTML = `<thead><tr><th>Pont.</th><th>Município</th><th>Área</th><th>Primeiro foco (Manaus)</th><th>Último (Manaus)</th><th>Focos</th><th>Vento</th><th>Fumaça → Manaus</th><th>Indicadores</th><th>Coord.</th></tr></thead><tbody>`
     + al.slice(0, 400).map(e => `<tr class="clicavel" data-id="${e.id}"><td><span class="pontos" style="background:${corScore(e.score)}">${e.score}</span></td><td>${esc(e.mun)}</td><td>${esc(e.det.ti || e.det.uc || "")}</td>
-      <td class="mono">${manaus(e.ini)}</td><td class="mono">${manaus(e.fim)}</td><td class="n">${e.n}</td><td>${e.ind.map(k => `<span class="selo">${IND_TXT[k].split(" ")[0]}</span>`).join(" ")}</td><td class="n">${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}</td></tr>`).join("") + "</tbody>";
+      <td class="mono">${manaus(e.ini)}</td><td class="mono">${manaus(e.fim)}</td><td class="n">${e.n}</td><td>${e.det.clima ? `${br(e.det.clima.vento_kmh, 0)} km/h de ${rosa(e.det.clima.vento_de_graus)}` : "–"}</td>
+      <td>${e.det.clima?.fumaca_rumo_manaus ? `<span class="selo erro">sim, ~${br(e.det.clima.horas_ate_manaus, 0)} h</span>` : "–"}</td>
+      <td>${e.ind.map(k => `<span class="selo">${IND_TXT[k].split(" ")[0]}</span>`).join(" ")}</td><td class="n">${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}</td></tr>`).join("") + "</tbody>";
   const rec = Q.focos.slice().sort((a, b) => b[2].localeCompare(a[2]));
   $("#nFocosRec").textContent = `${fmt(rec.length)} focos; mostrando os 300 mais recentes`;
   $("#tabFocos").innerHTML = `<thead><tr><th>Hora (Manaus)</th><th>Satélite</th><th>Município</th><th>Lat</th><th>Lon</th></tr></thead><tbody>`
@@ -513,6 +580,10 @@ function metodologia() {
     <div class="cartao"><h2>5. Inteligência artificial</h2>
       <p><b>DBSCAN</b> agrupa focos em eventos. <b>Isolation Forest</b> aprende o padrão dos eventos do Amazonas (focos, duração, simultaneidade, desmatamento, reincidência, área protegida, distância) e dá a cada evento uma nota de <b>atipicidade</b> de 0 a 100. O <b>parecer preliminar</b> é redigido por um modelo de linguagem (Google Gemini) a partir dos números calculados, sem acrescentar fatos.</p>
       <p class="nota">Próximo passo: com casos confirmados pela DEMA e laudos do DPTC, treinar um classificador supervisionado que estime a probabilidade de origem criminosa.</p></div>
+    <div class="cartao"><h2>6. Clima e comportamento do fogo</h2>
+      <p>Para cada evento, o clima na hora do 1º foco vem do Open-Meteo (modelos ECMWF, GFS e ICON; reanálise ERA5 para datas antigas): vento, umidade, temperatura e chuva das 72 h anteriores. Do INPE vêm, por foco, o risco de fogo, os dias sem chuva e a intensidade (FRP).</p>
+      <div class="formula">ignição em condição desfavorável (+10) = risco INPE &lt; 0,3 ou chuva 72 h ≥ 10 mm ou umidade mínima das 24 h anteriores ≥ 80%<br>escape plausível (contexto) = (risco ≥ 0,8 ou ≥ 30 dias sem chuva) e vento ≥ 10 km/h<br>muita biomassa (contexto) = FRP ≥ 100 MW e fogo por 2+ dias ou à noite<br>fumaça rumo a Manaus = vento soprando a ±30° da direção da cidade, até 800 km; chegada ≈ distância ÷ velocidade</div>
+      <p class="nota">Na Amazônia quase todo fogo é de origem humana; raio é raro na estação seca. O clima ajuda a distinguir a ignição deliberada da queima que escapa do controle, mas é contexto e não prova.</p></div>
     <div class="cartao"><h2>Limitações</h2><ul>
       <li>O satélite detecta calor, não autoria. A pontuação é indício para orientar diligência, nunca prova.</li>
       <li>Em TIs e RDS/RESEX há uso tradicional do fogo, permitido. A pontuação nessas áreas exige leitura cuidadosa.</li>
@@ -531,6 +602,7 @@ function fontes() {
     ["Terras indígenas", "FUNAI via TerraBrasilis", "https://terrabrasilis.dpi.inpe.br/", "–", "estático", ""],
     ["Unidades de conservação", "ICMBio/MMA via TerraBrasilis", "https://terrabrasilis.dpi.inpe.br/", "–", "estático", ""],
     ["Municípios", "IBGE via TerraBrasilis", "https://terrabrasilis.dpi.inpe.br/", "–", "estático", ""],
+    ["Clima: vento, umidade, chuva", "Open-Meteo (ECMWF, GFS, ICON, ERA5)", "https://open-meteo.com/", Q.vento ? manaus(Q.vento.gerado_em.replace("T", " ").slice(0, 19)) : "–", "a cada 3 h (grade) · por evento", "vento no mapa e na ficha"],
     ["Sentinel-2 L2A (10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-2-l2a", "sob demanda", "~5 dias", "NDVI, NBR, NDMI, imagens"],
     ["Landsat 8/9 C2 L2 (30 m)", "NASA/USGS · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/landsat-c2-l2", "sob demanda", "~8 dias", "série longa"],
   ];

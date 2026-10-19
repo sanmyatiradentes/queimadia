@@ -37,7 +37,11 @@ def carregar_focos():
         df["satelite"] = config.SAT_REFERENCIA
         df["fonte"] = "anual"
         partes.append(df[["lat", "lon", "data", "satelite", "municipio", "fonte"]])
-    partes.append(ingest.carregar_recentes())
+    rec = ingest.carregar_recentes()
+    for c in ingest.COLS:
+        if c not in rec:
+            rec[c] = float("nan")
+    partes.append(rec)
     df = pd.concat(partes, ignore_index=True)
     df["data"] = pd.to_datetime(df["data"].astype(str).str.strip())
     df["lat"] = df["lat"].astype(float)
@@ -116,6 +120,25 @@ def pontuar(g, anos_por_cel, desmat, cicat, tis, ucs):
     primeiro = g.iloc[0]
     # dia + posição a ~1 km: estável quando o arquivo diário substitui o de 10 min
     chave = f'{ini:%Y%m%d}|{primeiro["lat"]:.2f}|{primeiro["lon"]:.2f}'
+    # dados do INPE por foco (disponíveis nos arquivos diários/mensais do ano corrente)
+    fogo = {}
+    for c, nome in (("frp", "frp"), ("dias_sem_chuva", "dias_sem_chuva"), ("risco_fogo", "risco_fogo"),
+                    ("precipitacao", "precipitacao")):
+        if c in g and g[c].notna().any():
+            x = g[c].dropna()
+            fogo[nome + ("_max" if c == "frp" else "_mediana")] = round(float(x.max() if c == "frp" else x.median()), 2)
+            if c == "frp":
+                fogo["frp_soma"] = round(float(x.sum()), 1)
+    horas = g["data"].dt.hour
+    fogo["focos_noite"] = int(((horas >= 2) & (horas <= 10)).sum())   # 22h–6h em Manaus (UTC−4)
+    fogo["dias_com_fogo"] = int(g["data"].dt.date.nunique())
+    if fogo.get("risco_fogo_mediana") is not None:
+        # risco do INPE no(s) foco(s) do 1º dia
+        r1 = g[g["data"].dt.date == ini.date()]["risco_fogo"].dropna()
+        if len(r1):
+            fogo["risco_fogo_inicio"] = round(float(r1.median()), 2)
+    det["fogo"] = fogo
+
     return {
         "chave": chave,
         "lat": round(lat, 5), "lon": round(lon, 5),
@@ -201,3 +224,38 @@ def atipicidade(eventos, alertas):
         pct = np.searchsorted(ordenado, s, side="right") / len(ordenado) * 100
         for e, p in zip(lst, pct):
             e["ia"] = int(round(p))
+
+
+
+# ------------------------------------------------------------------ clima
+def aplicar_clima(lista):
+    """Usa o clima do 1º foco (Open-Meteo) e o risco de fogo do INPE para o sinal
+    "ignição em condição desfavorável" e para o contexto (escape plausível,
+    queima de muita biomassa). Recalcula a pontuação."""
+    for e in lista:
+        cl, fogo = e.get("clima") or {}, e["det"].get("fogo") or {}
+        if cl:
+            e["det"]["clima"] = cl
+        motivos = []
+        risco = fogo.get("risco_fogo_inicio")
+        if risco is not None and risco < 0.3:
+            motivos.append(f"risco de fogo do INPE {risco:.2f}")
+        if (cl.get("chuva_72h_mm") or 0) >= 10:
+            motivos.append(f"{cl['chuva_72h_mm']:.0f} mm de chuva nas 72 h anteriores")
+        if (cl.get("umidade_min_24h") or 0) >= 80:
+            motivos.append(f"umidade mínima de {cl['umidade_min_24h']:.0f}% nas 24 h anteriores")
+        ind = set(e["indicadores"])
+        if motivos:
+            ind.add("ignicao_desfavoravel")
+            e["det"]["ignicao_desfavoravel"] = motivos
+        else:
+            ind.discard("ignicao_desfavoravel")
+        contexto = []
+        if ((risco or 0) >= 0.8 or (fogo.get("dias_sem_chuva_mediana") or 0) >= 30) and (cl.get("vento_kmh") or 0) >= 10:
+            contexto.append("escape_plausivel")
+        if (fogo.get("frp_max") or 0) >= 100 and (fogo.get("dias_com_fogo", 1) >= 2 or fogo.get("focos_noite", 0) > 0):
+            contexto.append("biomassa_alta")
+        e["det"]["contexto"] = contexto
+        e["indicadores"] = sorted(ind)
+        e["score"] = min(100, sum(config.PESOS[k] for k in ind))
+    return lista
