@@ -1,4 +1,4 @@
-# QueimadIA — Radar de Queimadas Suspeitas
+# Fogo Forense — Radar de Queimadas Suspeitas
 
 Sistema do **NIPED/PCAM** com o **DPTC-AM** para identificar possíveis queimadas criminosas no Amazonas com dados públicos de satélite e inteligência artificial.
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>NIPED · QueimadIA — Radar de Queimadas Suspeitas</title>
+<title>Fogo Forense — NIPED/PCAM</title>
 <meta name="description" content="Radar de queimadas suspeitas no Amazonas: focos de calor, desmatamento, áreas protegidas e NDVI por satélite. NIPED/PCAM/DPTC.">
 <link rel="icon" href="img/dptc.png">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
@@ -14,7 +14,7 @@
   <a class="marca" href="./">
     <img src="img/pcam.png" alt="Polícia Civil do Amazonas">
     <img src="img/dptc.png" alt="Departamento de Polícia Técnico-Científica">
-    <span class="nome">NIPED<small>QueimadIA · Radar de Queimadas Suspeitas · PCAM/DPTC</small></span>
+    <span class="nome">Fogo Forense<small>NIPED · PCAM/DPTC · Radar de queimadas suspeitas</small></span>
   </a>
   <span class="espaco"></span>
   <button type="button" class="botao claro pequeno" id="btnAjuda" aria-haspopup="dialog">Como usar</button>
@@ -35,7 +35,7 @@
   <section class="boas-vindas" id="boasVindas" aria-label="Apresentação">
     <div class="bv-texto">
       <h1>Onde o fogo no Amazonas pode ter sido criminoso</h1>
-      <p>Satélites detectam focos de calor todos os dias. O QueimadIA junta esses focos em <b>eventos</b> e cruza cada um com desmatamento, terras indígenas, reservas e o histórico do local. Quanto mais sinais de ação humana intencional, maior a <b>pontuação</b> e mais alto o evento aparece na fila. Atualizado a cada 10 minutos.</p>
+      <p>Satélites detectam focos de calor todos os dias. O Fogo Forense junta esses focos em <b>eventos</b> e cruza cada um com desmatamento, terras indígenas, reservas e o histórico do local. Quanto mais sinais de ação humana intencional, maior a <b>prioridade de verificação</b> e mais alto o evento aparece na fila. A prioridade só ordena o trabalho: não é grau de certeza nem prova. Atualizado a cada 10 minutos.</p>
     </div>
     <ol class="bv-passos">
       <li><span><b>Veja o mapa.</b> Cada círculo é um evento de fogo. Vermelho-escuro é o mais suspeito.</span></li>
@@ -61,7 +61,7 @@
       </select></div>
     <div class="campo"><label for="fIni">De</label><input type="date" id="fIni"></div>
     <div class="campo"><label for="fFim">Até</label><input type="date" id="fFim"></div>
-    <div class="campo"><label for="fScore">Mostrar a partir de <b id="fScoreV" class="num">50</b> pontos <span class="nivel" id="fScoreN"></span></label><input type="range" id="fScore" min="0" max="100" step="5" value="50"></div>
+    <div class="campo"><label for="fScore">Prioridade a partir de <b id="fScoreV" class="num">50</b> <span class="nivel" id="fScoreN"></span></label><input type="range" id="fScore" min="0" max="100" step="5" value="50"></div>
     <div class="campo"><label for="fMun">Município</label><select id="fMun"><option value="">Todos</option></select></div>
     <div class="campo"><label for="fDist">Região</label>
       <select id="fDist"><option value="0">Todo o estado</option><option value="100">Até 100 km de Manaus</option><option value="250">Até 250 km de Manaus</option><option value="500">Até 500 km de Manaus</option></select></div>
@@ -130,7 +130,7 @@
     <div class="painel-grade">
       <div class="cartao"><h2>Focos por mês (satélite de referência)</h2><div class="leg-anos" id="legMes" role="group" aria-label="Destacar ano"></div><div class="grafico"><svg id="gMes"></svg></div><div class="info-mes" id="infoMes"></div><p class="nota">Série comparável entre anos. A deriva da órbita do AQUA reduz as detecções nos anos mais recentes.</p></div>
       <div class="cartao"><h2>Municípios com mais eventos (filtro atual)</h2><div class="grafico"><svg id="gMun"></svg></div></div>
-      <div class="cartao"><h2>Distribuição da pontuação (filtro atual)</h2><div class="grafico"><svg id="gHist"></svg></div></div>
+      <div class="cartao"><h2>Distribuição da prioridade (filtro atual)</h2><div class="grafico"><svg id="gHist"></svg></div></div>
       <div class="cartao"><h2>Frequência de cada indicador (filtro atual)</h2><div class="grafico"><svg id="gInd"></svg></div></div>
       <div class="cartao"><h2>Eventos por faixa de distância de Manaus</h2><div class="grafico"><svg id="gDist"></svg></div></div>
       <div class="cartao"><h2>Eventos por área (filtro atual)</h2><div class="grafico"><svg id="gArea"></svg></div></div>
@@ -143,7 +143,7 @@
       <div style="min-width:0">
       <div class="cartao so-estatico">
         <h2>Análises prontas</h2>
-        <p class="nota" style="margin:6px 0 10px">O motor do NIPED calcula no próprio computador a análise de NDVI dos eventos com pontuação ≥ 70 e publica aqui. A análise livre de qualquer ponto do mapa está disponível na versão local.</p>
+        <p class="nota" style="margin:6px 0 10px">O motor do NIPED calcula no próprio computador a análise de NDVI dos eventos com prioridade ≥ 70 e publica aqui. A análise livre de qualquer ponto do mapa está disponível na versão local.</p>
         <div class="rolagem" style="max-height:60vh"><table class="tabela" id="tabProntas"></table></div>
       </div>
       <div class="cartao so-api">
@@ -207,28 +207,28 @@
 
   <footer class="rodape">
     <div class="logos"><img src="img/pcam.png" alt="PCAM"><img src="img/dptc.png" alt="DPTC">
-      <div><b>QueimadIA</b> · Desenvolvido pelo <b>NIPED/PCAM</b> (Núcleo de Inovação, Pesquisa e Desenvolvimento da Polícia Civil do Amazonas), com o DPTC-AM</div></div>
-    <div>Dados públicos: INPE, TerraBrasilis, FUNAI, ICMBio, ESA Copernicus, NASA/USGS. A pontuação é indício para orientar diligência, não prova de crime.</div>
+      <div><b>Fogo Forense</b> · Desenvolvido pelo <b>NIPED/PCAM</b> (Núcleo de Inovação, Pesquisa e Desenvolvimento da Polícia Civil do Amazonas), com o DPTC-AM</div></div>
+    <div>Dados públicos: INPE, TerraBrasilis, FUNAI, ICMBio, ESA Copernicus, NASA/USGS. A prioridade orienta diligências; não é prova de crime nem grau de certeza.</div>
   </footer>
 </main>
 <div class="toast" id="toast" hidden></div>
 <div class="modal-fundo" id="ajuda" hidden role="dialog" aria-modal="true" aria-labelledby="ajudaTit">
   <div class="modal">
-    <div class="cab"><h2 id="ajudaTit">Como usar o QueimadIA</h2><button type="button" class="botao secundario pequeno" id="ajudaFechar">Fechar</button></div>
+    <div class="cab"><h2 id="ajudaTit">Como usar o Fogo Forense</h2><button type="button" class="botao secundario pequeno" id="ajudaFechar">Fechar</button></div>
     <div class="ajuda-grade">
       <section><h3>Em 4 passos</h3><ol>
         <li><b>Escolha o período e a região</b> nos filtros (por padrão: temporada atual, todo o estado).</li>
         <li><b>Olhe o mapa e a fila de prioridades.</b> A cor do círculo indica o nível de suspeita; o tamanho, a quantidade de focos.</li>
         <li><b>Clique num evento.</b> A ficha explica em uma frase por que ele foi marcado e lista cada sinal encontrado.</li>
         <li><b>Abra a análise de satélite</b> para ver imagens antes e depois do fogo, o gráfico da vegetação e a área queimada.</li>
-        <li><b>Veja o confronto de hipóteses</b> na ficha: os sinais de fogo intencional ficam de um lado; os compatíveis com acidente ou queima tradicional, do outro.</li>
+        <li><b>Veja a matriz de hipóteses</b> na ficha: elementos favoráveis à ignição intencional, compatíveis com acidente ou queima tradicional, e o que ainda é inconclusivo. Sem pesos: a quantidade de itens não decide.</li>
         <li><b>Ligue a camada de vento</b> no mapa para ver para onde a fumaça vai; as linhas tracejadas marrons mostram incêndios cuja fumaça segue rumo a Manaus.</li></ol></section>
-      <section><h3>O que significa a pontuação</h3>
+      <section><h3>O que significa a prioridade de verificação</h3>
         <div class="niveis"><span class="pontos" style="background:var(--s4)">85+</span> Muito alta: vários sinais fortes juntos</div>
         <div class="niveis"><span class="pontos" style="background:var(--s3)">70–84</span> Alta: merece ser verificada</div>
         <div class="niveis"><span class="pontos" style="background:var(--s2)">50–69</span> Atenção: alguns sinais</div>
         <div class="niveis"><span class="pontos" style="background:var(--s1)">0–49</span> Baixa: poucos sinais</div>
-        <p class="nota">A pontuação soma sinais objetivos de bases públicas. Ela indica onde investigar primeiro; não prova crime nem aponta autor.</p></section>
+        <p class="nota">A prioridade soma sinais objetivos de bases públicas para ordenar a fila de verificação. Não é percentual de certeza, não prova crime e não aponta autor; na perícia, as evidências são confrontadas na matriz de hipóteses, sem pesos numéricos.</p></section>
       <section><h3>Glossário</h3><dl class="glossario">
         <dt>Foco de calor</dt><dd>Ponto onde o satélite detectou temperatura alta, em geral fogo.</dd>
         <dt>Evento</dt><dd>Grupo de focos próximos no espaço (até 1,5 km) e no tempo (até 5 dias): o mesmo incêndio.</dd>

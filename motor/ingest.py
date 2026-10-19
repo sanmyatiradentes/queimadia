@@ -12,7 +12,7 @@ import requests
 from . import config, geo
 
 S = requests.Session()
-S.headers["User-Agent"] = "QueimadIA/1.0 (NIPED-PCAM-DPTC)"
+S.headers["User-Agent"] = "Fogo Forense/1.0 (NIPED-PCAM-DPTC)"
 STATUS = config.ESTADO / "status.json"
 RECENTES = config.ESTADO / "focos_recentes.csv"
 COLS = ["lat", "lon", "data", "satelite", "municipio", "fonte", "dias_sem_chuva", "precipitacao", "risco_fogo", "frp"]

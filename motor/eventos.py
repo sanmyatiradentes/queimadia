@@ -139,6 +139,18 @@ def pontuar(g, anos_por_cel, desmat, cicat, tis, ucs):
             fogo["risco_fogo_inicio"] = round(float(r1.median()), 2)
     det["fogo"] = fogo
 
+    # cronologia por passagem de satélite (guia pericial: detecções da mesma
+    # passagem são simultâneas; a primeira detecção não prova ignição naquele ponto)
+    gp = g.assign(min=g["data"].dt.floor("min"))
+    passagens = []
+    for (sat, t), gg in gp.groupby(["satelite", "min"]):
+        frp = gg["frp"].dropna() if "frp" in gg else []
+        passagens.append([t.strftime("%Y-%m-%d %H:%M"), sat, int(len(gg)),
+                          round(float(frp.max()), 1) if len(frp) else None])
+    passagens.sort()
+    det["passagens"] = passagens[:20]
+    det["n_passagens"] = len(passagens)
+
     return {
         "chave": chave,
         "lat": round(lat, 5), "lon": round(lon, 5),

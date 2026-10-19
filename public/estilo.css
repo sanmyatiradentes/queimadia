@@ -227,3 +227,6 @@ body:not(.estatico) .so-estatico{display:none!important}
 .confronto .acidental{border-top:3px solid var(--verde)}
 .confronto .acidental h4{color:var(--verde)}
 .confronto ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:13.5px}
+
+.confronto .inconclusivo{border-top:3px solid var(--cinza-texto)}
+.confronto .inconclusivo h4{color:var(--cinza-texto)}

@@ -1,4 +1,4 @@
-"""Servidor do QueimadIA para hospedagem própria (ex.: servidor do Integra).
+"""Servidor do Fogo Forense para hospedagem própria (ex.: servidor do Integra).
 
     python -m motor.servidor            # http://127.0.0.1:8090
 
@@ -54,7 +54,7 @@ async def ciclo_de_vida(app):
     yield
 
 
-app = FastAPI(title="QueimadIA", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=ciclo_de_vida)
+app = FastAPI(title="Fogo Forense", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=ciclo_de_vida)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.include_router(router)
 

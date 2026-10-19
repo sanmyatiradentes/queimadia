@@ -17,6 +17,8 @@ def _escrever(nome, obj):
 
 
 def _compacto(e):
+    if e["score"] < 50 and e.get("trilha") != "tempo_real":   # cronologia só onde importa (tamanho do arquivo)
+        e["det"].pop("passagens", None)
     mask = sum(1 << i for i, k in enumerate(INDICADORES) if k in e["indicadores"])
     return [e["id"], e["lat"], e["lon"], e["score"], e["n_focos"], e["max_focos_dia"], e["inicio"], e["fim"],
             e["municipio"], round(e["dist_manaus_km"]), mask, e["det"], e["satelites"], e.get("ia")]

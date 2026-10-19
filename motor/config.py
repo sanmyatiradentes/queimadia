@@ -1,7 +1,7 @@
 """Configuração do Radar de Queimadas Suspeitas (NIPED/PCAM/DPTC)."""
 from pathlib import Path
 
-NOME = "QueimadIA"
+NOME = "Fogo Forense"
 BASE = Path(__file__).resolve().parent
 RAIZ = BASE.parent
 DADOS = BASE / "dados"            # estado do motor (histórico, DETER, áreas)

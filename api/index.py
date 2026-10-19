@@ -1,4 +1,4 @@
-"""Função serverless da Vercel: API de análise do QueimadIA (NDVI, imagens,
+"""Função serverless da Vercel: API de análise do Fogo Forense (NDVI, imagens,
 dNBR, mosaicos, parecer). Os dados do painel vêm do Vercel Blob, atualizado
 pelo GitHub Actions a cada 10 minutos."""
 import sys
@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fastapi import FastAPI  # noqa: E402
 from motor.api_analise import router  # noqa: E402
 
-_app = FastAPI(title="QueimadIA", docs_url="/api/docs", openapi_url="/api/openapi.json")
+_app = FastAPI(title="Fogo Forense", docs_url="/api/docs", openapi_url="/api/openapi.json")
 _app.include_router(router)
 
 

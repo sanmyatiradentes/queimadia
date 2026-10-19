@@ -1,4 +1,4 @@
-/* QueimadIA — análise de NDVI sob demanda (série, quebra, imagens, dNBR, proveniência) */
+/* Fogo Forense — análise de NDVI sob demanda (série, quebra, imagens, dNBR, proveniência) */
 "use strict";
 (function () {
   const A = {cenas: [], med: [], quebra: null, evento: null, rodando: false};
@@ -21,7 +21,7 @@
     const idx = window.Q?.est?.analises || {}, evs = window.Q?.eventos || [];
     const linhas = Object.entries(idx).map(([id, r]) => ({id, r, e: evs.find(x => x.id === id)})).filter(x => x.e)
       .sort((a, b) => b.e.ini.localeCompare(a.e.ini));
-    $("#tabProntas").innerHTML = `<thead><tr><th>Pont.</th><th>Município</th><th>1º foco</th><th>Quebra</th><th>Relação</th><th>Queimado</th></tr></thead><tbody>`
+    $("#tabProntas").innerHTML = `<thead><tr><th>Prior.</th><th>Município</th><th>1º foco</th><th>Quebra</th><th>Relação</th><th>Queimado</th></tr></thead><tbody>`
       + linhas.map(({id, r, e}) => `<tr class="clicavel" data-id="${id}"><td><span class="pontos" style="background:${e.score >= 85 ? css("--s4") : css("--s3")}">${e.score}</span></td>
         <td>${e.mun}</td><td class="mono">${dBR(e.ini)}</td><td class="mono">${r.quebra ? dBR(r.quebra) + (r.situacao === "provavel" ? " (provável)" : "") : "–"}</td>
         <td>${{antes_do_fogo: '<span class="selo erro">antes do fogo</span>', no_fogo: '<span class="selo pend">junto com o fogo</span>'}[r.relacao] || ""}</td>
@@ -387,7 +387,7 @@
         <td class="n">${m.n_validos ?? "–"}</td><td class="n">${br(m.nuvem_cena, 1)}%</td><td class="mono">${m.baseline || "–"}</td><td class="mono" style="font-size:11px">${m.id}</td></tr>`).join("") + "</tbody>";
   }
   function proveniencia() {
-    return {sistema: "QueimadIA (NIPED/PCAM/DPTC)", gerado_em: new Date().toISOString(),
+    return {sistema: "Fogo Forense (NIPED/PCAM/DPTC)", gerado_em: new Date().toISOString(),
       area: {lat: +$("#aLat").value, lon: +$("#aLon").value, raio_m: +$("#aRaio").value}, periodo: [$("#aIni").value, $("#aFim").value],
       linha_base: [$("#aRefIni").value, $("#aRefFim").value], modo: $("#aModo").value, min_fracao_valida: MIN_VALIDO,
       metodo: "NDVI = mediana dos pixels válidos no círculo; cena do mês: >= 80% da área limpa e menor nuvem na cena; triagem Tmask na linha de base; quebra: limiar = base − max(3σ; 0,15), confirmada por 6 observações consecutivas (CCDC).",
@@ -418,7 +418,7 @@
     const idx = window.Q?.est?.analises || {}, evs = window.Q?.eventos || [];
     const linhas = Object.entries(idx).map(([id, r]) => ({id, r, e: evs.find(x => x.id === id)})).filter(x => x.e)
       .sort((a, b) => b.e.ini.localeCompare(a.e.ini));
-    $("#tabProntas").innerHTML = `<thead><tr><th>Pont.</th><th>Município</th><th>1º foco</th><th>Quebra</th><th>Relação</th><th>Queimado</th></tr></thead><tbody>`
+    $("#tabProntas").innerHTML = `<thead><tr><th>Prior.</th><th>Município</th><th>1º foco</th><th>Quebra</th><th>Relação</th><th>Queimado</th></tr></thead><tbody>`
       + linhas.map(({id, r, e}) => `<tr class="clicavel" data-id="${id}"><td><span class="pontos" style="background:${e.score >= 85 ? css("--s4") : css("--s3")}">${e.score}</span></td>
         <td>${e.mun}</td><td class="mono">${dBR(e.ini)}</td><td class="mono">${r.quebra ? dBR(r.quebra) + (r.situacao === "provavel" ? " (provável)" : "") : "–"}</td>
         <td>${{antes_do_fogo: '<span class="selo erro">antes do fogo</span>', no_fogo: '<span class="selo pend">junto com o fogo</span>'}[r.relacao] || ""}</td>

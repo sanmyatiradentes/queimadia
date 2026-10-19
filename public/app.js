@@ -1,4 +1,4 @@
-/* QueimadIA — painel principal (mapa, filtros, ocorrências, tempo real, estatísticas) */
+/* Fogo Forense — painel principal (mapa, filtros, ocorrências, tempo real, estatísticas) */
 "use strict";
 const Q = window.Q = {
   est: null, eventos: [], alertas: [], focos: [], ind: [], versao: null,
@@ -153,7 +153,7 @@ function fila() {
     <span class="s num">${dBR(e.ini)} · ${e.n} foco${e.n > 1 ? "s" : ""} · ${fmt(e.dist)} km de Manaus</span></span>
     ${e.ia != null ? `<span class="selo" title="Atipicidade estimada pelo modelo de IA (0–100)">IA ${e.ia}</span>` : "<span></span>"}</button>`).join("")
     + (f.length > 300 ? `<p class="nota" style="padding:10px 14px">Mostrando 300 de ${fmt(f.length)}. Refine os filtros ou veja todas em Ocorrências.</p>` : "")
-    + (!f.length ? `<p class="nota" style="padding:14px">Nenhum evento com esses filtros. Reduza a pontuação mínima ou amplie o período.</p>` : "");
+    + (!f.length ? `<p class="nota" style="padding:14px">Nenhum evento com esses filtros. Reduza a prioridade mínima ou amplie o período.</p>` : "");
 }
 $("#fila").addEventListener("click", e => { const b = e.target.closest(".linha"); if (b) { selecionar(b.dataset.id, true); rolarPara($("#ficha")); } });
 
@@ -196,7 +196,7 @@ function selecionar(id, voar) {
       <h2 style="font-size:20px">${esc(e.mun)}, ${dBR(e.ini)}${e.fim.slice(0, 10) !== e.ini.slice(0, 10) ? " a " + dBR(e.fim) : ""}</h2>
       <span class="muted">${esc(d.ti || d.uc || "Fora de TI/UC")}${d.uc && d.ti ? " · " + esc(d.uc) : ""}</span></div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">${Q.est.analises?.[e.id] ? `<button type="button" class="botao fogo" id="fPronta">Ver análise NDVI${Q.est.analises[e.id].quebra ? (Q.est.analises[e.id].situacao === "provavel" ? " · queda provável " : " · quebra ") + dBR(Q.est.analises[e.id].quebra) : ""}</button>` : ""}
-      ${Q.estatico ? (Q.est.analises?.[e.id] ? "" : `<span class="selo pend" title="O motor calcula a análise de NDVI dos eventos com pontuação ≥ 70, começando pelos mais recentes e mais perto de Manaus.">NDVI na fila de cálculo</span>`) : `<button type="button" class="botao ${Q.est.analises?.[e.id] ? "secundario" : "fogo"}" id="fAnalisar">Analisar NDVI agora</button>`}
+      ${Q.estatico ? (Q.est.analises?.[e.id] ? "" : `<span class="selo pend" title="O motor calcula a análise de NDVI dos eventos com prioridade ≥ 70, começando pelos mais recentes e mais perto de Manaus.">NDVI na fila de cálculo</span>`) : `<button type="button" class="botao ${Q.est.analises?.[e.id] ? "secundario" : "fogo"}" id="fAnalisar">Analisar NDVI agora</button>`}
       <button type="button" class="botao secundario" id="fCopiar">Copiar resumo</button></div></div>
     ${porque}
     <div class="fatos">
@@ -208,9 +208,10 @@ function selecionar(id, voar) {
     </div>
     ${blocoConfronto(e)}
     ${blocoClima(e)}
+    ${blocoCronologia(e)}
     <div class="painel-grade">
       <div><h3 style="margin-bottom:6px">Os sinais verificados, um a um</h3>${linhas}
-        <div class="formula">pontuação = ${calc} = <b>${e.score}</b></div></div>
+        <div class="formula">prioridade = ${calc} = <b>${e.score}</b></div></div>
       <div><h3 style="margin-bottom:6px">Conferir nas fontes públicas</h3>
         <div class="links">
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://terrabrasilis.dpi.inpe.br/queimadas/bdqueimadas/">BDQueimadas (INPE)</a>
@@ -223,46 +224,58 @@ function selecionar(id, voar) {
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://consultapublica.car.gov.br/publico/imoveis/index">Consulta CAR</a>
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://servicos.ibama.gov.br/ctf/publico/areasembargadas/ConsultaPublicaAreasEmbargadas.php">Embargos IBAMA</a>
         </div>
-        <p class="nota" style="margin-top:10px">A pontuação soma indicadores objetivos de fontes públicas e orienta onde aprofundar a investigação. Não substitui a perícia de local nem os procedimentos legais.</p></div>
+        <p class="nota" style="margin-top:10px">A prioridade soma indicadores objetivos de fontes públicas para ordenar a verificação; não é grau de certeza. Não substitui a perícia de local nem os procedimentos legais.</p></div>
     </div>`;
   if ($("#fAnalisar")) $("#fAnalisar").onclick = () => window.abrirAnalise?.(e);
   if ($("#fPronta")) $("#fPronta").onclick = () => window.mostrarAnalisePronta?.(e.id);
-  $("#fCopiar").onclick = () => { const t = `QueimadIA ${e.id} — ${e.mun}, ${dBR(e.ini)}. Pontuação ${e.score} (${e.ind.map(k => IND_TXT[k]).join("; ") || "sem indicadores"}). ${e.n} focos, ${lat}, ${lon}. ${d.ti || d.uc || ""}`;
+  $("#fCopiar").onclick = () => { const t = `Fogo Forense ${e.id} — ${e.mun}, ${dBR(e.ini)}. Prioridade ${e.score} (${e.ind.map(k => IND_TXT[k]).join("; ") || "sem indicadores"}). ${e.n} focos, ${lat}, ${lon}. ${d.ti || d.uc || ""}`;
     navigator.clipboard?.writeText(t).then(() => toast("Resumo copiado."), () => toast(t, 10000)); };
 }
 
 // ------------------------------------------------------------ confronto de hipóteses
 function blocoConfronto(e) {
-  const d = e.det, f = d.fogo || {}, ctx = d.contexto || [], an = Q.est.analises?.[e.id];
-  const intenc = [], acid = [];
+  const d = e.det, f = d.fogo || {}, ctx = d.contexto || [], an = Q.est.analises?.[e.id], cl = d.clima;
+  const intenc = [], acid = [], inconc = [];
   if (d.desmatamento) intenc.push(`Desmatamento detectado pelo DETER ${d.desmatamento.dias_antes > 0 ? d.desmatamento.dias_antes + " dias antes" : "junto com"} do fogo`);
-  if (an?.relacao === "antes_do_fogo") intenc.push("A vegetação sumiu antes dos focos (NDVI): derrubada seguida de queima");
-  if (d.ignicao_desfavoravel) intenc.push("Começou em condição desfavorável ao fogo (não pegaria sozinho)");
-  if (e.maxDia >= 3) intenc.push(`${e.maxDia} focos no mesmo dia: ignições simultâneas`);
+  if (an?.relacao === "antes_do_fogo") intenc.push("A vegetação sumiu antes dos focos (NDVI): compatível com derrubada seguida de queima");
+  if (d.ignicao_desfavoravel) intenc.push("Começou em condição desfavorável ao fogo (dificilmente pegaria sozinho)");
+  if (e.maxDia >= 3) intenc.push(`${e.maxDia} focos no mesmo dia: possíveis ignições distintas (confrontar com projeção de partículas e combate)`);
   if (d.anos_anteriores?.length >= 2) intenc.push(`Reincidência: fogo no local em ${d.anos_anteriores.join(", ")}`);
   if (e.ind.includes("periodo_proibitivo")) intenc.push("Período de proibição do uso do fogo");
   if (e.ind.includes("area_protegida")) intenc.push(d.ti ? `Dentro da ${d.ti}: queima por não indígenas é proibida` : `Dentro da ${d.uc} (proteção integral): uso do fogo proibido`);
-  if (ctx.includes("biomassa_alta")) intenc.push("Fogo intenso e persistente: queima de muita biomassa (conversão)");
+  if (ctx.includes("biomassa_alta")) intenc.push("Fogo intenso e persistente: compatível com queima de muita biomassa (conversão)");
   if (ctx.includes("escape_plausivel")) acid.push("Seca forte e vento acima de 10 km/h: uma queima pode ter escapado do controle");
   if (d.ti) acid.push("Em terra indígena, a roça tradicional dos próprios indígenas com fogo é permitida");
   else if (d.uc && d.uc_grupo !== "PI") acid.push("Reserva de uso sustentável: a roça tradicional das comunidades com fogo é permitida");
-  if (!d.desmatamento && !(an?.relacao === "antes_do_fogo")) acid.push("Sem desmatamento prévio detectado");
+  if (!d.desmatamento && an?.relacao !== "antes_do_fogo") acid.push("Sem desmatamento prévio detectado");
   if (e.n <= 2 && (f.dias_com_fogo || 1) <= 1 && (f.frp_max == null || f.frp_max < 20)) acid.push("Fogo pequeno e curto, de baixa intensidade");
   if (an && !an.quebra) acid.push("A vegetação não foi perdida de forma sustentada (NDVI)");
-  if (!(e.maxDia >= 3) && e.n > 2) acid.push("Focos espalhados ao longo dos dias, sem ignições simultâneas");
-  const saldo = intenc.length - acid.length;
-  const resumo = intenc.length === 0 && acid.length === 0 ? "Sem sinais suficientes para comparar."
-    : saldo >= 2 ? "Predominam os sinais de <b>ação intencional</b>."
-    : saldo <= -2 ? "Predominam os sinais compatíveis com <b>acidente ou queima tradicional</b>."
-    : "Os sinais estão <b>equilibrados</b>: a apuração de campo é que vai esclarecer.";
-  const lista = (l, vazio) => l.length ? `<ul>${l.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="nota">${vazio}</p>`;
-  return `<div class="confronto"><h3>Confronto de hipóteses</h3>
-    <div class="confronto-grade">
-      <div class="lado intencional"><h4>Sinais de fogo intencional (${intenc.length})</h4>${lista(intenc, "Nenhum sinal forte.")}</div>
-      <div class="lado acidental"><h4>Compatível com acidente ou queima tradicional (${acid.length})</h4>${lista(acid, "Nenhum sinal.")}</div>
+  if (!(e.maxDia >= 3) && e.n > 2) acid.push("Focos espalhados ao longo dos dias, sem detecções simultâneas");
+  // inconclusivos e lacunas: o que ainda não permite discriminar
+  if (!an) inconc.push("Análise de vegetação (NDVI) ainda não calculada para este evento");
+  else if (an.situacao === "provavel") inconc.push(`Queda de vegetação desde ${dBR(an.quebra)} ainda não confirmada (faltam imagens)`);
+  if (!cl) inconc.push("Clima no início do fogo indisponível");
+  if (f.risco_fogo_inicio == null) inconc.push("Risco de fogo do INPE indisponível (anos anteriores a 2026)");
+  inconc.push("Satélite de referência passa poucas vezes ao dia: a primeira detecção não marca a hora nem o ponto da ignição");
+  inconc.push("Sem verificação de campo, CAR/SIGEF, embargos ou autorização de queima (IPAAM)");
+  const col = (cls, t, l) => `<div class="lado ${cls}"><h4>${t} (${l.length})</h4>${l.length ? `<ul>${l.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="nota">Nenhum elemento identificado nas bases públicas.</p>`}</div>`;
+  return `<div class="confronto"><h3>Matriz de hipóteses</h3>
+    <div class="confronto-grade tres">
+      ${col("intencional", "Favoráveis à ignição intencional", intenc)}
+      ${col("acidental", "Compatíveis com acidente ou queima tradicional", acid)}
+      ${col("inconclusivo", "Inconclusivos e lacunas", inconc)}
     </div>
-    <p class="clima-leitura">${resumo}</p>
-    <p class="nota">Comparação qualitativa dos sinais objetivos das bases públicas. Orienta a investigação; não substitui a perícia de local nem conclui sobre autoria.</p></div>`;
+    <p class="nota">Sem pesos ou percentuais: a quantidade de itens não decide a hipótese. Elementos derivados da mesma fonte (ex.: o mesmo foco no INPE e no FIRMS) não são independentes. Origem, causa e autoria exigem demonstrações próprias, com perícia de local.</p></div>`;
+}
+
+function blocoCronologia(e) {
+  const p = e.det.passagens; if (!p?.length) return "";
+  return `<div class="clima-bloco"><h3>Cronologia das detecções por passagem</h3>
+    <div class="rolagem"><table class="tabela"><thead><tr><th>Hora (Manaus)</th><th>Satélite</th><th>Focos na passagem</th><th>FRP máx.</th></tr></thead><tbody>
+    ${p.map(([t, sat, n, frp]) => `<tr><td class="mono">${manaus(t)}</td><td>${esc(sat)}</td><td class="n">${n}</td><td class="n">${frp != null ? br(frp, 1) + " MW" : "–"}</td></tr>`).join("")}
+    </tbody></table></div>
+    ${e.det.n_passagens > p.length ? `<p class="nota">Mostrando ${p.length} de ${e.det.n_passagens} passagens.</p>` : ""}
+    <p class="nota">Focos da mesma passagem são simultâneos: a ordem não é sequência de ignições. A primeira detecção mostra fogo detectável até aquele instante, não a hora nem o ponto de início. Intervalos sem passagem não são trajetórias medidas.</p></div>`;
 }
 
 // ------------------------------------------------------------ clima e comportamento do fogo
@@ -359,7 +372,7 @@ async function iniciarMapa() {
   for (const id of ["eventos", "alertas"]) {
     m.on("click", id, ev => { if (Q.modoPonto) return; selecionar(ev.features[0].properties.id, false); rolarPara($("#ficha")); });
     m.on("mouseenter", id, ev => { m.getCanvas().style.cursor = "pointer"; const p = ev.features[0].properties;
-      pop.setLngLat(ev.lngLat).setHTML(`<b>${esc(p.mun)}</b> · ${dBR(p.ini)}<br>Pontuação <b>${p.score}</b> · ${p.n} foco(s)`).addTo(m); });
+      pop.setLngLat(ev.lngLat).setHTML(`<b>${esc(p.mun)}</b> · ${dBR(p.ini)}<br>Prioridade <b>${p.score}</b> · ${p.n} foco(s)`).addTo(m); });
     m.on("mouseleave", id, () => { m.getCanvas().style.cursor = ""; pop.remove(); });
   }
   m.on("click", "desmat", ev => { if (Q.modoPonto) return; const p = ev.features[0].properties; new maplibregl.Popup().setLngLat(ev.lngLat).setHTML(`<b>DETER ${esc(p.c)}</b><br>${dBR(p.d)} · ${br(p.a)} km²`).addTo(m); });
@@ -444,7 +457,7 @@ function montarControles() {
 
 // ------------------------------------------------------------ ocorrências (tabela)
 const OC = {pag: 0, ord: "score", dir: -1};
-const COLS_OC = [["score", "Pont."], ["ia", "IA"], ["id", "Nº"], ["mun", "Município"], ["ini", "Início (UTC)"], ["n", "Focos"], ["maxDia", "Máx/dia"],
+const COLS_OC = [["score", "Prior."], ["ia", "IA"], ["id", "Nº"], ["mun", "Município"], ["ini", "Início (UTC)"], ["n", "Focos"], ["maxDia", "Máx/dia"],
   ["dist", "Dist. Manaus (km)"], ["area", "Área protegida"], ["inds", "Indicadores"], ["lat", "Lat"], ["lon", "Lon"]];
 function valOc(e, k) { return k === "area" ? (e.det.ti || e.det.uc || "") : k === "inds" ? e.ind.length : e[k]; }
 function ocorrencias() {
@@ -478,11 +491,11 @@ function tempoReal() {
   const al = (Q.alertasF || []).slice().sort((a, b) => b.score - a.score || b.fim.localeCompare(a.fim));
   const ult24 = Q.focos.filter(f => Date.now() - new Date(f[2].replace(" ", "T") + "Z") < 864e5).length;
   $("#kpisTR").innerHTML = [[fmt(Q.focos.length), "focos (todos os satélites) em 7 dias", "azul"], [fmt(ult24), "focos nas últimas 24 h", "vermelho fogo"],
-    [fmt(al.length), "alertas VIIRS agrupados", "ouro"], [fmt(al.filter(e => e.score >= 70).length), "alertas com pontuação ≥ 70", "vermelho fogo"],
+    [fmt(al.length), "alertas VIIRS agrupados", "ouro"], [fmt(al.filter(e => e.score >= 70).length), "alertas com prioridade ≥ 70", "vermelho fogo"],
     [fmt(al.filter(e => e.det.clima?.fumaca_rumo_manaus).length), "alertas com fumaça rumo a Manaus", "vermelho fogo"],
     [Q.est ? manaus(Q.est.ultimo_foco_utc) : "–", "último foco recebido (Manaus)", "azul"]]
     .map(([v, t, c]) => `<div class="indicador ${c}"><b style="${v.length > 10 ? "font-size:18px" : ""}">${v}</b><span>${t}</span></div>`).join("");
-  $("#tabTR").innerHTML = `<thead><tr><th>Pont.</th><th>Município</th><th>Área</th><th>Primeiro foco (Manaus)</th><th>Último (Manaus)</th><th>Focos</th><th>Vento</th><th>Fumaça → Manaus</th><th>Indicadores</th><th>Coord.</th></tr></thead><tbody>`
+  $("#tabTR").innerHTML = `<thead><tr><th>Prior.</th><th>Município</th><th>Área</th><th>Primeiro foco (Manaus)</th><th>Último (Manaus)</th><th>Focos</th><th>Vento</th><th>Fumaça → Manaus</th><th>Indicadores</th><th>Coord.</th></tr></thead><tbody>`
     + al.slice(0, 400).map(e => `<tr class="clicavel" data-id="${e.id}"><td><span class="pontos" style="background:${corScore(e.score)}">${e.score}</span></td><td>${esc(e.mun)}</td><td>${esc(e.det.ti || e.det.uc || "")}</td>
       <td class="mono">${manaus(e.ini)}</td><td class="mono">${manaus(e.fim)}</td><td class="n">${e.n}</td><td>${e.det.clima ? `${br(e.det.clima.vento_kmh, 0)} km/h de ${rosa(e.det.clima.vento_de_graus)}` : "–"}</td>
       <td>${e.det.clima?.fumaca_rumo_manaus ? `<span class="selo erro">sim, ~${br(e.det.clima.horas_ate_manaus, 0)} h</span>` : "–"}</td>
@@ -533,7 +546,7 @@ function estatisticas() {
   const f = Q.filtrados, st = Q.est, anos = Object.keys(st.focos_por_mes);
   const anoSel = (F.ini || "").slice(0, 4);
   $("#kpisEst").innerHTML = anos.slice(-4).map(a => `<div class="indicador ${a === anoSel ? "vermelho" : "azul"}"><b>${fmt(st.total_focos_ref[a])}</b><span>focos de referência em ${a}${a == new Date().getFullYear() ? " (parcial)" : ""}</span></div>`).join("")
-    + `<div class="indicador ouro"><b>${fmt(f.length)}</b><span>eventos no filtro atual</span></div><div class="indicador ouro"><b>${f.length ? br(d3.mean(f, e => e.score), 1) : "–"}</b><span>pontuação média no filtro</span></div>`;
+    + `<div class="indicador ouro"><b>${fmt(f.length)}</b><span>eventos no filtro atual</span></div><div class="indicador ouro"><b>${f.length ? br(d3.mean(f, e => e.score), 1) : "–"}</b><span>prioridade média no filtro</span></div>`;
   graficoMeses(st, anos);
   const porMun = d3.rollups(f, v => v.length, e => e.mun).sort((a, b) => b[1] - a[1]).slice(0, 12);
   barras("#gMun", porMun, css("--dptc-vermelho"), true);
@@ -597,10 +610,10 @@ function metodologia() {
       <p>Focos de calor do INPE (Programa Queimadas). A série histórica usa o satélite de referência <b>${p.sat_referencia}</b>, comparável entre anos. Os alertas de tempo real usam VIIRS 375 m (${p.sat_tempo_real.join(", ")}) dos últimos ${p.dias_tempo_real} dias.</p>
       <p>Focos são agrupados em <b>eventos</b> por DBSCAN espaço-temporal (aprendizado de máquina não supervisionado):</p>
       <div class="formula">x = lon·111,32·cos(φ̄) km · y = lat·111,32 km · t = dias·(${p.eps_km}/${p.eps_dias}) km<br>vizinhos se ‖(x,y,t)‖ ≤ ${p.eps_km} km  →  ${p.eps_km} km no espaço ou ${p.eps_dias} dias no tempo</div></div>
-    <div class="cartao"><h2>2. Pontuação de suspeição (0–100)</h2>
+    <div class="cartao"><h2>2. Prioridade de verificação (0–100)</h2>
       <table class="tabela"><thead><tr><th>Indicador</th><th>Critério</th><th>Peso</th></tr></thead><tbody>
       ${Object.keys(P).map(k => `<tr><td>${D[k][0]}</td><td class="nota">${D[k][1]}</td><td class="n">${P[k]}</td></tr>`).join("")}</tbody></table>
-      <div class="formula">pontuação = Σ peso(indicador presente) · máximo = 100</div>
+      <div class="formula">prioridade = Σ peso(indicador presente) · máximo = 100 · serve para ordenar a fila, não é probabilidade</div>
       <p class="nota">Raio de associação ao DETER: ${p.buffer_desmat_km} km. Meses do período proibitivo: ${p.meses_proibicao.join(", ")} (ajustar ao decreto vigente).</p></div>
     <div class="cartao"><h2>3. Índices espectrais</h2>
       <div class="formula">NDVI = (NIR − Red) / (NIR + Red)</div><div class="formula">NBR = (NIR − SWIR2) / (NIR + SWIR2)</div>
@@ -621,8 +634,8 @@ function metodologia() {
       <div class="formula">ignição em condição desfavorável (+10) = risco INPE &lt; 0,3 ou chuva 72 h ≥ 10 mm ou umidade mínima das 24 h anteriores ≥ 80%<br>escape plausível (contexto) = (risco ≥ 0,8 ou ≥ 30 dias sem chuva) e vento ≥ 10 km/h<br>muita biomassa (contexto) = FRP ≥ 100 MW e fogo por 2+ dias ou à noite<br>fumaça rumo a Manaus = vento soprando a ±30° da direção da cidade, até 800 km; chegada ≈ distância ÷ velocidade</div>
       <p class="nota">Na Amazônia quase todo fogo é de origem humana; raio é raro na estação seca. O clima ajuda a distinguir a ignição deliberada da queima que escapa do controle, mas é contexto e não prova.</p></div>
     <div class="cartao"><h2>Limitações</h2><ul>
-      <li>O satélite detecta calor, não autoria. A pontuação é indício para orientar diligência, nunca prova.</li>
-      <li>Em TIs e RDS/RESEX há uso tradicional do fogo, permitido. A pontuação nessas áreas exige leitura cuidadosa.</li>
+      <li>O satélite detecta calor, não autoria. A prioridade orienta diligências, nunca é prova nem grau de certeza.</li>
+      <li>Em TIs e RDS/RESEX há uso tradicional do fogo, permitido. A prioridade nessas áreas exige leitura cuidadosa.</li>
       <li>Nuvem e fumaça abrem lacunas na série de NDVI e alargam a incerteza da data.</li>
       <li>Resolução de 10 a 30 m: adequada para áreas em hectares, não para feições pequenas.</li>
       <li>CAR e SIGEF ainda não estão integrados para apontar o imóvel.</li></ul></div>
@@ -647,7 +660,7 @@ function fontes() {
       <div class="indicador azul"><b>${f.duracao_ciclo_s ?? "–"} s</b><span>duração do ciclo</span></div>
       <div class="indicador ouro"><b>${fmt(st.n_eventos)}</b><span>eventos de referência</span></div>
       <div class="indicador ouro"><b>${fmt(st.n_deter)}</b><span>polígonos DETER no mapa</span></div></div>
-    <div class="cartao"><div class="cab"><h2>Fontes de dados</h2><a class="botao secundario pequeno" href="api/docs" target="_blank" rel="noopener">API do QueimadIA</a></div>
+    <div class="cartao"><div class="cab"><h2>Fontes de dados</h2><a class="botao secundario pequeno" href="api/docs" target="_blank" rel="noopener">API do Fogo Forense</a></div>
     <div class="rolagem"><table class="tabela"><thead><tr><th>Dado</th><th>Origem</th><th>Atualizado (Manaus)</th><th>Frequência</th><th>Situação</th></tr></thead><tbody>
     ${linhas.map(([d, o, u, h, fr, s]) => `<tr><td><a href="${u}" target="_blank" rel="noopener">${d}</a></td><td>${o}</td><td class="mono">${h}</td><td>${fr}</td><td class="nota">${esc(s || "")}</td></tr>`).join("")}
     </tbody></table></div></div>`;
