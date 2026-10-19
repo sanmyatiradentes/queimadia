@@ -104,9 +104,25 @@ def _data(it):
     return it.datetime.date()
 
 
-def buscar_cenas(lat, lon, inicio, fim, colecoes=("sentinel-2-l2a", "landsat-c2-l2"), modo="mes", nuvem_max=70):
-    """Lista as cenas que cobrem o ponto. modo='mes': a menos nublada de cada mês
-    por coleção (como no PolicIA); modo='todas': todas as datas."""
+def limpeza_local(colecao, item, lat, lon, raio_m=600):
+    """Fração do círculo de análise sem nuvem/sombra (0–1), lendo só a máscara."""
+    try:
+        res = 20 if colecao == "sentinel-2-l2a" else 30
+        b = caixa(lat, lon, 2 * raio_m)
+        sh = forma_janela(b, res)
+        m = ler(item, colecao, b, ["mascara"], sh)["mascara"]
+        circ = mascara_circulo(sh, 1.0)
+        return float(mascara_boa(colecao, m)[circ].mean())
+    except Exception:
+        return 0.0
+
+
+def buscar_cenas(lat, lon, inicio, fim, colecoes=("sentinel-2-l2a", "landsat-c2-l2"), modo="mes", nuvem_max=70,
+                 raio_m=None, candidatas=4):
+    """Lista as cenas que cobrem o ponto. modo='mes': uma por mês e coleção. Com
+    raio_m, entre as `candidatas` menos nubladas, considera só as com >= 80% da
+    ÁREA limpa (máscara) e fica com a de menor nuvem na cena; sem raio_m, a de
+    menor nuvem na cena. modo='todas': todas as datas."""
     saida = []
     for col in colecoes:
         q = {"eo:cloud_cover": {"lt": nuvem_max}}
@@ -115,16 +131,33 @@ def buscar_cenas(lat, lon, inicio, fim, colecoes=("sentinel-2-l2a", "landsat-c2-
             q["landsat:collection_category"] = {"eq": "T1"}
         itens = catalogo().search(collections=[col], intersects={"type": "Point", "coordinates": [lon, lat]},
                                   datetime=f"{inicio}/{fim}", query=q).items()
-        por_chave = {}
+        grupos = {}
         for it in itens:
             k = it.datetime.strftime("%Y-%m") if modo == "mes" else str(_data(it))
-            if k not in por_chave or it.properties["eo:cloud_cover"] < por_chave[k].properties["eo:cloud_cover"]:
-                por_chave[k] = it
-        for it in por_chave.values():
+            grupos.setdefault(k, []).append(it)
+        escolhidas, limpeza = [], {}
+        if modo == "mes" and raio_m:
+            tarefas = []
+            for lst in grupos.values():
+                lst.sort(key=lambda it: it.properties["eo:cloud_cover"])
+                tarefas += lst[:candidatas]
+            with ThreadPoolExecutor(16) as ex:
+                for it, f in zip(tarefas, ex.map(lambda it: limpeza_local(col, it, lat, lon, raio_m), tarefas)):
+                    limpeza[it.id] = f
+            for lst in grupos.values():
+                # área limpa (máscara) E pouca nuvem na cena: a máscara não pega névoa nem
+                # nuvem fina, que acompanham cenas muito nubladas. Entre as candidatas com
+                # >= 80% da área limpa, fica a de menor nuvem na cena.
+                escolhidas.append(min(lst[:candidatas], key=lambda it: (limpeza[it.id] < 0.8, round(it.properties["eo:cloud_cover"] / 10),
+                                                                        -limpeza[it.id])))
+        else:
+            escolhidas = [min(lst, key=lambda it: it.properties["eo:cloud_cover"]) for lst in grupos.values()]
+        for it in escolhidas:
             saida.append({"id": it.id, "colecao": col, "data": str(_data(it)),
                           "nuvem_cena": round(it.properties.get("eo:cloud_cover", 0), 1),
                           "plataforma": it.properties.get("platform"),
-                          "baseline": it.properties.get("s2:processing_baseline")})
+                          "baseline": it.properties.get("s2:processing_baseline"),
+                          "limpo_area": round(limpeza[it.id], 3) if it.id in limpeza else None})
     return sorted(saida, key=lambda c: (c["data"], c["colecao"]))
 
 
@@ -200,7 +233,7 @@ def medir_cena(colecao, item_id, lat, lon, raio_m=600):
     res = COLECOES[colecao]["res"] if raio_m > 1500 else 10
     b = caixa(lat, lon, 2 * raio_m)
     sh = forma_janela(b, res)
-    d = ler(item, colecao, b, ["red", "nir", "swir1", "swir2", "mascara"], sh)
+    d = ler(item, colecao, b, ["green", "red", "nir", "swir1", "swir2", "mascara"], sh)
     idx, bom = indices(d, colecao)
     circ = mascara_circulo(sh, 1.0)
     validos = circ & bom & np.isfinite(idx["ndvi"])
@@ -209,6 +242,12 @@ def medir_cena(colecao, item_id, lat, lon, raio_m=600):
              "baseline": item.properties.get("s2:processing_baseline"),
              "frac_valida": round(frac, 3), "n_validos": int(validos.sum()), "segundos": round(time.time() - t0, 1)}
     if validos.sum() >= 5:
+        # reflectâncias medianas usadas pela triagem Tmask (Zhu & Woodcock, 2014)
+        for banda in ("green", "swir1"):
+            x = d[banda][validos]
+            x = x[np.isfinite(x)]
+            if x.size:
+                saida["refl_" + banda] = round(float(np.median(x)), 4)
         for k, v in idx.items():
             x = v[validos]
             x = x[np.isfinite(x)]
@@ -219,13 +258,44 @@ def medir_cena(colecao, item_id, lat, lon, raio_m=600):
     return saida
 
 
-def detectar_quebra(serie, ref_ini=None, ref_fim=None):
-    """Método do PolicIA (servico-ambiental/ndvi.py): base = mediana do período de
-    referência; limiar = base − max(3·desvio, 0,15); quebra = 1ª de ≥2
-    observações seguidas abaixo do limiar. A data é dada como intervalo."""
+OBS_CONSECUTIVAS = 6   # critério do CCDC (Zhu & Woodcock, 2014; Arévalo et al., 2020)
+TMASK_LIMIAR = 0.04    # reflectância; Tmask do CCDC (Zhu & Woodcock, 2014)
+
+
+def tmask(serie, ref_ini, ref_fim):
+    """Triagem multitemporal de nuvem/névoa e sombra residuais (Tmask, CCDC):
+    na LINHA DE BASE, por coleção, remove a observação cujo verde passa da
+    mediana + 0,04 (nuvem/névoa) ou cujo SWIR1 fica abaixo da mediana − 0,04
+    (sombra). Fora da linha de base nada é removido (lá está a mudança)."""
+    from statistics import median as med
+    saida, removidas = [], []
+    for col in {p["colecao"] for p in serie}:
+        base = [p for p in serie if p["colecao"] == col and ref_ini <= p["data"] <= ref_fim
+                and p.get("refl_green") is not None and p.get("refl_swir1") is not None]
+        if len(base) < 4:
+            continue
+        mg, ms = med(p["refl_green"] for p in base), med(p["refl_swir1"] for p in base)
+        for p in base:
+            if p["refl_green"] > mg + TMASK_LIMIAR:
+                p["tmask"] = "nuvem/névoa"
+            elif p["refl_swir1"] < ms - TMASK_LIMIAR:
+                p["tmask"] = "sombra"
+    for p in serie:
+        (removidas if p.get("tmask") else saida).append(p)
+    return saida, removidas
+
+
+def detectar_quebra(serie, ref_ini=None, ref_fim=None, n_consec=None):
+    """Método do PolicIA (servico-ambiental/ndvi.py), com confirmação pelo
+    critério do CCDC: base = mediana do período de referência; limiar = base −
+    max(3·desvio, 0,15); quebra CONFIRMADA = 1ª de >= 6 observações consecutivas
+    abaixo do limiar. Queda no fim da série ainda sem as 6 = mudança PROVÁVEL.
+    Quedas que se recuperam antes = transitórias. A data é dada como intervalo."""
+    n = int(n_consec or OBS_CONSECUTIVAS)
     serie = [p for p in serie if p.get("ndvi") is not None]
     if len(serie) < 6:
-        return {"detectada": False, "motivo": "Série curta demais para avaliar quebra."}
+        return {"detectada": False, "situacao": "nao_detectada", "obs_consecutivas": n,
+                "motivo": "Série curta demais para avaliar quebra."}
     vals = [p["ndvi"] for p in serie]
     datas = [p["data"] for p in serie]
     if ref_ini and ref_fim:
@@ -236,18 +306,32 @@ def detectar_quebra(serie, ref_ini=None, ref_fim=None):
     base = median(base_vals)
     desv = float(np.std(base_vals)) if len(base_vals) > 1 else 0.05
     limiar = base - max(3 * desv, 0.15)
-    ini_busca = (base_idx[-1] + 1) if base_idx else len(vals) // 3
     comum = {"ndvi_base": round(base, 4), "desvio_base": round(desv, 4), "limiar": round(limiar, 4),
-             "n_base": len(base_vals)}
-    for i in range(ini_busca, len(vals) - 1):
-        if vals[i] < limiar and vals[i + 1] < limiar:
-            apos = median(vals[i:i + 3])
-            return {**comum, "detectada": True,
-                    "data_ultima_estavel": datas[i - 1] if i > 0 else datas[0],
-                    "data_primeira_abaixo": datas[i], "ndvi_apos": round(apos, 4),
-                    "queda": round(base - apos, 4),
-                    "criterio": f"NDVI < {limiar:.3f} (base {base:.3f} − max(3·{desv:.3f}; 0,15)) em ≥2 observações seguidas"}
-    return {**comum, "detectada": False, "motivo": "Sem queda sustentada abaixo do limiar da linha de base."}
+             "n_base": len(base_vals), "obs_consecutivas": n,
+             "criterio": f"NDVI < {limiar:.3f} (base {base:.3f} − max(3·{desv:.3f}; 0,15)) em ≥{n} observações consecutivas (CCDC)"}
+    i = (base_idx[-1] + 1) if base_idx else len(vals) // 3
+    transitorias = []
+    while i < len(vals):
+        if vals[i] >= limiar:
+            i += 1
+            continue
+        j = i
+        while j < len(vals) and vals[j] < limiar:
+            j += 1
+        seq = j - i
+        apos = median(vals[i:j])
+        info = {"data_ultima_estavel": datas[i - 1] if i > 0 else datas[0], "data_primeira_abaixo": datas[i],
+                "ndvi_apos": round(apos, 4), "queda": round(base - apos, 4), "obs_abaixo": seq}
+        if seq >= n:
+            return {**comum, **info, "detectada": True, "situacao": "confirmada", "quedas_transitorias": transitorias}
+        if j == len(vals) and seq >= 2:
+            return {**comum, **info, "detectada": False, "situacao": "provavel", "quedas_transitorias": transitorias,
+                    "motivo": f"Queda em {seq} observação(ões) no fim da série; a confirmação exige {n} consecutivas."}
+        if seq >= 2:
+            transitorias.append({"de": datas[i], "ate": datas[j - 1], "obs": seq})
+        i = j
+    return {**comum, "detectada": False, "situacao": "nao_detectada", "quedas_transitorias": transitorias,
+            "motivo": "Sem queda sustentada abaixo do limiar da linha de base."}
 
 
 # ------------------------------------------------------------------ imagens

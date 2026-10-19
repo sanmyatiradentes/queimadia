@@ -47,7 +47,7 @@ def escolher_periodos(validas, quebra, n=4):
     if not v:
         return []
     marcas = {v[0]["data"]: "Início", v[-1]["data"]: "Fim"}
-    if quebra.get("detectada"):
+    if quebra.get("data_primeira_abaixo"):
         antes = [m for m in v if m["data"] <= quebra["data_ultima_estavel"]]
         depois = [m for m in v if m["data"] >= quebra["data_primeira_abaixo"]]
         if antes:
@@ -71,7 +71,7 @@ def analisar(ev):
     a_fim = min(hoje, (pd.Timestamp(fim) + pd.Timedelta(days=120)).date().isoformat())
     ref_ini, ref_fim = a_ini, (pd.Timestamp(ini) - pd.Timedelta(days=60)).date().isoformat()
 
-    cenas = ndvi.buscar_cenas(lat, lon, a_ini, ref_fim, modo="mes", nuvem_max=70)
+    cenas = ndvi.buscar_cenas(lat, lon, a_ini, ref_fim, modo="mes", nuvem_max=70, raio_m=RAIO_M)
     cenas += ndvi.buscar_cenas(lat, lon, ref_fim, a_fim, modo="todas", nuvem_max=80)
     vistos, unicas = set(), []
     for c in cenas:
@@ -87,8 +87,11 @@ def analisar(ev):
     with ThreadPoolExecutor(12) as ex:
         med = sorted(ex.map(medir, unicas), key=lambda m: (m["data"], m["colecao"]))
     validas = [m for m in med if m.get("ndvi") is not None and m.get("frac_valida", 0) >= MIN_VALIDO]
+    validas, removidas_tmask = ndvi.tmask(validas, ref_ini, ref_fim)
     quebra = ndvi.detectar_quebra(validas, ref_ini, ref_fim)
-    if quebra.get("detectada"):
+    quebra["removidas_tmask"] = [{"data": m["data"], "colecao": m["colecao"], "motivo": m["tmask"], "ndvi": m["ndvi"]}
+                                 for m in removidas_tmask]
+    if quebra.get("situacao") in ("confirmada", "provavel"):
         ini_ts = pd.Timestamp(ini)
         prim, ult = pd.Timestamp(quebra["data_primeira_abaixo"]), pd.Timestamp(quebra["data_ultima_estavel"])
         quebra["relacao_fogo"] = ("antes_do_fogo" if prim < ini_ts - pd.Timedelta(days=5)
@@ -110,7 +113,7 @@ def analisar(ev):
     dn = None
     v_nbr = [m for m in validas if m.get("nbr") is not None]
     if len(v_nbr) >= 2:
-        if quebra.get("detectada"):
+        if quebra.get("data_primeira_abaixo"):
             a = [m for m in v_nbr if m["data"] <= quebra["data_ultima_estavel"]]
             b = [m for m in v_nbr if m["data"] >= quebra["data_primeira_abaixo"]]
         else:
@@ -132,8 +135,10 @@ def analisar(ev):
         "periodo": [a_ini, a_fim], "linha_base": [ref_ini, ref_fim],
         "quebra": quebra, "dnbr": dn, "imagens": imagens,
         "cenas": med, "n_validas": len(validas),
-        "metodo": "NDVI = mediana dos pixels válidos no círculo de 600 m; quebra pelo método do PolicIA "
-                  "(limiar = base − max(3σ; 0,15), ≥2 observações seguidas); Sentinel-2 L2A + Landsat 8/9 C2 L2 Tier 1.",
+        "metodo": "NDVI = mediana dos pixels válidos no círculo de 600 m; cena do mês escolhida pela limpeza sobre a área; "
+                  "quebra pelo método do PolicIA (limiar = base − max(3σ; 0,15)) confirmada por 6 observações consecutivas "
+                  "(critério do CCDC), com triagem Tmask de nuvem/névoa e sombra residuais na linha de base; "
+                  "Sentinel-2 L2A + Landsat 8/9 C2 L2 Tier 1.",
         "fonte": "Microsoft Planetary Computer (STAC)",
         "gerado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
@@ -210,7 +215,7 @@ def ciclo(eventos, limite=MAX_POR_CICLO, ids=None):
     else:
         def precisa(e):
             r = idx.get(e["id"])
-            if not r:
+            if not r or "situacao" not in r:   # sem resultado, ou calculado antes do critério do CCDC
                 return True
             recente = (pd.Timestamp.now() - pd.Timestamp(e["fim"][:10])).days < 90
             return recente and agora - r["t"] > DIAS_REFAZER * 86400
@@ -222,7 +227,8 @@ def ciclo(eventos, limite=MAX_POR_CICLO, ids=None):
         try:
             r = analisar(e)
             q = r["quebra"]
-            idx[e["id"]] = {"t": time.time(), "quebra": q.get("data_primeira_abaixo"), "relacao": q.get("relacao_fogo"),
+            idx[e["id"]] = {"t": time.time(), "quebra": q.get("data_primeira_abaixo"), "situacao": q.get("situacao"),
+                            "relacao": q.get("relacao_fogo"),
                             "queimado_ha": (r["dnbr"] or {}).get("queimado_ha"), "n": r["n_validas"],
                             "parecer": "texto" in (r.get("parecer") or {})}
             print(f"análise {e['id']} {e['municipio']}: {r['n_validas']} obs, quebra {q.get('data_primeira_abaixo')} "

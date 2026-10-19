@@ -17,9 +17,9 @@ CACHE_CURTO = {"Cache-Control": "public, max-age=600, s-maxage=600"}
 
 @router.get("/cenas")
 def cenas(lat: float, lon: float, inicio: str, fim: str, colecoes: str = "sentinel-2-l2a,landsat-c2-l2",
-          modo: str = "mes", nuvem_max: float = 70):
+          modo: str = "mes", nuvem_max: float = 70, raio_m: float | None = None):
     cols = tuple(c for c in colecoes.split(",") if c in ndvi.COLECOES)
-    return JSONResponse(ndvi.buscar_cenas(lat, lon, inicio, fim, cols, modo, nuvem_max), headers=CACHE_CURTO)
+    return JSONResponse(ndvi.buscar_cenas(lat, lon, inicio, fim, cols, modo, nuvem_max, raio_m), headers=CACHE_CURTO)
 
 
 @router.get("/medir")
