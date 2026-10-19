@@ -206,6 +206,7 @@ function selecionar(id, voar) {
       <div><span>Satélites</span><b>${esc(e.sats.join(", ") || "AQUA_M-T")}</b></div>
       ${e.ia != null ? `<div><span>Atipicidade (IA)</span><b>${e.ia}/100</b></div>` : ""}
     </div>
+    ${blocoConfronto(e)}
     ${blocoClima(e)}
     <div class="painel-grade">
       <div><h3 style="margin-bottom:6px">Os sinais verificados, um a um</h3>${linhas}
@@ -218,6 +219,7 @@ function selecionar(id, voar) {
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://plataforma.brasil.mapbiomas.org/">MapBiomas</a>
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://apps.sentinel-hub.com/eo-browser/?zoom=14&lat=${lat}&lng=${lon}">EO Browser (Sentinel)</a>
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://www.google.com/maps/@${lat},${lon},2000m/data=!3m1!1e3">Google Satélite</a>
+          <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://www.windy.com/${lat}/${lon}?wind,${lat},${lon},9">Windy (vento)</a>
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://consultapublica.car.gov.br/publico/imoveis/index">Consulta CAR</a>
           <a class="botao secundario pequeno" target="_blank" rel="noopener" href="https://servicos.ibama.gov.br/ctf/publico/areasembargadas/ConsultaPublicaAreasEmbargadas.php">Embargos IBAMA</a>
         </div>
@@ -227,6 +229,40 @@ function selecionar(id, voar) {
   if ($("#fPronta")) $("#fPronta").onclick = () => window.mostrarAnalisePronta?.(e.id);
   $("#fCopiar").onclick = () => { const t = `QueimadIA ${e.id} — ${e.mun}, ${dBR(e.ini)}. Pontuação ${e.score} (${e.ind.map(k => IND_TXT[k]).join("; ") || "sem indicadores"}). ${e.n} focos, ${lat}, ${lon}. ${d.ti || d.uc || ""}`;
     navigator.clipboard?.writeText(t).then(() => toast("Resumo copiado."), () => toast(t, 10000)); };
+}
+
+// ------------------------------------------------------------ confronto de hipóteses
+function blocoConfronto(e) {
+  const d = e.det, f = d.fogo || {}, ctx = d.contexto || [], an = Q.est.analises?.[e.id];
+  const intenc = [], acid = [];
+  if (d.desmatamento) intenc.push(`Desmatamento detectado pelo DETER ${d.desmatamento.dias_antes > 0 ? d.desmatamento.dias_antes + " dias antes" : "junto com"} do fogo`);
+  if (an?.relacao === "antes_do_fogo") intenc.push("A vegetação sumiu antes dos focos (NDVI): derrubada seguida de queima");
+  if (d.ignicao_desfavoravel) intenc.push("Começou em condição desfavorável ao fogo (não pegaria sozinho)");
+  if (e.maxDia >= 3) intenc.push(`${e.maxDia} focos no mesmo dia: ignições simultâneas`);
+  if (d.anos_anteriores?.length >= 2) intenc.push(`Reincidência: fogo no local em ${d.anos_anteriores.join(", ")}`);
+  if (e.ind.includes("periodo_proibitivo")) intenc.push("Período de proibição do uso do fogo");
+  if (e.ind.includes("area_protegida")) intenc.push(d.ti ? `Dentro da ${d.ti}: queima por não indígenas é proibida` : `Dentro da ${d.uc} (proteção integral): uso do fogo proibido`);
+  if (ctx.includes("biomassa_alta")) intenc.push("Fogo intenso e persistente: queima de muita biomassa (conversão)");
+  if (ctx.includes("escape_plausivel")) acid.push("Seca forte e vento acima de 10 km/h: uma queima pode ter escapado do controle");
+  if (d.ti) acid.push("Em terra indígena, a roça tradicional dos próprios indígenas com fogo é permitida");
+  else if (d.uc && d.uc_grupo !== "PI") acid.push("Reserva de uso sustentável: a roça tradicional das comunidades com fogo é permitida");
+  if (!d.desmatamento && !(an?.relacao === "antes_do_fogo")) acid.push("Sem desmatamento prévio detectado");
+  if (e.n <= 2 && (f.dias_com_fogo || 1) <= 1 && (f.frp_max == null || f.frp_max < 20)) acid.push("Fogo pequeno e curto, de baixa intensidade");
+  if (an && !an.quebra) acid.push("A vegetação não foi perdida de forma sustentada (NDVI)");
+  if (!(e.maxDia >= 3) && e.n > 2) acid.push("Focos espalhados ao longo dos dias, sem ignições simultâneas");
+  const saldo = intenc.length - acid.length;
+  const resumo = intenc.length === 0 && acid.length === 0 ? "Sem sinais suficientes para comparar."
+    : saldo >= 2 ? "Predominam os sinais de <b>ação intencional</b>."
+    : saldo <= -2 ? "Predominam os sinais compatíveis com <b>acidente ou queima tradicional</b>."
+    : "Os sinais estão <b>equilibrados</b>: a apuração de campo é que vai esclarecer.";
+  const lista = (l, vazio) => l.length ? `<ul>${l.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="nota">${vazio}</p>`;
+  return `<div class="confronto"><h3>Confronto de hipóteses</h3>
+    <div class="confronto-grade">
+      <div class="lado intencional"><h4>Sinais de fogo intencional (${intenc.length})</h4>${lista(intenc, "Nenhum sinal forte.")}</div>
+      <div class="lado acidental"><h4>Compatível com acidente ou queima tradicional (${acid.length})</h4>${lista(acid, "Nenhum sinal.")}</div>
+    </div>
+    <p class="clima-leitura">${resumo}</p>
+    <p class="nota">Comparação qualitativa dos sinais objetivos das bases públicas. Orienta a investigação; não substitui a perícia de local nem conclui sobre autoria.</p></div>`;
 }
 
 // ------------------------------------------------------------ clima e comportamento do fogo

@@ -220,7 +220,9 @@
         <li><b>Escolha o período e a região</b> nos filtros (por padrão: temporada atual, todo o estado).</li>
         <li><b>Olhe o mapa e a fila de prioridades.</b> A cor do círculo indica o nível de suspeita; o tamanho, a quantidade de focos.</li>
         <li><b>Clique num evento.</b> A ficha explica em uma frase por que ele foi marcado e lista cada sinal encontrado.</li>
-        <li><b>Abra a análise de satélite</b> para ver imagens antes e depois do fogo, o gráfico da vegetação e a área queimada.</li></ol></section>
+        <li><b>Abra a análise de satélite</b> para ver imagens antes e depois do fogo, o gráfico da vegetação e a área queimada.</li>
+        <li><b>Veja o confronto de hipóteses</b> na ficha: os sinais de fogo intencional ficam de um lado; os compatíveis com acidente ou queima tradicional, do outro.</li>
+        <li><b>Ligue a camada de vento</b> no mapa para ver para onde a fumaça vai; as linhas tracejadas marrons mostram incêndios cuja fumaça segue rumo a Manaus.</li></ol></section>
       <section><h3>O que significa a pontuação</h3>
         <div class="niveis"><span class="pontos" style="background:var(--s4)">85+</span> Muito alta: vários sinais fortes juntos</div>
         <div class="niveis"><span class="pontos" style="background:var(--s3)">70–84</span> Alta: merece ser verificada</div>
@@ -237,7 +239,14 @@
         <dt>Quebra</dt><dd>Momento em que o NDVI cai e não volta: a vegetação foi removida ou queimada.</dd>
         <dt>dNBR</dt><dd>Mede quanto a área queimou, comparando imagens antes e depois do fogo.</dd>
         <dt>IA (atipicidade)</dt><dd>Nota de 0 a 100 dada por inteligência artificial: quanto o evento foge do padrão normal de fogo no Amazonas.</dd>
-        <dt>Tempo real (VIIRS)</dt><dd>Satélites que passam várias vezes ao dia e detectam focos menores. São os alertas dos últimos 7 dias.</dd></dl></section>
+        <dt>Tempo real (VIIRS)</dt><dd>Satélites que passam várias vezes ao dia e detectam focos menores. São os alertas dos últimos 7 dias.</dd>
+        <dt>Quebra confirmada × mudança provável</dt><dd>A quebra é confirmada quando o NDVI fica abaixo do limiar em 6 imagens seguidas (critério do CCDC, Zhu &amp; Woodcock, 2014). Com menos imagens, por ser recente, aparece como "mudança provável", que se confirma conforme chegam novas imagens.</dd>
+        <dt>Queda transitória</dt><dd>O NDVI caiu, mas voltou ao normal (estação chuvosa, névoa, alagamento). Não é perda de vegetação.</dd>
+        <dt>Tmask</dt><dd>Etapa do CCDC que retira da linha de base imagens com névoa ou sombra que a máscara de nuvem não pegou.</dd>
+        <dt>FRP</dt><dd>Intensidade do fogo medida pelo satélite, em megawatts. Alta e persistente indica muita biomassa queimando (mata derrubada).</dd>
+        <dt>Ignição em condição desfavorável</dt><dd>O fogo começou com risco baixo, chuva recente ou ar úmido: dificilmente pegaria sozinho, o que pesa para ação deliberada.</dd>
+        <dt>Escape plausível</dt><dd>Seca forte e vento acima de 10 km/h: uma queima pode ter fugido do controle (acidente).</dd>
+        <dt>Fumaça rumo a Manaus</dt><dd>O vento no início do fogo soprava em direção à cidade (±30°), até 800 km; mostra a chegada estimada em horas.</dd></dl></section>
     </div>
   </div>
 </div>

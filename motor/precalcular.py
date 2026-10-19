@@ -143,7 +143,7 @@ def analisar(ev):
         "gerado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     try:
-        res["parecer"] = parecer.gerar({**res, "evento": {**res["evento"], "det": ev.get("det")}})
+        res["parecer"] = parecer.gerar({**res, "evento": {**res["evento"], "det": ev.get("det"), "clima": ev.get("clima")}})
     except parecer.ParecerIndisponivel as e:
         res["parecer"] = {"indisponivel": str(e)}
     _grava(f"{ev['id']}.json", res)

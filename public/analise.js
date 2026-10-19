@@ -392,7 +392,8 @@
       linha_base: [$("#aRefIni").value, $("#aRefFim").value], modo: $("#aModo").value, min_fracao_valida: MIN_VALIDO,
       metodo: "NDVI = mediana dos pixels válidos no círculo; cena do mês: >= 80% da área limpa e menor nuvem na cena; triagem Tmask na linha de base; quebra: limiar = base − max(3σ; 0,15), confirmada por 6 observações consecutivas (CCDC).",
       fonte: "Microsoft Planetary Computer (STAC): sentinel-2-l2a, landsat-c2-l2 (Landsat 8/9, Tier 1)",
-      quebra: A.quebra && {...A.quebra, baseVals: undefined}, dnbr: A.dnbrRes || null, evento: A.evento && {id: A.evento.id, municipio: A.evento.mun, inicio: A.evento.ini, fim: A.evento.fim, pontuacao: A.evento.score},
+      quebra: A.quebra && {...A.quebra, baseVals: undefined}, dnbr: A.dnbrRes || null, evento: A.evento && {id: A.evento.id, municipio: A.evento.mun, inicio: A.evento.ini, fim: A.evento.fim, pontuacao: A.evento.score,
+        indicadores: A.evento.ind, det: A.evento.det},
       cenas: A.med};
   }
   const baixar = (n, t, tp) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], {type: tp})); a.download = n; a.click(); };

@@ -22,8 +22,11 @@ Regras:
 - Cite os números com as unidades e as datas no formato dd/mm/aaaa.
 - Explique em linguagem técnica e clara, para um delegado ou perito que não é especialista em satélite.
 - Se a área estiver em terra indígena ou reserva de uso sustentável, lembre que o uso tradicional do fogo pode ser legal.
-- Estrutura: 1. Objeto; 2. Dados e método (fontes, satélites, período, critério de quebra); 3. Resultados (série de NDVI, quebra e intervalo de data, dNBR e área queimada, indicadores do evento); 4. Interpretação técnica; 5. Limitações; 6. Diligências sugeridas (ex.: perícia de local, consulta ao CAR/SIGEF, embargos, imagens de maior resolução).
-- Texto corrido em português, sem markdown, sem tabelas. Máximo de 700 palavras."""
+- Critério de quebra: o NDVI precisa ficar abaixo do limiar em 6 observações consecutivas (CCDC; Zhu & Woodcock, 2014; Arévalo et al., 2020). Se "situacao" for "provavel", diga que a mudança ainda não está confirmada e aguarda novas imagens. Se houver "quedas_transitorias", explique que foram quedas passageiras, com recuperação. Se houver "removidas_tmask", informe que essas imagens saíram da linha de base por névoa ou sombra residual.
+- Clima (det.clima e det.fogo): use vento, umidade mínima, chuva das 72 h, dias sem chuva, risco de fogo do INPE e FRP para discutir as duas hipóteses. "ignicao_desfavoravel" pesa para ignição deliberada. "escape_plausivel" torna possível uma queima que fugiu do controle. "biomassa_alta" indica queima de muita biomassa, como mata derrubada. Se "fumaca_rumo_manaus" for verdadeiro, mencione o impacto potencial na qualidade do ar em Manaus e o tempo estimado.
+- Faça um confronto explícito das hipóteses: liste os sinais que apontam para fogo intencional e os compatíveis com acidente ou queima tradicional, e diga qual predomina. Não conclua sobre autoria.
+- Estrutura: 1. Objeto; 2. Dados e método (fontes, satélites, período, critério de quebra, triagem Tmask); 3. Resultados (série de NDVI, situação da quebra e intervalo de data, dNBR e área queimada, indicadores, clima no início do fogo); 4. Confronto de hipóteses (intencional × acidental); 5. Interpretação técnica; 6. Limitações; 7. Diligências sugeridas (ex.: perícia de local, consulta ao CAR/SIGEF, embargos, autorização de queima no IPAAM, imagens de maior resolução).
+- Texto corrido em português, sem markdown, sem tabelas. Máximo de 800 palavras."""
 
 class ParecerIndisponivel(Exception):
     pass
