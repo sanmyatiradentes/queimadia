@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Entrar — Fogo Forense</title>
+<link rel="icon" href="img/dptc.png">
+<link rel="stylesheet" href="estilo.css">
+<style>
+body{display:grid;place-items:center;min-height:100vh;padding:24px 16px}
+.login{width:100%;max-width:440px;background:#fff;border:1px solid var(--cinza-borda);border-radius:10px;padding:28px 26px;text-align:center}
+.login img{width:120px;height:auto;margin:0 auto 6px;display:block}
+.login h1{font-size:22px;margin:4px 0}
+.login .sub{color:var(--cinza-texto);margin:0 0 18px}
+.login form{display:grid;gap:12px;text-align:left}
+.login label{display:grid;gap:4px;font-size:13px;font-weight:600;color:var(--cinza-texto)}
+.login input,.login select{font-size:15px;padding:9px 10px;width:100%}
+.login .botao{justify-content:center;padding:10px 16px;font-size:15px}
+.login .troca{margin-top:14px;font-size:14px}
+.login .troca a{cursor:pointer}
+.aviso{border-radius:8px;padding:10px 12px;font-size:14px;text-align:left}
+.aviso.erro{background:#fbe6e4;color:var(--vermelho)} .aviso.ok{background:#e3f4ea;color:var(--verde)}
+.lgpd{font-size:12px;color:var(--cinza-texto);text-align:left;margin:4px 0 0}
+.voltar{display:inline-block;margin-top:16px;font-size:13px}
+</style>
+</head>
+<body>
+<main class="login">
+  <img src="img/dptc.png" alt="Departamento de Polícia Técnico-Científica">
+  <h1>Fogo Forense</h1>
+  <p class="sub">Área restrita · NIPED/PCAM · DPTC</p>
+  <div id="msg" class="aviso" hidden role="status"></div>
+
+  <form id="fEntrar" autocomplete="on">
+    <label>E-mail<input type="email" name="email" required autocomplete="username"></label>
+    <label>Senha<input type="password" name="senha" required autocomplete="current-password"></label>
+    <button class="botao" type="submit">Entrar</button>
+  </form>
+
+  <form id="fCad" hidden autocomplete="on">
+    <label>Nome completo<input name="nome" required maxlength="120" autocomplete="name"></label>
+    <label>E-mail<input type="email" name="email" required autocomplete="email"></label>
+    <label>Órgão<input name="orgao" required maxlength="120" placeholder="Ex.: PCAM, DPTC, MPAM, PF, IBAMA"></label>
+    <label>Cargo<input name="cargo" required maxlength="120" placeholder="Ex.: Perito criminal, Delegado"></label>
+    <label>Matrícula (opcional)<input name="matricula" maxlength="40"></label>
+    <label>Senha (mínimo 10 caracteres)<input type="password" name="senha" required minlength="10" autocomplete="new-password"></label>
+    <p class="lgpd">Seus dados são usados só para validar e registrar o acesso à área restrita, que contém dados de convênio. O cadastro é analisado pela administração do NIPED.</p>
+    <button class="botao" type="submit">Pedir cadastro</button>
+  </form>
+
+  <p class="troca" id="troca"><a id="aCad">Primeiro acesso / cadastre-se</a></p>
+  <a class="voltar" href="./">← Voltar ao Fogo Forense</a>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const msg = (t, tipo) => { const m = $("#msg"); m.textContent = t; m.className = "aviso " + tipo; m.hidden = !t; };
+const dados = f => Object.fromEntries(new FormData(f));
+let cad = false;
+function alternar() {
+  cad = !cad; $("#fEntrar").hidden = cad; $("#fCad").hidden = !cad; msg("", "");
+  $("#troca").innerHTML = cad ? '<a id="aCad">Já tenho cadastro / entrar</a>' : '<a id="aCad">Primeiro acesso / cadastre-se</a>';
+  $("#aCad").onclick = alternar;
+}
+$("#aCad").onclick = alternar;
+async function enviar(acao, corpo, botao) {
+  botao.disabled = true;
+  try {
+    const r = await fetch("api/conta?acao=" + acao, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(corpo), credentials: "same-origin"});
+    return [r.ok, await r.json()];
+  } catch (e) { return [false, {erro: "Sem conexão. Tente novamente."}]; }
+  finally { botao.disabled = false; }
+}
+$("#fEntrar").onsubmit = async e => {
+  e.preventDefault();
+  const [ok, d] = await enviar("entrar", dados(e.target), e.submitter);
+  if (!ok) return msg(d.erro, "erro");
+  location.href = new URLSearchParams(location.search).get("voltar") || "./";
+};
+$("#fCad").onsubmit = async e => {
+  e.preventDefault();
+  const [ok, d] = await enviar("cadastrar", dados(e.target), e.submitter);
+  if (!ok) return msg(d.erro, "erro");
+  e.target.reset();
+  if (d.status === "aprovado") { alternar(); msg("Cadastro de administração criado. Agora entre com seu e-mail e senha.", "ok"); }
+  else msg("Pedido enviado. Você poderá entrar assim que a administração do NIPED aprovar o seu cadastro.", "ok");
+};
+</script>
+</body>
+</html>

@@ -211,6 +211,7 @@ function selecionar(id, voar) {
     ${blocoCronologia(e)}
     ${blocoMudanca(e)}
     ${blocoErbs(e)}
+    ${blocoBrmais(e)}
     <div class="painel-grade">
       <div><h3 style="margin-bottom:6px">Os sinais verificados, um a um</h3>${linhas}
         <div class="formula">prioridade = ${calc} = <b>${e.score}</b></div></div>
@@ -262,6 +263,8 @@ function blocoConfronto(e) {
   if (!(e.maxDia >= 3) && e.n > 2) acid.push("Focos espalhados ao longo dos dias, sem detecções simultâneas");
   if (d.lixao) acid.push(`A ${br(d.lixao.dist_m, 0)} m de um lixão/vazadouro (${d.lixao.nome}): possível fonte térmica não vegetal ou queima de resíduos; fumaça tóxica`);
   // inconclusivos e lacunas: o que ainda não permite discriminar
+  const brI = brmaisPerto(e).filter(x => x.a[1] === "I");
+  if (brI.length) inconc.push(`Brasil MAIS (restrito): ${brI.length} indício(s) de local de início por IA, o mais próximo a ${br(brI[0].km, 1)} km. É hipótese espacial do produto (só em vegetação primária), não ponto de ignição demonstrado: confrontar em campo`);
   if (!an) inconc.push("Análise de vegetação (NDVI) ainda não calculada para este evento");
   else if (an.situacao === "provavel") inconc.push(`Queda de vegetação desde ${dBR(an.quebra)} ainda não confirmada (faltam imagens)`);
   if (!cl) inconc.push("Clima no início do fogo indisponível");
@@ -405,7 +408,7 @@ async function iniciarMapa() {
   const [mun, tis, ucs] = await Promise.all(["municipios", "tis", "ucs"].map(n => json(`dados/${n}.json`)));
   m.addSource("mun", {type: "geojson", data: mun}); m.addSource("tis", {type: "geojson", data: tis}); m.addSource("ucs", {type: "geojson", data: ucs});
   m.addSource("deter", {type: "geojson", data: vazio});
-  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca", "lixoes", "perto-lixao", "mudancas", "erbs"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
+  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca", "lixoes", "perto-lixao", "mudancas", "erbs", "brmais"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
   m.addLayer({id: "tis", type: "fill", source: "tis", paint: {"fill-color": "#b8860b", "fill-opacity": .08, "fill-outline-color": "#b8860b"}});
   m.addLayer({id: "tis-l", type: "line", source: "tis", paint: {"line-color": "#d4a017", "line-width": 1.3, "line-dasharray": [3, 2]}});
   m.addLayer({id: "ucs", type: "fill", source: "ucs", paint: {"fill-color": "#0a7a36", "fill-opacity": .07}});
@@ -435,6 +438,11 @@ async function iniciarMapa() {
     "circle-stroke-color": "#ba68c8", "circle-stroke-width": 3, "circle-stroke-opacity": 0.9}});
   m.addLayer({id: "vento", type: "line", source: "vento", layout: {"line-cap": "round"},
     paint: {"line-width": 1.6, "line-color": ["interpolate", ["linear"], ["get", "v"], 0, "#90caf9", 10, "#1e88e5", 20, "#3949ab", 35, "#b71c1c"]}});
+  m.addLayer({id: "brmais", type: "circle", source: "brmais", layout: {visibility: "none"}, paint: {
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 2, 12, 6], "circle-color": ["match", ["get", "t"], "C", BRM_COR.C, "F", BRM_COR.F, BRM_COR.I],
+    "circle-stroke-color": "#000", "circle-stroke-width": .5}});
+  m.on("click", "brmais", ev => { if (Q.modoPonto) return; const a = BRM.porId.get(String(ev.features[0].properties.id));
+    if (a) new maplibregl.Popup({maxWidth: "300px"}).setLngLat(ev.lngLat).setHTML(popupBrmais(a)).addTo(m); });
   m.addLayer({id: "sel", type: "circle", source: "sel", paint: {"circle-radius": 16, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#ffdf00", "circle-stroke-width": 3}});
   Q.layersOk = true;
   montarControles();
@@ -808,6 +816,80 @@ async function detectarModo() {
   await detectarModo();
   try { await carregar(true); } catch (e) { $("#aoVivoTxt").textContent = "Sem dados: rode o atualizador"; $("#aoVivo").classList.add("atrasado"); console.error(e); return; }
   await iniciarMapa();
+  iniciarConta();
   const h = location.hash.slice(1); if (h && document.querySelector(`[data-aba="${h}"]`)) trocarAba(h);
   if (Q.filtrados[0]) selecionar(Q.filtrados[0].id, false);
 })();
+
+// ------------------------------------------------------------ área restrita (login) e alertas Brasil MAIS
+// Os alertas do Brasil MAIS são de convênio: ficam no armazenamento privado e só chegam a usuários aprovados.
+const BRM = {meta: null, lista: [], porId: new Map()};
+const BRM_COR = {C: "#ff8a65", F: "#ff1744", I: "#ffea00"};
+const BRM_RAIO_KM = 5, BRM_DIAS_ANTES = 30, BRM_DIAS_DEPOIS = 60;
+async function iniciarConta() {
+  let u = null;
+  try { const r = await fetch("api/conta?acao=eu", {credentials: "same-origin"}); if (r.ok) u = (await r.json()).usuario; } catch (e) {}
+  Q.usuario = u;
+  if (!u) return;
+  $("#conta").innerHTML = `<span class="quem" title="${esc(u.email)}">${esc(u.nome.split(" ")[0])}</span>
+    ${u.papel === "admin" ? `<a class="botao claro pequeno" href="admin.html">Administração</a>` : ""}
+    <button type="button" class="botao claro pequeno" id="btnSair">Sair</button>`;
+  $("#btnSair").onclick = async () => { await fetch("api/conta?acao=sair", {method: "POST", credentials: "same-origin"}); location.reload(); };
+  carregarBrmais();
+}
+async function restrito(qual) {
+  const r = await fetch("api/restrito?dados=" + qual, {credentials: "same-origin"});
+  if (!r.ok) throw new Error("restrito " + r.status);
+  return r.json();
+}
+async function carregarBrmais() {
+  try {
+    BRM.meta = await restrito("brmais_indice");
+    const anos = await Promise.all(Object.keys(BRM.meta.anos).map(a => restrito("brmais_" + a).catch(() => null)));
+    BRM.lista = anos.filter(Boolean).flatMap(a => a.alertas);
+  } catch (e) { console.error(e); return; }
+  BRM.porId = new Map(BRM.lista.map(a => [String(a[0]), a]));
+  const m = Q.mapa;
+  m.getSource("brmais").setData({type: "FeatureCollection",
+    features: BRM.lista.map(a => ({type: "Feature", properties: {id: a[0], t: a[1]}, geometry: {type: "Point", coordinates: [a[6], a[5]]}}))});
+  m.setLayoutProperty("brmais", "visibility", "visible");
+  const lista = $("#ctlCorpo input[data-c='erbs']")?.closest("label");
+  if (lista && !$("#ctlCorpo input[data-c='brmais']")) lista.insertAdjacentHTML("afterend",
+    `<label title="Dado de convênio: acesso restrito a usuários aprovados"><input type="checkbox" data-c="brmais" checked><span class="sw" style="background:${BRM_COR.F}"></span>Alertas Brasil MAIS (restrito)</label>`);
+  $("#legenda")?.insertAdjacentHTML("beforeend", `<div><b style="font-size:11px">Brasil MAIS (restrito):</b></div><div><i style="background:${BRM_COR.C}"></i>Cicatriz · <i style="background:${BRM_COR.F};margin-left:4px"></i>Foco · <i style="background:${BRM_COR.I};margin-left:4px"></i>Foco (IA)</div>`);
+  if (Q.sel) selecionar(Q.sel, false);
+}
+const brmImg = (a, qual) => BRM.meta.img.replace("{uuid}", a[10]).replace("{qual}", qual);
+const brmRaa = a => BRM.meta.raa.replace("{id}", a[0]);
+function popupBrmais(a) {
+  return `<b>Brasil MAIS · ${esc(BRM.meta.tipos[a[1]] || a[1])}</b><br>Alerta nº ${esc(a[0])} · ${esc(a[7])}<br>${br(a[2], 2)} ha · imagens de ${dBR(a[3])} e ${dBR(a[4])}<br>
+    ${a[10] ? `<a href="${brmImg(a, "before")}" target="_blank" rel="noopener">Imagem antes</a> · <a href="${brmImg(a, "after")}" target="_blank" rel="noopener">Imagem depois</a> · ` : ""}<a href="${brmRaa(a)}" target="_blank" rel="noopener">RAA</a>
+    <br><span class="nota">Dado restrito (convênio). Não divulgar.</span>`;
+}
+function kmEntre(la1, lo1, la2, lo2) {
+  const r = Math.PI / 180, dla = (la2 - la1) * r, dlo = (lo2 - lo1) * r;
+  const h = Math.sin(dla / 2) ** 2 + Math.cos(la1 * r) * Math.cos(la2 * r) * Math.sin(dlo / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+// alertas a até BRM_RAIO_KM do evento, com imagem "depois" entre 30 dias antes do 1º foco e 60 dias depois do último
+function brmaisPerto(e) {
+  if (!BRM.lista.length) return [];
+  const dia = 864e5, t0 = new Date(e.ini.slice(0, 10)) - BRM_DIAS_ANTES * dia, t1 = +new Date(e.fim.slice(0, 10)) + BRM_DIAS_DEPOIS * dia;
+  const g = BRM_RAIO_KM / 111, gl = g / Math.max(Math.cos(e.lat * Math.PI / 180), .2);
+  return BRM.lista.filter(a => Math.abs(a[5] - e.lat) < g && Math.abs(a[6] - e.lon) < gl)
+    .filter(a => { const t = +new Date(a[4]); return t >= t0 && t <= t1; })
+    .map(a => ({a, km: kmEntre(e.lat, e.lon, a[5], a[6])})).filter(x => x.km <= BRM_RAIO_KM).sort((x, y) => x.km - y.km);
+}
+function blocoBrmais(e) {
+  if (!Q.usuario || !BRM.lista.length) return "";
+  const l = brmaisPerto(e);
+  return `<div class="clima-bloco restrito-bloco"><h3>Alertas Brasil MAIS próximos <span class="tarja">RESTRITO</span></h3>
+    ${l.length ? `<p class="nota">${l.length} alerta(s) a até ${BRM_RAIO_KM} km, com imagem posterior entre ${BRM_DIAS_ANTES} dias antes do primeiro foco e ${BRM_DIAS_DEPOIS} dias depois do último.</p>
+    <div class="rolagem"><table class="tabela"><thead><tr><th>Alerta nº</th><th>Tipo</th><th>Área</th><th>Antes</th><th>Depois</th><th>Distância</th><th>Imagens Planet</th></tr></thead><tbody>
+    ${l.slice(0, 20).map(({a, km}) => `<tr><td class="mono"><a href="${brmRaa(a)}" target="_blank" rel="noopener" title="Abrir o RAA na plataforma da PF">${esc(a[0])}</a></td><td>${esc(BRM.meta.tipos[a[1]] || a[1])}</td>
+      <td class="n">${br(a[2], 2)} ha</td><td class="mono">${dBR(a[3])}</td><td class="mono">${dBR(a[4])}</td><td class="n">${br(km, 1)} km</td>
+      <td>${a[10] ? `<a href="${brmImg(a, "before")}" target="_blank" rel="noopener">antes</a> · <a href="${brmImg(a, "after")}" target="_blank" rel="noopener">depois</a>` : "–"}</td></tr>`).join("")}</tbody></table></div>
+    ${l.length > 20 ? `<p class="nota">Mostrando 20 de ${l.length}.</p>` : ""}`
+      : `<p class="nota">Nenhum alerta do Brasil MAIS a até ${BRM_RAIO_KM} km nesse período.</p>`}
+    <p class="nota">Fonte: Brasil MAIS (Polícia Federal), imagens Planet de 3 m. Imagens e RAA exigem login na plataforma da PF. O "foco de queimada (IA)" indica a área provável de início segundo o produto, só em vegetação primária: é hipótese a confrontar, não ponto de ignição demonstrado. Dado de convênio: uso restrito, não divulgar.</p></div>`;
+}

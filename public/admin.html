@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Administração — Fogo Forense</title>
+<link rel="icon" href="img/dptc.png">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<header class="topo">
+  <a class="marca" href="./"><img src="img/pcam.png" alt="PCAM"><img src="img/dptc.png" alt="DPTC">
+    <span class="nome">Fogo Forense<small>Administração de acessos</small></span></a>
+  <span class="espaco"></span>
+  <a class="botao claro pequeno" href="./">Voltar ao painel</a>
+</header>
+<main class="conteudo">
+  <div id="msg" class="alerta-faixa" hidden></div>
+  <div class="indicadores" id="kpis"></div>
+  <div class="cartao">
+    <div class="cab"><h2>Pedidos de cadastro e usuários</h2>
+      <div class="chips" id="filtro">
+        <span class="chip" role="button" tabindex="0" aria-pressed="true" data-s="pendente">Pendentes</span>
+        <span class="chip" role="button" tabindex="0" aria-pressed="false" data-s="aprovado">Aprovados</span>
+        <span class="chip" role="button" tabindex="0" aria-pressed="false" data-s="outros">Recusados e desativados</span>
+      </div></div>
+    <div class="rolagem"><table class="tabela" id="tab"></table></div>
+  </div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const dt = s => s ? new Date(s).toLocaleString("pt-BR", {timeZone: "America/Manaus"}) : "–";
+let lista = [], filtro = "pendente";
+async function carregar() {
+  const r = await fetch("api/conta?acao=lista", {credentials: "same-origin"});
+  if (r.status === 403) { location.href = "entrar.html?voltar=admin.html"; return; }
+  lista = (await r.json()).usuarios || []; render();
+}
+function render() {
+  const n = s => lista.filter(u => u.status === s).length;
+  $("#kpis").innerHTML = [[n("pendente"), "pendentes", "vermelho fogo"], [n("aprovado"), "aprovados", "azul"], [n("recusado") + n("desativado"), "recusados ou desativados", "ouro"]]
+    .map(([v, t, c]) => `<div class="indicador ${c}"><b>${v}</b><span>${t}</span></div>`).join("");
+  const l = lista.filter(u => filtro === "outros" ? ["recusado", "desativado"].includes(u.status) : u.status === filtro)
+    .sort((a, b) => (b.criado_em || "").localeCompare(a.criado_em || ""));
+  $("#tab").innerHTML = `<thead><tr><th>Nome</th><th>E-mail</th><th>Órgão</th><th>Cargo</th><th>Matrícula</th><th>Pedido em</th><th>Último acesso</th><th>Papel</th><th>Ações</th></tr></thead><tbody>`
+    + (l.map(u => `<tr><td>${esc(u.nome)}</td><td>${esc(u.email)}</td><td>${esc(u.orgao)}</td><td>${esc(u.cargo)}</td><td>${esc(u.matricula || "")}</td>
+      <td class="mono">${dt(u.criado_em)}</td><td class="mono">${dt(u.ultimo_acesso)}</td><td>${u.papel === "admin" ? '<span class="selo">admin</span>' : "usuário"}</td>
+      <td style="white-space:nowrap">${acoes(u)}</td></tr>`).join("") || `<tr><td colspan="9" class="nota">Nada nesta lista.</td></tr>`) + "</tbody>";
+}
+function acoes(u) {
+  const b = (s, t, cls = "secundario") => `<button class="botao ${cls} pequeno" data-e="${esc(u.email)}" data-s="${s}">${t}</button> `;
+  if (u.status === "pendente") return b("aprovado", "Aprovar", "") + b("recusado", "Recusar");
+  if (u.status === "aprovado") return u.papel === "admin" ? '<span class="nota">—</span>' : b("desativado", "Desativar");
+  return b("aprovado", "Reativar");
+}
+$("#tab").addEventListener("click", async e => {
+  const bt = e.target.closest("button[data-s]"); if (!bt) return;
+  if (bt.dataset.s !== "aprovado" && !confirm(`Confirmar: ${bt.textContent.trim()} ${bt.dataset.e}?`)) return;
+  bt.disabled = true;
+  const r = await fetch("api/conta?acao=decidir", {method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({email: bt.dataset.e, status: bt.dataset.s})});
+  const d = await r.json(); const m = $("#msg");
+  m.hidden = false; m.textContent = r.ok ? "Alteração registrada." : (d.erro || "Erro."); setTimeout(() => m.hidden = true, 4000);
+  carregar();
+});
+$("#filtro").addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return;
+  document.querySelectorAll("#filtro .chip").forEach(x => x.setAttribute("aria-pressed", x === c)); filtro = c.dataset.s; render(); });
+carregar();
+</script>
+</body>
+</html>

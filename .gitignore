@@ -24,3 +24,5 @@ public/dados/
 motor/node_modules/
 motor/package*.json
 motor/dados/estacoes_smp.*
+.env.publico
+node_modules/
