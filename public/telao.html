@@ -66,6 +66,47 @@ body:hover .ctl,.ctl:focus-within{opacity:1}
 .camadas .sw{width:1.4vh;height:1.4vh;border-radius:.3vh;flex:none}
 .camadas input{width:1.8vh;height:1.8vh;accent-color:#ffdf00}
 .maplibregl-ctrl-attrib{background:rgba(6,13,31,.6)!important;color:#9fb0d0} .maplibregl-ctrl-attrib a{color:#9fb0d0}
+
+/* ---------- celular (telas estreitas): só muda o layout; TV/projetor seguem como acima ---------- */
+@media (max-width: 820px) {
+  html,body{overflow:auto;height:auto}
+  body{display:flex;flex-direction:column}
+  .topo{order:1} .ctl{order:2} #mapa{order:3} .kpis{order:4} .destaque{order:5} .fila{order:6} .legenda{order:7} .rodape{order:8} .camadas{order:9}
+  .topo{position:sticky;padding:8px 10px;gap:8px;background:#060d1f;flex-wrap:nowrap}
+  .topo img{height:28px}
+  .topo .nome{font-size:15px}
+  .topo .nome small{display:none}
+  .vivo{font-size:11px} .vivo span{display:none}
+  .relogio b{font-size:16px} .relogio span{display:none}
+  #mapa{position:relative;inset:auto;height:52vh;width:100%}
+  .ctl{position:sticky;top:44px;left:0;right:0;transform:none;opacity:1;justify-content:center;flex-wrap:wrap;gap:6px;padding:6px 8px;background:#060d1f;z-index:6}
+  .ctl button{font-size:13px;padding:6px 10px;border-radius:7px}
+  .ctl #bTela{display:none}
+  #bCam{background:#ffdf00;color:#0a1f56;font-weight:700;border-color:#ffdf00}
+  .camadas{position:fixed;top:92px;left:8px;right:8px;transform:none;width:auto;min-width:0;font-size:14px;padding:12px 14px;max-height:calc(100vh - 110px);overflow:auto}
+  .camadas h3{font-size:16px} .camadas p,.camadas h4{font-size:12px}
+  .camadas input{width:18px;height:18px}
+  .camadas .sw{width:12px;height:12px}
+  .kpis,.destaque,.fila,.legenda{position:static;width:auto;margin:10px;backdrop-filter:none}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}
+  .kpi{padding:8px 10px;border-left-width:4px;border-radius:8px}
+  .kpi b{font-size:22px} .kpi span{font-size:11.5px}
+  .destaque{padding:12px 14px;border-radius:10px}
+  .destaque .rot{font-size:11px}
+  .pontos{min-width:44px;height:44px;font-size:20px;border-radius:8px}
+  .destaque .linha1{gap:10px;margin:8px 0}
+  .destaque h2{font-size:18px} .destaque .sub{font-size:12.5px}
+  .destaque ul{font-size:13px;padding-left:18px;margin-top:6px} .destaque ul li{margin:2px 0}
+  .destaque .extra{font-size:13px;gap:6px 12px;margin-top:8px} .destaque .extra span{font-size:11px}
+  .barra{height:3px;margin-top:10px}
+  .fila{padding:10px 12px;border-radius:10px} .fila h3{font-size:11px;margin-bottom:6px}
+  .fila .it{grid-template-columns:36px 1fr auto;gap:8px;font-size:13px;padding:5px 0}
+  .fila .it .pontos{min-width:32px;height:26px;font-size:13px;border-radius:5px}
+  .fila .it small{font-size:11px}
+  .legenda{font-size:12px;padding:8px 12px;border-radius:8px;grid-template-columns:1fr 1fr;gap:4px 10px}
+  .legenda i{width:10px;height:10px;margin-right:5px}
+  .rodape{position:static;flex-direction:column;gap:4px;font-size:11px;padding:8px 12px 16px;background:none}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -230,7 +271,8 @@ function mostrar(i) {
     </div><div class="barra"><i id="barra"></i></div>`;
   fila();
   quandoEstilo(() => mapa.getSource("sel")?.setData({type: "FeatureCollection", features: [{type: "Feature", geometry: {type: "Point", coordinates: [e.lon, e.lat]}}]}));
-  mapa.flyTo({center: [e.lon - 0.35, e.lat], zoom: 9.2, speed: .6, curve: 1.4, essential: true});
+  const cel = matchMedia("(max-width: 820px)").matches;
+  mapa.flyTo({center: [cel ? e.lon : e.lon - 0.35, e.lat], zoom: cel ? 9 : 9.2, speed: .6, curve: 1.4, essential: true});
   const b = $("#barra"); if (b && !T.pausa) { b.style.transition = "none"; b.style.width = "0"; requestAnimationFrame(() => { b.style.transition = `width ${ROT_MS}ms linear`; b.style.width = "100%"; }); }
 }
 setInterval(() => { if (!T.pausa) mostrar(T.i + 1); }, ROT_MS);
@@ -241,6 +283,7 @@ document.addEventListener("keydown", e => { if (e.key === "ArrowRight") mostrar(
   if (e.key === " ") { e.preventDefault(); $("#bPausa").click(); } if (e.key === "f") $("#bTela").click(); if (e.key === "c") $("#bCam").click(); if (e.key === "Escape") $("#painelCam").hidden = true; });
 // o estilo (vetorial local) fica pronto rápido; não esperar as imagens de fundo terminarem
 function quandoEstilo(f) { if (mapa.isStyleLoaded()) return f(); setTimeout(() => quandoEstilo(f), 300); }
+setTimeout(() => mapa.resize(), 300); mapa.once("load", () => mapa.resize());
 carregar(true).catch(e => { $("#atual").textContent = "sem dados"; console.error(e); });
 </script>
 </body>
