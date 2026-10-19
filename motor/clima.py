@@ -52,14 +52,18 @@ def _consultar(pontos, inicio, fim, url):
     else:
         params.update(start_date=inicio, end_date=fim)
     for tentativa in range(3):
-        r = requests.get(url, params=params, timeout=120)
-        if r.status_code == 429:          # limite de requisições: espera e tenta de novo
+        try:
+            r = requests.get(url, params=params, timeout=(30, 240))
+        except requests.RequestException:
+            time.sleep(15 * (tentativa + 1))
+            continue
+        if r.status_code in (429, 500, 502, 503, 504):   # limite ou instabilidade: espera e tenta de novo
             time.sleep(20 * (tentativa + 1))
             continue
         r.raise_for_status()
         d = r.json()
         return d if isinstance(d, list) else [d]
-    r.raise_for_status()
+    raise RuntimeError("Open-Meteo sem resposta")
 
 
 def _resumo(serie, ini_utc, fim_utc, lat, lon):
@@ -151,16 +155,22 @@ def grade_vento(passo=1.0, horas=24):
     hoje = agora.date().isoformat()
     amanha = (agora + timedelta(days=1)).date().isoformat()
     linhas = []
-    for k in range(0, len(pontos), 100):
-        lote = pontos[k:k + 100]
+    for k in range(0, len(pontos), 40):
+        lote = pontos[k:k + 40]
         params = {"latitude": ",".join(str(a) for a, _ in lote), "longitude": ",".join(str(b) for _, b in lote),
                   "hourly": "wind_speed_10m,wind_direction_10m", "timezone": "UTC", "wind_speed_unit": "kmh",
                   "start_date": hoje, "end_date": amanha}
-        for tentativa in range(3):
-            resp = requests.get(FORECAST, params=params, timeout=120)
-            if resp.status_code != 429:
+        resp = None
+        for tentativa in range(4):
+            try:
+                resp = requests.get(FORECAST, params=params, timeout=(30, 240))
+            except requests.RequestException:
+                resp = None
+            if resp is not None and resp.status_code not in (429, 500, 502, 503, 504):
                 break
-            time.sleep(20 * (tentativa + 1))
+            time.sleep(15 * (tentativa + 1))
+        if resp is None:
+            raise RuntimeError("Open-Meteo sem resposta para a grade de vento")
         resp.raise_for_status()
         d = resp.json()
         for (la, lo), sr in zip(lote, d if isinstance(d, list) else [d]):
