@@ -52,7 +52,12 @@ import requests
 os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
 os.environ.setdefault("GDAL_HTTP_MULTIPLEX", "YES")
 os.environ.setdefault("GDAL_HTTP_MERGE_CONSECUTIVE_RANGES", "YES")
-os.environ.setdefault("CPL_VSIL_CURL_ALLOWED_EXTENSIONS", ".tif")
+os.environ.setdefault("CPL_VSIL_CURL_ALLOWED_EXTENSIONS", ".tif,.tiff")
+# leituras remotas nunca podem travar o ciclo: limite de tempo e novas tentativas
+os.environ.setdefault("GDAL_HTTP_TIMEOUT", "45")
+os.environ.setdefault("GDAL_HTTP_CONNECTTIMEOUT", "15")
+os.environ.setdefault("GDAL_HTTP_MAX_RETRY", "3")
+os.environ.setdefault("GDAL_HTTP_RETRY_DELAY", "2")
 
 STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
 PC_DATA = "https://planetarycomputer.microsoft.com/api/data/v1"

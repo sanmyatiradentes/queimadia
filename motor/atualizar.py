@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 
-from . import clima, ingest, eventos, lixoes, publicar, precalcular
+from . import clima, ingest, eventos, lixoes, mudanca, publicar, precalcular
 
 
 def ciclo(rapido=False):
@@ -46,6 +46,10 @@ def ciclo(rapido=False):
         try:
             precalcular.ciclo(evs)
             est = publicar.atualizar_indice_analises(evs)   # inclui as análises e pareceres deste ciclo
+        except Exception:
+            traceback.print_exc()
+        try:
+            print("alertas de mudança:", mudanca.ciclo(evs + alertas))
         except Exception:
             traceback.print_exc()
     ingest.salvar_status(ultimo_ciclo=est["gerado_em"], duracao_ciclo_s=round(time.time() - t0, 1))

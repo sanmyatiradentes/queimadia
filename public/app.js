@@ -209,6 +209,7 @@ function selecionar(id, voar) {
     ${blocoConfronto(e)}
     ${blocoClima(e)}
     ${blocoCronologia(e)}
+    ${blocoMudanca(e)}
     <div class="painel-grade">
       <div><h3 style="margin-bottom:6px">Os sinais verificados, um a um</h3>${linhas}
         <div class="formula">prioridade = ${calc} = <b>${e.score}</b></div></div>
@@ -244,6 +245,12 @@ function blocoConfronto(e) {
   if (d.anos_anteriores?.length >= 2) intenc.push(`Reincidência: fogo no local em ${d.anos_anteriores.join(", ")}`);
   if (e.ind.includes("periodo_proibitivo")) intenc.push("Período de proibição do uso do fogo");
   if (e.ind.includes("area_protegida")) intenc.push(d.ti ? `Dentro da ${d.ti}: queima por não indígenas é proibida` : `Dentro da ${d.uc} (proteção integral): uso do fogo proibido`);
+  const mu = Q.mudancas?.eventos?.[e.id], muF = (Q.mudancas?.features || []).filter(f => f.properties.evento === e.id);
+  const haRad = muF.filter(f => f.properties.fonte !== "optico").reduce((t, f) => t + f.properties.ha, 0);
+  const radPoucas = mu?.fontes?.radar && Math.min(mu.fontes.radar[0].length, mu.fontes.radar[1].length) < 2;
+  if (haRad >= 1 && !radPoucas) intenc.push(`Radar detectou abertura de dossel em ${br(haRad, 1)} ha após o fogo (compatível com derrubada/conversão)`);
+  if (haRad >= 1 && radPoucas) inconc.push(`Radar indica possível abertura de dossel em ${br(haRad, 1)} ha, mas com só 1 imagem antes ou depois: confirmar com novas passagens`);
+  if (mu && mu.area_total_ha >= 1 && haRad < 1) inconc.push(`Óptico mostra ${br(mu.area_total_ha, 1)} ha alterados (queima/perda de verde), sem confirmação do radar`);
   if (ctx.includes("biomassa_alta")) intenc.push("Fogo intenso e persistente: compatível com queima de muita biomassa (conversão)");
   if (ctx.includes("escape_plausivel")) acid.push("Seca forte e vento acima de 10 km/h: uma queima pode ter escapado do controle");
   if (d.ti) acid.push("Em terra indígena, a roça tradicional dos próprios indígenas com fogo é permitida");
@@ -280,6 +287,25 @@ function copernicus(e) {
     + `&dateMode=TIME%20RANGE&fromTime=${d0.toISOString().slice(0, 10)}T00%3A00%3A00.000Z&toTime=${d1.toISOString().slice(0, 10)}T23%3A59%3A59.999Z&mosaickingOrder=leastCC`;
   return [["3-WILDFIRES", "Copernicus: incêndios"], ["6-SWIR", "Copernicus: SWIR"], ["1_TRUE_COLOR", "Copernicus: cor real"], ["3_NDVI", "Copernicus: NDVI"]]
     .map(([l, t]) => `<a class="botao secundario pequeno" target="_blank" rel="noopener" href="${base}&layerId=${l}">${t}</a>`).join("");
+}
+
+function blocoMudanca(e) {
+  const r = Q.mudancas?.eventos?.[e.id];
+  if (!r) return (e.score >= 50 && Q.mudancas) ? `<div class="clima-bloco"><h3>Alertas de mudança</h3><p class="nota">Ainda não calculado para este evento (o motor processa os incêndios recentes com prioridade ≥ 50, alguns por ciclo).</p></div>` : "";
+  const fs = (Q.mudancas.features || []).filter(f => f.properties.evento === e.id);
+  const soma = k => fs.filter(f => f.properties.fonte === k).reduce((t, f) => t + f.properties.ha, 0);
+  const op = r.fontes.optico, ra = r.fontes.radar;
+  return `<div class="clima-bloco"><h3>Alertas de mudança (Sentinel-2 + radar Sentinel-1)</h3>
+    <div class="fatos">
+      <div><span>Área total alterada</span><b>${br(r.area_total_ha, 1)} ha</b></div>
+      <div><span>Só óptico</span><b>${br(soma("optico"), 1)} ha</b></div>
+      <div><span>Só radar</span><b>${br(soma("radar"), 1)} ha</b></div>
+      <div><span>Óptico e radar</span><b>${br(soma("ambos"), 1)} ha</b></div>
+      <div><span>Polígonos (≥ 1 ha)</span><b>${r.n_poligonos}</b></div>
+    </div>
+    <p class="nota">Antes: ${dBR(r.janela_antes[0])} a ${dBR(r.janela_antes[1])} · depois: ${dBR(r.janela_depois[0])} a ${dBR(r.janela_depois[1])}.
+      Óptico: ${op ? `${op[0].length} + ${op[1].length} cenas` : "sem cenas limpas"} · radar: ${ra ? `${ra[0].length} + ${ra[1].length} cenas` : "sem cenas"}${ra && Math.min(ra[0].length, ra[1].length) < 2 ? " (poucas cenas de radar: confiança baixa)" : ""}.
+      Polígonos no mapa (camada "Alertas de mudança"). Automático, não validado por analista: pode haver falso positivo por nuvem, sombra, água ou cultivo.</p></div>`;
 }
 
 function blocoCronologia(e) {
@@ -350,6 +376,7 @@ const CAMADAS = [
   ["mun", "Municípios", "#5b6675", true],
   ["vento", "Vento (previsão, setas)", "#1e88e5", true], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
   ["lixoes", "Lixões e vazadouros (fumaça tóxica)", "#8e24aa", true],
+  ["mudancas", "Alertas de mudança (Sentinel-2 + radar)", "#00b8d4", true],
 ];
 async function iniciarMapa() {
   const m = Q.mapa = new maplibregl.Map({container: "mapa", center: [-62.5, -4.3], zoom: 5, maxZoom: 18, attributionControl: {compact: true},
@@ -364,7 +391,7 @@ async function iniciarMapa() {
   const [mun, tis, ucs] = await Promise.all(["municipios", "tis", "ucs"].map(n => json(`dados/${n}.json`)));
   m.addSource("mun", {type: "geojson", data: mun}); m.addSource("tis", {type: "geojson", data: tis}); m.addSource("ucs", {type: "geojson", data: ucs});
   m.addSource("deter", {type: "geojson", data: vazio});
-  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca", "lixoes", "perto-lixao"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
+  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca", "lixoes", "perto-lixao", "mudancas"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
   m.addLayer({id: "tis", type: "fill", source: "tis", paint: {"fill-color": "#b8860b", "fill-opacity": .08, "fill-outline-color": "#b8860b"}});
   m.addLayer({id: "tis-l", type: "line", source: "tis", paint: {"line-color": "#d4a017", "line-width": 1.3, "line-dasharray": [3, 2]}});
   m.addLayer({id: "ucs", type: "fill", source: "ucs", paint: {"fill-color": "#0a7a36", "fill-opacity": .07}});
@@ -382,6 +409,9 @@ async function iniciarMapa() {
   m.addLayer({id: "alertas", type: "circle", source: "alertas", paint: {"circle-radius": raio, "circle-color": "rgba(255,122,0,.15)", "circle-stroke-color": "#ff7a00", "circle-stroke-width": 2}});
   m.addLayer({id: "area", type: "line", source: "area", paint: {"line-color": "#ffdf00", "line-width": 2.5}});
   m.addLayer({id: "fumaca", type: "line", source: "fumaca", paint: {"line-color": "#8d6e63", "line-width": 2, "line-opacity": .8, "line-dasharray": [2, 2]}});
+  const corMud = ["match", ["get", "fonte"], "ambos", "#ff1744", "radar", "#00b8d4", "#ffd600"];
+  m.addLayer({id: "mudancas", type: "fill", source: "mudancas", paint: {"fill-color": corMud, "fill-opacity": 0.35}});
+  m.addLayer({id: "mudancas-l", type: "line", source: "mudancas", paint: {"line-color": corMud, "line-width": 1.6}});
   m.addLayer({id: "lixoes", type: "circle", source: "lixoes", paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 5, 12, 9],
     "circle-color": "#8e24aa", "circle-stroke-color": "#fff", "circle-stroke-width": 1.5}});
   m.addLayer({id: "lixoes-anel", type: "circle", source: "perto-lixao", paint: {"circle-radius": 16, "circle-color": "rgba(0,0,0,0)",
@@ -393,6 +423,10 @@ async function iniciarMapa() {
   montarControles();
   atualizarCamadasDados();
   json("dados/vento.json").then(v => { Q.vento = v; const sl = $("#ventoSl"); if (sl) { sl.max = v.horas_utc.length - 1; } desenharVento(); if (sl) sl.value = Q.ventoHora; }).catch(() => {});
+  json("dados/mudancas.json").then(mu => { Q.mudancas = mu; m.getSource("mudancas").setData({type: "FeatureCollection", features: mu.features}); }).catch(() => {});
+  m.on("click", "mudancas", ev => { if (Q.modoPonto) return; const p = ev.features[0].properties;
+    new maplibregl.Popup().setLngLat(ev.lngLat).setHTML(`<b>Alerta de mudança · ${br(p.ha, 1)} ha</b><br>${{ambos: "Óptico e radar", optico: "Óptico (Sentinel-2)", radar: "Radar (Sentinel-1)"}[p.fonte]}<br>
+      Fogo a partir de ${dBR(p.inicio_fogo)} · imagens até ${dBR(p.depois_ate)}<br><span class="nota">Automático, não validado por analista.</span>`).addTo(m); });
   json("dados/lixoes.json").then(l => { Q.lixoes = l.pontos; m.getSource("lixoes").setData({type: "FeatureCollection",
     features: l.pontos.map(p => ({type: "Feature", properties: {nome: p.nome, mun: p.municipio}, geometry: {type: "Point", coordinates: [p.lon, p.lat]}}))}); }).catch(() => {});
   m.on("click", "lixoes", ev => { const p = ev.features[0].properties; new maplibregl.Popup().setLngLat(ev.lngLat)
@@ -484,6 +518,7 @@ function montarControles() {
     const k = e.target.dataset.c; if (!k) return;
     const ids = {tis: ["tis", "tis-l"], ucs: ["ucs", "ucs-l"]}[k] || [k];
     ids.forEach(id => Q.mapa.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none"));
+    if (k === "mudancas") Q.mapa.setLayoutProperty("mudancas-l", "visibility", e.target.checked ? "visible" : "none");
     if (k === "lixoes") Q.mapa.setLayoutProperty("lixoes-anel", "visibility", e.target.checked ? "visible" : "none");
     if (k === "vento") { $("#ventoCtl").hidden = !e.target.checked; const sl = $("#ventoSl");
       if (Q.vento) { sl.max = Q.vento.horas_utc.length - 1; sl.value = Q.ventoHora || 0; } desenharVento(); }
@@ -492,7 +527,7 @@ function montarControles() {
   $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "mostrar" : "ocultar"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };
   if (matchMedia("(max-width:640px)").matches) $("#ctlRec").click();
   $("#legenda").innerHTML = `<b style="font-size:12px">Prioridade de verificação</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
-    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div><i style="background:#8e24aa"></i>Lixão/vazadouro</div><div><i style="background:transparent;border:2px solid #ba68c8"></i>Fogo a até 1 km de lixão</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
+    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div><i style="background:#8e24aa"></i>Lixão/vazadouro</div><div><b style="font-size:11px">Alerta de mudança:</b></div><div><i style="background:#ffd600;border-radius:2px"></i>Óptico · <i style="background:#00b8d4;border-radius:2px;margin-left:4px"></i>Radar · <i style="background:#ff1744;border-radius:2px;margin-left:4px"></i>Ambos</div><div><i style="background:transparent;border:2px solid #ba68c8"></i>Fogo a até 1 km de lixão</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
 }
 
 // ------------------------------------------------------------ ocorrências (tabela)
@@ -673,6 +708,13 @@ function metodologia() {
       <p>Para cada evento, o clima na hora do 1º foco vem do Open-Meteo (modelos ECMWF, GFS e ICON; reanálise ERA5 para datas antigas): vento, umidade, temperatura e chuva das 72 h anteriores. Do INPE vêm, por foco, o risco de fogo, os dias sem chuva e a intensidade (FRP).</p>
       <div class="formula">ignição em condição desfavorável (+10) = risco INPE &lt; 0,3 ou chuva 72 h ≥ 10 mm ou umidade mínima das 24 h anteriores ≥ 80%<br>escape plausível (contexto) = (risco ≥ 0,8 ou ≥ 30 dias sem chuva) e vento ≥ 10 km/h<br>muita biomassa (contexto) = FRP ≥ 100 MW e fogo por 2+ dias ou à noite<br>fumaça rumo a Manaus = vento soprando a ±30° da direção da cidade, até 800 km; chegada ≈ distância ÷ velocidade</div>
       <p class="nota">Na Amazônia quase todo fogo é de origem humana; raio é raro na estação seca. O clima ajuda a distinguir a ignição deliberada da queima que escapa do controle, mas é contexto e não prova.</p></div>
+    <div class="cartao"><h2>7. Alertas de mudança (Sentinel-2 + radar Sentinel-1)</h2>
+      <p>Para os incêndios recentes com prioridade ≥ 50, o motor compara um recorte de 3 × 3 km antes e depois do fogo.</p>
+      <div class="formula">Óptico: antes = mediana das cenas limpas de 90 a 5 dias antes; depois = de 1 a 60 dias depois<br>
+      mudança = NDVI antes ≥ 0,6 e sem água (NDWI &lt; 0) e (dNBR ≥ 0,27 ou ΔNDVI ≤ −0,20 com NDVI depois &lt; 0,5)<br>
+      Radar: ΔVH (dB) local = ΔVH − mediana do recorte (desconta a seca); mudança = ΔVH local ≤ −3 dB<br>
+      polígonos com pelo menos 1 ha · fonte = óptico, radar ou ambos</div>
+      <p class="nota">Inspirado nos alertas do Brasil MAIS e do DETER, mas com satélites públicos (10 m, a cada 5 a 12 dias) e sem validação por analista. É alerta para verificar, não laudo. O radar enxerga através de nuvem e fumaça; a queda do sinal VH indica abertura de dossel.</p></div>
     <div class="cartao"><h2>Limitações</h2><ul>
       <li>O satélite detecta calor, não autoria. A prioridade orienta diligências, nunca é prova nem grau de certeza.</li>
       <li>Em TIs e RDS/RESEX há uso tradicional do fogo, permitido. A prioridade nessas áreas exige leitura cuidadosa.</li>
@@ -693,6 +735,7 @@ function fontes() {
     ["Municípios", "IBGE via TerraBrasilis", "https://terrabrasilis.dpi.inpe.br/", "–", "estático", ""],
     ["Clima: vento, umidade, chuva", "Open-Meteo (ECMWF, GFS, ICON, ERA5)", "https://open-meteo.com/", Q.vento ? manaus(Q.vento.gerado_em.replace("T", " ").slice(0, 19)) : "–", "a cada 3 h (grade) · por evento", "vento no mapa e na ficha"],
     ["Sentinel-2 L2A (10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-2-l2a", "sob demanda", "~5 dias", "NDVI, NBR, NDMI, imagens"],
+    ["Alertas de mudança (óptico + radar)", "Fogo Forense, a partir de Sentinel-2 e Sentinel-1", "#", Q.mudancas ? Object.keys(Q.mudancas.eventos || {}).length + " incêndios analisados" : "–", "2 incêndios por ciclo", "automático, não validado"],
     ["Sentinel-1 RTC (radar, 10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc", "a cada 6 h (mosaico)", "~6 a 12 dias", "vê através de nuvem e fumaça"],
     ["Landsat 8/9 C2 L2 (30 m)", "NASA/USGS · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/landsat-c2-l2", "sob demanda", "~8 dias", "série longa"],
   ];
