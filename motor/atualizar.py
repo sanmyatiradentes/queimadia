@@ -30,6 +30,7 @@ def ciclo(rapido=False):
     if "--sem-ndvi" not in sys.argv:
         try:
             precalcular.ciclo(evs)
+            est = publicar.atualizar_indice_analises(evs)   # inclui as análises e pareceres deste ciclo
         except Exception:
             traceback.print_exc()
     ingest.salvar_status(ultimo_ciclo=est["gerado_em"], duracao_ciclo_s=round(time.time() - t0, 1))

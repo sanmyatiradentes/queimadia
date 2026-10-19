@@ -104,3 +104,13 @@ def publicar(df, eventos, alertas):
     }
     _escrever("estatisticas.json", estat)
     return estat
+
+
+def atualizar_indice_analises(eventos):
+    """Regrava em estatisticas.json o índice das análises prontas (chamado
+    depois do pré-cálculo, para o site já mostrar as análises do ciclo)."""
+    from . import precalcular
+    est = json.load(open(config.PUBLICO / "estatisticas.json"))
+    est["analises"] = precalcular.religar(eventos, precalcular.indice())
+    _escrever("estatisticas.json", est)
+    return est
