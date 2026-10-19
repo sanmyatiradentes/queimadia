@@ -1,5 +1,7 @@
 # Fogo Forense — Radar de Queimadas Suspeitas
 
+Endereço: **https://fogoforense.vercel.app** (o antigo, queimadia.vercel.app, continua funcionando).
+
 Sistema do **NIPED/PCAM** com o **DPTC-AM** para identificar possíveis queimadas criminosas no Amazonas com dados públicos de satélite e inteligência artificial.
 
 Desenvolvido pelo **NIPED/PCAM**, Núcleo de Inovação, Pesquisa e Desenvolvimento da Polícia Civil do Amazonas.
