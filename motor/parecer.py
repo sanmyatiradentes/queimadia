@@ -9,7 +9,9 @@ import os
 
 import requests
 
-GEMINI_MODELO = os.environ.get("GEMINI_MODELO", "gemini-2.5-flash")
+GEMINI_MODELO = os.environ.get("GEMINI_MODELO")   # vazio: escolhe o Flash mais recente da conta
+GEMINI_LISTA = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"
+_modelo_escolhido = None
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 
 SISTEMA = """Você redige pareceres técnicos preliminares para o Núcleo de Inovação, Pesquisa e Desenvolvimento da Polícia Civil do Amazonas (NIPED/PCAM) e para o Departamento de Polícia Técnico-Científica (DPTC-AM), sobre possíveis queimadas criminosas identificadas por satélite.
@@ -50,13 +52,43 @@ def gerar(dados):
     return _gemini(pedido)
 
 
+def _escolher_modelo(chave):
+    """O mais recente da família Flash (texto) disponível para a chave."""
+    global _modelo_escolhido
+    if GEMINI_MODELO:
+        return GEMINI_MODELO
+    if _modelo_escolhido:
+        return _modelo_escolhido
+    import re
+    r = requests.get(GEMINI_LISTA, headers={"x-goog-api-key": chave}, timeout=60)
+    if not r.ok:
+        raise ParecerIndisponivel(f"não foi possível listar os modelos do Gemini ({r.status_code})")
+    candidatos = []
+    for m in r.json().get("models", []):
+        nome = m["name"].split("/")[-1]
+        if "generateContent" not in m.get("supportedGenerationMethods", []):
+            continue
+        if not nome.startswith("gemini-") or "flash" not in nome:
+            continue
+        if re.search(r"lite|image|tts|audio|live|thinking|exp|preview|embedding|8b", nome):
+            continue
+        versao = tuple(int(x) for x in re.findall(r"\d+", nome.split("flash")[0]))
+        candidatos.append((versao, -len(nome), nome))
+    if not candidatos:
+        raise ParecerIndisponivel("nenhum modelo Gemini Flash disponível para esta chave")
+    _modelo_escolhido = max(candidatos)[2]
+    return _modelo_escolhido
+
+
 def _gemini(pedido):
     corpo = {"systemInstruction": {"parts": [{"text": SISTEMA}]},
              "contents": [{"role": "user", "parts": [{"text": pedido}]}],
              "generationConfig": {"temperature": 0.2, "maxOutputTokens": 8192}}
     try:
-        r = requests.post(GEMINI_URL.format(modelo=GEMINI_MODELO), json=corpo, timeout=180,
-                          headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
+        chave = os.environ["GEMINI_API_KEY"]
+        modelo = _escolher_modelo(chave)
+        r = requests.post(GEMINI_URL.format(modelo=modelo), json=corpo, timeout=180,
+                          headers={"x-goog-api-key": chave})
     except requests.RequestException:
         raise ParecerIndisponivel("sem conexão com a API Gemini")
     if r.status_code == 429:
@@ -64,7 +96,11 @@ def _gemini(pedido):
     if r.status_code in (400, 401, 403) and "API key" in r.text:
         raise ParecerIndisponivel("chave da API Gemini inválida")
     if not r.ok:
-        raise ParecerIndisponivel(f"erro da API Gemini ({r.status_code})")
+        try:
+            msg = r.json()["error"]["message"][:160]
+        except Exception:
+            msg = ""
+        raise ParecerIndisponivel(f"erro da API Gemini ({r.status_code}) {msg}".strip())
     d = r.json()
     cand = (d.get("candidates") or [{}])[0]
     if cand.get("finishReason") in ("SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST"):
@@ -72,4 +108,4 @@ def _gemini(pedido):
     texto = "".join(p.get("text", "") for p in (cand.get("content") or {}).get("parts", [])).strip()
     if not texto:
         raise ParecerIndisponivel("resposta vazia do modelo")
-    return {"texto": texto, "modelo": d.get("modelVersion", GEMINI_MODELO)}
+    return {"texto": texto, "modelo": d.get("modelVersion", modelo)}
