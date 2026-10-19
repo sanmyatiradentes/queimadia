@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 
-from . import clima, ingest, eventos, lixoes, mudanca, publicar, precalcular
+from . import clima, erbs, ingest, eventos, lixoes, mudanca, publicar, precalcular
 
 
 def ciclo(rapido=False):
@@ -37,6 +37,10 @@ def ciclo(rapido=False):
     eventos.aplicar_clima(evs + alertas)
     try:
         print("eventos perto de lixão:", lixoes.marcar(evs + alertas, lixoes.atualizar()))
+    except Exception:
+        traceback.print_exc()
+    try:
+        print("eventos com ERB a até 15 km:", erbs.marcar(evs + alertas, erbs.atualizar()))
     except Exception:
         traceback.print_exc()
     evs.sort(key=lambda e: (-e["score"], -e["n_focos"]))

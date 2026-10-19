@@ -210,6 +210,7 @@ function selecionar(id, voar) {
     ${blocoClima(e)}
     ${blocoCronologia(e)}
     ${blocoMudanca(e)}
+    ${blocoErbs(e)}
     <div class="painel-grade">
       <div><h3 style="margin-bottom:6px">Os sinais verificados, um a um</h3>${linhas}
         <div class="formula">prioridade = ${calc} = <b>${e.score}</b></div></div>
@@ -308,6 +309,18 @@ function blocoMudanca(e) {
       Polígonos no mapa (camada "Alertas de mudança"). Automático, não validado por analista: pode haver falso positivo por nuvem, sombra, água ou cultivo.</p></div>`;
 }
 
+function blocoErbs(e) {
+  const l = e.det.erbs, n = e.det.n_erbs_15km;
+  if (n == null) return "";
+  const ops = l ? [...new Set(l.map(b => b.op))].join(", ") : "";
+  return `<div class="clima-bloco"><h3>ERBs de telefonia próximas (Anatel)</h3>
+    ${n ? `<p class="nota">${n} estação(ões) licenciada(s) a até 15 km do centro do evento${ops ? " · operadoras: " + esc(ops) : ""}. As mais próximas:</p>
+    <div class="rolagem"><table class="tabela"><thead><tr><th>Estação nº</th><th>Operadora</th><th>Tecnologia</th><th>Distância</th></tr></thead><tbody>
+    ${l.map(b => `<tr><td class="mono">${esc(b.id)}</td><td>${esc(b.op)}</td><td>${esc(b.ger.join(", "))}</td><td class="n">${br(b.dist_km, 1)} km</td></tr>`).join("")}</tbody></table></div>`
+      : `<p class="nota">Nenhuma ERB licenciada a até 15 km: área provavelmente sem cobertura de telefonia móvel terrestre (aparelhos podem registrar GPS localmente, sem rede).</p>`}
+    <p class="nota">Uso investigativo: a posição da antena não é a posição de um aparelho, e o alcance varia com relevo, vegetação e potência. Registros de conexão às ERBs dependem de ordem judicial e de vínculo individualizado com o fato; a proximidade, por si só, não fundamenta pedido coletivo (guia do NIPED).</p></div>`;
+}
+
 function blocoCronologia(e) {
   const p = e.det.passagens; if (!p?.length) return "";
   return `<div class="clima-bloco"><h3>Cronologia das detecções por passagem</h3>
@@ -377,6 +390,7 @@ const CAMADAS = [
   ["vento", "Vento (previsão, setas)", "#1e88e5", true], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
   ["lixoes", "Lixões e vazadouros (fumaça tóxica)", "#8e24aa", true],
   ["mudancas", "Alertas de mudança (Sentinel-2 + radar)", "#00b8d4", true],
+  ["erbs", "ERBs de telefonia (Anatel)", "#5e35b1", true],
 ];
 async function iniciarMapa() {
   const m = Q.mapa = new maplibregl.Map({container: "mapa", center: [-62.5, -4.3], zoom: 5, maxZoom: 18, attributionControl: {compact: true},
@@ -391,7 +405,7 @@ async function iniciarMapa() {
   const [mun, tis, ucs] = await Promise.all(["municipios", "tis", "ucs"].map(n => json(`dados/${n}.json`)));
   m.addSource("mun", {type: "geojson", data: mun}); m.addSource("tis", {type: "geojson", data: tis}); m.addSource("ucs", {type: "geojson", data: ucs});
   m.addSource("deter", {type: "geojson", data: vazio});
-  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca", "lixoes", "perto-lixao", "mudancas"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
+  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca", "lixoes", "perto-lixao", "mudancas", "erbs"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
   m.addLayer({id: "tis", type: "fill", source: "tis", paint: {"fill-color": "#b8860b", "fill-opacity": .08, "fill-outline-color": "#b8860b"}});
   m.addLayer({id: "tis-l", type: "line", source: "tis", paint: {"line-color": "#d4a017", "line-width": 1.3, "line-dasharray": [3, 2]}});
   m.addLayer({id: "ucs", type: "fill", source: "ucs", paint: {"fill-color": "#0a7a36", "fill-opacity": .07}});
@@ -412,6 +426,9 @@ async function iniciarMapa() {
   const corMud = ["match", ["get", "fonte"], "ambos", "#ff1744", "radar", "#00b8d4", "#ffd600"];
   m.addLayer({id: "mudancas", type: "fill", source: "mudancas", paint: {"fill-color": corMud, "fill-opacity": 0.35}});
   m.addLayer({id: "mudancas-l", type: "line", source: "mudancas", paint: {"line-color": corMud, "line-width": 1.6}});
+  const corOp = ["match", ["get", "op"], "VIVO", "#7b1fa2", "TIM", "#1565c0", "CLARO", "#c62828", "#455a64"];
+  m.addLayer({id: "erbs", type: "circle", source: "erbs", minzoom: 7, paint: {
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 2.5, 12, 6], "circle-color": "#fff", "circle-stroke-color": corOp, "circle-stroke-width": 2.2}});
   m.addLayer({id: "lixoes", type: "circle", source: "lixoes", paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 5, 12, 9],
     "circle-color": "#8e24aa", "circle-stroke-color": "#fff", "circle-stroke-width": 1.5}});
   m.addLayer({id: "lixoes-anel", type: "circle", source: "perto-lixao", paint: {"circle-radius": 16, "circle-color": "rgba(0,0,0,0)",
@@ -427,6 +444,10 @@ async function iniciarMapa() {
   m.on("click", "mudancas", ev => { if (Q.modoPonto) return; const p = ev.features[0].properties;
     new maplibregl.Popup().setLngLat(ev.lngLat).setHTML(`<b>Alerta de mudança · ${br(p.ha, 1)} ha</b><br>${{ambos: "Óptico e radar", optico: "Óptico (Sentinel-2)", radar: "Radar (Sentinel-1)"}[p.fonte]}<br>
       Fogo a partir de ${dBR(p.inicio_fogo)} · imagens até ${dBR(p.depois_ate)}<br><span class="nota">Automático, não validado por analista.</span>`).addTo(m); });
+  json("dados/erbs.json").then(b => { Q.erbs = b; m.getSource("erbs").setData({type: "FeatureCollection",
+    features: b.erbs.map(e => ({type: "Feature", properties: {id: e.id, op: e.op, ger: e.ger.join(", "), mun: e.mun, desde: e.desde}, geometry: {type: "Point", coordinates: [e.lon, e.lat]}}))}); }).catch(() => {});
+  m.on("click", "erbs", ev => { if (Q.modoPonto) return; const p = ev.features[0].properties;
+    new maplibregl.Popup().setLngLat(ev.lngLat).setHTML(`<b>ERB ${esc(p.op)}</b> · ${esc(p.ger)}<br>Estação nº ${esc(p.id)} · ${esc(p.mun)}<br>Licenciada desde ${esc(p.desde)}<br><span class="nota">Anatel. A posição da antena não é a de um aparelho.</span>`).addTo(m); });
   json("dados/lixoes.json").then(l => { Q.lixoes = l.pontos; m.getSource("lixoes").setData({type: "FeatureCollection",
     features: l.pontos.map(p => ({type: "Feature", properties: {nome: p.nome, mun: p.municipio}, geometry: {type: "Point", coordinates: [p.lon, p.lat]}}))}); }).catch(() => {});
   m.on("click", "lixoes", ev => { const p = ev.features[0].properties; new maplibregl.Popup().setLngLat(ev.lngLat)
@@ -527,7 +548,7 @@ function montarControles() {
   $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "mostrar" : "ocultar"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };
   if (matchMedia("(max-width:640px)").matches) $("#ctlRec").click();
   $("#legenda").innerHTML = `<b style="font-size:12px">Prioridade de verificação</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
-    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div><i style="background:#8e24aa"></i>Lixão/vazadouro</div><div><b style="font-size:11px">Alerta de mudança:</b></div><div><i style="background:#ffd600;border-radius:2px"></i>Óptico · <i style="background:#00b8d4;border-radius:2px;margin-left:4px"></i>Radar · <i style="background:#ff1744;border-radius:2px;margin-left:4px"></i>Ambos</div><div><i style="background:transparent;border:2px solid #ba68c8"></i>Fogo a até 1 km de lixão</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
+    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div><i style="background:#8e24aa"></i>Lixão/vazadouro</div><div><i style="background:#fff;border:2px solid #5e35b1"></i>ERB (zoom 7+): <span style="color:#7b1fa2">Vivo</span> · <span style="color:#1565c0">TIM</span> · <span style="color:#c62828">Claro</span></div><div><b style="font-size:11px">Alerta de mudança:</b></div><div><i style="background:#ffd600;border-radius:2px"></i>Óptico · <i style="background:#00b8d4;border-radius:2px;margin-left:4px"></i>Radar · <i style="background:#ff1744;border-radius:2px;margin-left:4px"></i>Ambos</div><div><i style="background:transparent;border:2px solid #ba68c8"></i>Fogo a até 1 km de lixão</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
 }
 
 // ------------------------------------------------------------ ocorrências (tabela)
@@ -736,6 +757,7 @@ function fontes() {
     ["Clima: vento, umidade, chuva", "Open-Meteo (ECMWF, GFS, ICON, ERA5)", "https://open-meteo.com/", Q.vento ? manaus(Q.vento.gerado_em.replace("T", " ").slice(0, 19)) : "–", "a cada 3 h (grade) · por evento", "vento no mapa e na ficha"],
     ["Sentinel-2 L2A (10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-2-l2a", "sob demanda", "~5 dias", "NDVI, NBR, NDMI, imagens"],
     ["Alertas de mudança (óptico + radar)", "Fogo Forense, a partir de Sentinel-2 e Sentinel-1", "#", Q.mudancas ? Object.keys(Q.mudancas.eventos || {}).length + " incêndios analisados" : "–", "6 incêndios por ciclo", "automático, não validado"],
+    ["ERBs de telefonia móvel", "Anatel — Estações do SMP licenciadas", "https://www.anatel.gov.br/dadosabertos/paineis_de_dados/outorga_e_licenciamento/estacoes_smp.zip", Q.erbs ? fmt(Q.erbs.n) + " estações no AM" : "–", "semanal", "localização das antenas, não de aparelhos"],
     ["Sentinel-1 RTC (radar, 10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc", "a cada 6 h (mosaico)", "~6 a 12 dias", "vê através de nuvem e fumaça"],
     ["Landsat 8/9 C2 L2 (30 m)", "NASA/USGS · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/landsat-c2-l2", "sob demanda", "~8 dias", "série longa"],
   ];
