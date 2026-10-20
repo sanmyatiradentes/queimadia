@@ -197,6 +197,7 @@ function selecionar(id, voar) {
       <span class="muted">${esc(d.ti || d.uc || "Fora de TI/UC")}${d.uc && d.ti ? " · " + esc(d.uc) : ""}</span></div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">${Q.est.analises?.[e.id] ? `<button type="button" class="botao fogo" id="fPronta">Ver análise NDVI${Q.est.analises[e.id].quebra ? (Q.est.analises[e.id].situacao === "provavel" ? " · queda provável " : " · quebra ") + dBR(Q.est.analises[e.id].quebra) : ""}</button>` : ""}
       ${Q.estatico ? (Q.est.analises?.[e.id] ? "" : `<span class="selo pend" title="O motor calcula a análise de NDVI dos eventos com prioridade ≥ 70, começando pelos mais recentes e mais perto de Manaus.">NDVI na fila de cálculo</span>`) : `<button type="button" class="botao ${Q.est.analises?.[e.id] ? "secundario" : "fogo"}" id="fAnalisar">Analisar NDVI agora</button>`}
+      <a class="botao secundario" href="https://www.ventusky.com/?p=${lat};${lon};9&l=radar" target="_blank" rel="noopener" title="Tempo agora, radar e previsão no local do evento">Abrir no Ventusky</a>
       <button type="button" class="botao secundario" id="fCopiar">Copiar resumo</button></div></div>
     ${porque}
     <div class="fatos">
@@ -393,7 +394,9 @@ const CAMADAS = [
   ["desmat", "DETER desmatamento", "#8e44ad", false], ["cicat", "DETER cicatriz de queimada", "#5d4037", false],
   ["tis", "Terras indígenas", "#b8860b", true], ["ucs", "Unidades de conservação", "#0a7a36", true],
   ["mun", "Municípios", "#5b6675", true],
-  ["vento", "Vento (previsão, setas)", "#1e88e5", true], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
+  ["vento", "Vento (previsão, setas)", "#1e88e5", true],
+  ["chuva", "Radar de chuva (RainViewer, agora) <span class=\"nota\" id=\"chuvaHora\"></span>", "#2979ff", false],
+  ["nuvens", "Nuvens (satélite GOES-16, a cada 10 min)", "#90a4ae", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
   ["lixoes", "Lixões e vazadouros (fumaça tóxica)", "#8e24aa", true],
   ["mudancas", "Alertas de mudança (Sentinel-2 + radar)", "#00b8d4", true],
   ["erbs", "ERBs de telefonia (Anatel)", "#5e35b1", true],
@@ -417,6 +420,11 @@ async function iniciarMapa() {
   m.addLayer({id: "tis-l", type: "line", source: "tis", paint: {"line-color": "#d4a017", "line-width": 1.3, "line-dasharray": [3, 2]}});
   m.addLayer({id: "ucs", type: "fill", source: "ucs", paint: {"fill-color": "#0a7a36", "fill-opacity": .07}});
   m.addLayer({id: "ucs-l", type: "line", source: "ucs", paint: {"line-color": "#2fbf71", "line-width": 1.2, "line-dasharray": [1, 1.5]}});
+  // tempo agora: nuvens (GOES-16 GeoColor, NASA GIBS) e radar de chuva (RainViewer)
+  m.addSource("nuvens", {type: "raster", tileSize: 256, maxzoom: 7, attribution: "NASA GIBS · GOES-16",
+    tiles: ["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png"]});
+  m.addLayer({id: "nuvens", type: "raster", source: "nuvens", layout: {visibility: "none"}, paint: {"raster-opacity": .6}});
+  atualizarChuva(); setInterval(atualizarChuva, 10 * 60e3);
   m.addLayer({id: "mun", type: "line", source: "mun", paint: {"line-color": "#ffffff", "line-opacity": .55, "line-width": .7}});
   m.addLayer({id: "desmat", type: "fill", source: "deter", filter: ["!=", ["get", "c"], "CICATRIZ_DE_QUEIMADA"], paint: {"fill-color": "#8e44ad", "fill-opacity": .55}, layout: {visibility: "none"}});
   m.addLayer({id: "cicat", type: "fill", source: "deter", filter: ["==", ["get", "c"], "CICATRIZ_DE_QUEIMADA"], paint: {"fill-color": "#5d4037", "fill-opacity": .6}, layout: {visibility: "none"}});
@@ -564,7 +572,7 @@ function montarControles() {
     if (e.target.id === "brmAno") { BRM.ano = e.target.value; return filtrarBrmais(); }
     const k = e.target.dataset.c; if (!k) return;
     const ids = {tis: ["tis", "tis-l"], ucs: ["ucs", "ucs-l"], sel: ["sel", "area"]}[k] || [k];
-    ids.forEach(id => Q.mapa.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none"));
+    ids.forEach(id => Q.mapa.getLayer(id) && Q.mapa.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none"));
     if (k === "mudancas") Q.mapa.setLayoutProperty("mudancas-l", "visibility", e.target.checked ? "visible" : "none");
     if (k === "lixoes") Q.mapa.setLayoutProperty("lixoes-anel", "visibility", e.target.checked ? "visible" : "none");
     if (k === "vento") { $("#ventoCtl").hidden = !e.target.checked; const sl = $("#ventoSl");
@@ -996,4 +1004,18 @@ function blocoDesm(e) {
       <td>${a[8] ? `<a href="${brmImg({10: a[8]}, "before")}" target="_blank" rel="noopener">antes</a> · <a href="${brmImg({10: a[8]}, "after")}" target="_blank" rel="noopener">depois</a>` : "–"}</td></tr>`).join("")}</tbody></table></div>
     ${l.length > 20 ? `<p class="nota">Mostrando 20 de ${l.length}.</p>` : ""}`
       : `<p class="nota">Nenhum alerta de desmatamento ou garimpo nesse raio e período.</p>`}`;
+}
+
+// radar de chuva mais recente do RainViewer (lista de quadros renovada a cada 10 min)
+async function atualizarChuva() {
+  try {
+    const d = await (await fetch("https://api.rainviewer.com/public/weather-maps.json")).json();
+    const q = d.radar.past.at(-1), url = `${d.host}${q.path}/256/{z}/{x}/{y}/2/1_1.png`, m = Q.mapa;
+    if (m.getSource("chuva")) m.getSource("chuva").setTiles([url]);
+    else {
+      m.addSource("chuva", {type: "raster", tiles: [url], tileSize: 256, maxzoom: 7, attribution: "RainViewer"});
+      m.addLayer({id: "chuva", type: "raster", source: "chuva", layout: {visibility: $("#ctlCorpo input[data-c='chuva']")?.checked ? "visible" : "none"}, paint: {"raster-opacity": .75}}, "mun");
+    }
+    const h = $("#chuvaHora"); if (h) h.textContent = "· " + new Date(q.time * 1000).toLocaleTimeString("pt-BR", {timeZone: "America/Manaus", hour: "2-digit", minute: "2-digit"});
+  } catch (e) { console.warn("RainViewer indisponível", e); }
 }
