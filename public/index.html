@@ -161,7 +161,7 @@
           <div class="campo"><label for="aFim">Fim da série</label><input id="aFim" type="date"></div>
           <div class="campo"><label for="aRefIni">Linha de base: de</label><input id="aRefIni" type="date"></div>
           <div class="campo"><label for="aRefFim">Linha de base: até</label><input id="aRefFim" type="date"></div>
-          <div class="campo"><label for="aModo">Cenas</label><select id="aModo"><option value="mes">Melhor por mês (PolicIA)</option><option value="todas">Todas as datas</option></select></div>
+          <div class="campo"><label for="aModo">Cenas</label><select id="aModo"><option value="mes">Melhor por mês (≥ 80% da área limpa)</option><option value="todas">Todas as datas</option></select></div>
           <div class="campo"><label for="aNuvem">Nuvem máx. na cena (%)</label><input id="aNuvem" type="number" min="5" max="100" value="70"></div>
           <div class="campo largo"><label>Satélites</label><div class="chips"><span class="chip" role="button" tabindex="0" aria-pressed="true" data-col="sentinel-2-l2a">Sentinel-2 (10 m)</span><span class="chip" role="button" tabindex="0" aria-pressed="true" data-col="landsat-c2-l2">Landsat 8/9 (30 m)</span></div></div>
           <div class="campo largo"><label>Imagens por período</label><div class="chips" id="aProd"><span class="chip" role="button" tabindex="0" aria-pressed="true" data-p="rgb">Cor real</span><span class="chip" role="button" tabindex="0" aria-pressed="false" data-p="falsacor">Falsa-cor SWIR</span><span class="chip" role="button" tabindex="0" aria-pressed="true" data-p="ndvi">NDVI</span><span class="chip" role="button" tabindex="0" aria-pressed="false" data-p="nbr">NBR</span><span class="chip" role="button" tabindex="0" aria-pressed="false" data-p="ndmi">NDMI</span></div></div>
@@ -180,7 +180,7 @@
         <div class="cartao" id="aSerieC" hidden><div class="cab"><h2>Série temporal (mediana no núcleo)</h2>
           <div class="chips" id="aIdx"><span class="chip" role="button" tabindex="0" aria-pressed="true" data-i="ndvi">NDVI</span><span class="chip" role="button" tabindex="0" aria-pressed="false" data-i="nbr">NBR</span><span class="chip" role="button" tabindex="0" aria-pressed="false" data-i="ndmi">NDMI</span></div></div>
           <div class="grafico"><svg id="gSerie"></svg></div></div>
-        <div class="cartao" id="aQuebraC" hidden><h2>A conta, passo a passo</h2><p class="nota" style="margin:4px 0 8px">Para quem quiser conferir: como o sistema decide se e quando a vegetação foi perdida (método do PolicIA).</p><div class="calculo" id="aCalc"></div></div>
+        <div class="cartao" id="aQuebraC" hidden><h2>A conta, passo a passo</h2><p class="nota" style="margin:4px 0 8px">Para quem quiser conferir: como se decide se e quando a vegetação foi perdida (limiar de 3σ com a confirmação do CCDC; Zhu &amp; Woodcock, 2014).</p><div class="calculo" id="aCalc"></div></div>
         <div class="cartao" id="aTlC" hidden>
           <div class="cab"><h2>Linha do tempo animada</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div class="chips" id="tlProd"></div><button type="button" class="botao secundario pequeno" id="tlVideo" title="Grava a animação em vídeo, com data e legenda, para slides">Baixar vídeo</button></div></div>
           <div class="tl-quadro"><img id="tlImg" alt="Imagem da linha do tempo"><span class="tl-data" id="tlData"></span></div>
@@ -198,7 +198,7 @@
           <div id="dRes" style="margin-top:12px"></div>
         </div>
         <div class="cartao" id="aParecerC" hidden>
-          <div class="cab"><h2>Parecer preliminar (IA)</h2><button type="button" class="botao secundario pequeno" id="aParecer">Gerar parecer com IA</button></div>
+          <div class="cab"><h2>Parecer preliminar (IA)</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="botao secundario pequeno" id="aParecer">Gerar parecer com IA</button><button type="button" class="botao pequeno" id="aRelatorio" title="Relatório completo em PDF, com mapas, bases consultadas, imagens e o parecer">Relatório completo (PDF)</button></div></div>
           <div id="aParecerTxt" class="nota" style="margin-top:8px">Gera um texto técnico com a série, a quebra, o dNBR e as limitações. Requer a chave de IA (Gemini) configurada na hospedagem.</div>
         </div>
         <div class="cartao" id="aTabC" hidden>

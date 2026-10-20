@@ -119,12 +119,63 @@ async function montar() {
   let ndvi = null;
   if (est.analises?.[e.id]) try { ndvi = await dj(`analises/${e.id}.json`); } catch (x) {}
 
-  R = {e, est, mun, ai, aiHa, raioM, centro, bb, camadas, brm, ndvi, usuario, guardado};
+  // parecer: o mais recente entre o redigido no painel (memória do navegador) e o do motor
+  let parecer = null; try { parecer = JSON.parse(localStorage.getItem("ff_parecer_" + ID) || "null"); } catch (x) {}
+  if (!parecer?.texto && ndvi?.parecer?.texto) parecer = {...ndvi.parecer, gerado_em: ndvi.parecer.gerado_em || ndvi.gerado_em};
+  const antigo = parecer?.texto && /polic\s*ia|queimadia/i.test(parecer.texto);   // citava o sistema, não a literatura
+  R = {e, est, mun, ai, aiHa, raioM, centro, bb, camadas, brm, ndvi, usuario, guardado, parecer: antigo ? null : parecer};
   estado("Desenhando…");
   render();
   desenharMapas();
+  if (ndvi && !R.parecer?.texto && usuario) gerarParecer();
   estado("Pronto para imprimir");
 }
+
+// ------------------------------------------------------------ método e parecer (literatura científica)
+const METODO_LIT = "NDVI (Rouse et al., 1974; Tucker, 1979) como mediana dos pixels válidos num círculo de 600 m; uma cena por mês, com ao menos 80% da área sem nuvem e a menor nuvem na cena; triagem Tmask de névoa e sombra residuais na linha de base (Zhu &amp; Woodcock, 2014b); quebra quando o NDVI fica abaixo de mediana − max(3σ; 0,15) em 6 observações consecutivas, critério de confirmação do CCDC (Zhu &amp; Woodcock, 2014a; Arévalo et al., 2020); severidade da queima por dNBR com as classes do USGS (Key &amp; Benson, 2006). Sentinel-2 L2A e Landsat 8/9 Coleção 2 Nível 2.";
+const REFS_LIT = [
+  "Rouse, J. W.; Haas, R. H.; Schell, J. A.; Deering, D. W. (1974). Monitoring vegetation systems in the Great Plains with ERTS. NASA SP-351, p. 309–317.",
+  "Tucker, C. J. (1979). Red and photographic infrared linear combinations for monitoring vegetation. <i>Remote Sensing of Environment</i>, 8, 127–150.",
+  "Zhu, Z.; Woodcock, C. E. (2014a). Continuous change detection and classification of land cover using all available Landsat data. <i>Remote Sensing of Environment</i>, 144, 152–171.",
+  "Zhu, Z.; Woodcock, C. E. (2014b). Automated cloud, cloud shadow, and snow detection in multitemporal Landsat data. <i>Remote Sensing of Environment</i>, 152, 217–234.",
+  "Arévalo, P.; Bullock, E. L.; Woodcock, C. E.; Olofsson, P. (2020). A suite of tools for continuous land change monitoring in Google Earth Engine. <i>Frontiers in Climate</i>, 2, 576740.",
+  "Key, C. H.; Benson, N. C. (2006). Landscape Assessment: sampling and analysis methods. In: <i>FIREMON</i>. USDA Forest Service, RMRS-GTR-164-CD.",
+];
+const SECOES = "Objeto|Dados e m[ée]todo|Dados|M[ée]todo|Resultados|Matriz de hip[óo]teses|Interpreta[çc][ãa]o t[ée]cnica|Interpreta[çc][ãa]o|Limita[çc][õo]es|Dilig[êe]ncias sugeridas|Dilig[êe]ncias|Refer[êe]ncias";
+function parecerHTML(p) {
+  if (p?.carregando) return `<p class="carregando">Redigindo o parecer com IA a partir dos números deste relatório…</p>`;
+  if (!p?.texto) return `<p class="nota">${p?.erro ? "Parecer indisponível: " + esc(p.erro) + ". " : "O parecer ainda não foi redigido para este evento. "}</p>
+    <button type="button" class="botao nao-imprime" id="gerarParecer">Gerar parecer com IA</button>`;
+  let t = p.texto.replace(/\r/g, "").replace(/\*\*|__|^#+\s*/gm, "");
+  t = t.replace(new RegExp(`\\s+(?=[1-9]\\.\\s+(?:${SECOES})\\b)`, "g"), "\n");
+  const linhas = t.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const tit = new RegExp(`^([1-9])\\.\\s+(${SECOES})\\s*[:.–-]?\\s*(.*)$`, "i");
+  let ref = false;
+  const html = linhas.map(l => {
+    const m = l.match(tit);
+    if (m) { ref = /^refer/i.test(m[2]); return `<h3><span>${m[1]}.</span> ${esc(m[2])}</h3>${m[3] ? `<p>${esc(m[3])}</p>` : ""}`; }
+    return ref ? `<p class="ref">${esc(l)}</p>` : `<p>${esc(l)}</p>`;
+  }).join("");
+  const quando = p.gerado_em ? new Date(p.gerado_em).toLocaleString("pt-BR", {timeZone: "America/Manaus"}) : null;
+  return `<div class="parecer-txt">${html}</div>
+    <p class="nota assinatura">Texto redigido por modelo de linguagem${p.modelo ? ` (${esc(p.modelo)})` : ""}${quando ? ` em ${quando}` : ""}, exclusivamente a partir dos números deste relatório. Exige revisão de perito ou analista antes de qualquer uso; não substitui laudo pericial.</p>
+    <button type="button" class="botao secundario pequeno nao-imprime" id="gerarParecer">Redigir de novo</button>`;
+}
+async function gerarParecer() {
+  const {e, ndvi} = R;
+  R.parecer = {carregando: true}; $("#parecerCorpo").innerHTML = parecerHTML(R.parecer);
+  try {
+    const corpo = {...ndvi, imagens: undefined, parecer: undefined,
+      evento: {...(ndvi.evento || {}), id: e.id, municipio: e.mun, inicio: e.ini, fim: e.fim, pontuacao: e.score, indicadores: e.ind, det: e.det}};
+    const r = await fetch("api/parecer", {method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/json"}, body: JSON.stringify(corpo)});
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || d.erro || "serviço indisponível");
+    R.parecer = {...d, gerado_em: new Date().toISOString()};
+    try { localStorage.setItem("ff_parecer_" + e.id, JSON.stringify(R.parecer)); } catch (x) {}
+  } catch (x) { R.parecer = {erro: x.message}; }
+  $("#parecerCorpo").innerHTML = parecerHTML(R.parecer);
+}
+document.addEventListener("click", ev => { if (ev.target.id === "gerarParecer") gerarParecer(); });
 
 // ------------------------------------------------------------ HTML
 const sec = (n, t, corpo, extra = "") => `<section class="cartao ${extra}"><h2><span class="num-sec">${n}</span>${t}</h2>${corpo}</section>`;
@@ -196,9 +247,11 @@ function render() {
       <div class="figs">${img.map((i, k) => `<figure><img src="${DADOS}analises/${encodeURIComponent(i.arquivo)}" alt="Imagem ${esc(i.rotulo)}"><figcaption><b>Figura ${4 + k}</b> — ${esc(i.rotulo)}: ${dBR(i.data)} · ${esc(i.colecao)} · NDVI médio ${br(i.ndvi, 3)}</figcaption></figure>`).join("")}
       ${dn?.arquivo ? `<figure><img src="${DADOS}analises/${encodeURIComponent(dn.arquivo)}" alt="dNBR"><figcaption><b>Figura ${4 + img.length}</b> — Severidade da queima (dNBR) entre ${dBR(dn.antes)} e ${dBR(dn.depois)}: ${br(dn.queimado_ha, 1)} ha queimados.</figcaption></figure>` : ""}</div>
       ${dn?.areas_ha ? `<p class="rotulo">Área por classe de severidade (dNBR)</p>${tab(["Classe", "Área (ha)"], Object.entries(dn.areas_ha).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="n">${br(v, 1)}</td></tr>`))}` : ""}
-      <p class="rotulo">Quebra na série de NDVI (linha de base CCDC, 6 observações consecutivas)</p>
+      <p class="rotulo">Quebra na série de NDVI (limiar de 3σ e 6 observações consecutivas; Zhu &amp; Woodcock, 2014a)</p>
       <p>${ndvi.quebra?.detectada ? `Queda sustentada detectada a partir de <b>${dBR(ndvi.quebra.data || ndvi.quebra.inicio)}</b>.` : esc(ndvi.quebra?.motivo || "Sem quebra detectada.")} NDVI de base ${br(ndvi.quebra?.ndvi_base, 3)} ± ${br(ndvi.quebra?.desvio_base, 3)} (limiar ${br(ndvi.quebra?.limiar, 3)}, ${ndvi.quebra?.n_base ?? "–"} observações).</p>
-      <p class="nota">Período analisado: ${dBR(ndvi.periodo?.[0])} a ${dBR(ndvi.periodo?.[1])} · ${ndvi.n_validas ?? "–"} cenas válidas · ${esc(ndvi.metodo || "")}</p>`));
+      <p class="nota">Período analisado: ${dBR(ndvi.periodo?.[0])} a ${dBR(ndvi.periodo?.[1])} · ${ndvi.n_validas ?? "–"} cenas válidas.</p>
+      <p class="nota"><b>Método.</b> ${METODO_LIT}</p>`));
+    html.push(sec(N(), "Parecer técnico preliminar (IA)", `<div id="parecerCorpo">${parecerHTML(R.parecer)}</div>`, "parecer-sec"));
   }
 
   // 5. bases
@@ -234,7 +287,7 @@ function render() {
     <li>INPE — Programa Queimadas (BDQueimadas) e DETER/TerraBrasilis.</li>
     <li>NASA FIRMS (VIIRS/MODIS) — alertas em tempo real.</li>
     <li>ESA Copernicus Sentinel-1 e Sentinel-2; USGS Landsat 8/9 — via Microsoft Planetary Computer.</li>
-    <li>Zhu & Woodcock (2014), CCDC — linha de base e quebra de NDVI; Key & Benson (2006), dNBR.</li>
+    ${REFS_LIT.map(r => `<li>${r}</li>`).join("")}
     <li>Open-Meteo — clima e vento; INPE — risco de fogo.</li>
     <li>FUNAI — terras indígenas; MMA/CNUC — unidades de conservação; INCRA — comunidades quilombolas.</li>
     <li>SICAR — Cadastro Ambiental Rural; IBAMA — áreas embargadas; ANM — SIGMINE; Anatel — estações do SMP.</li>

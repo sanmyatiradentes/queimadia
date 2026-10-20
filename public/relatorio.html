@@ -44,6 +44,14 @@
 .rel .confronto h3{display:none}
 .ctl-rel{display:flex;align-items:center;gap:6px;font-size:13px;color:#fff}
 .ctl-rel input{width:76px;padding:4px 6px;border-radius:6px;border:0}
+.parecer-txt{font-size:14px;line-height:1.6;text-align:justify;hyphens:auto}
+.parecer-txt h3{font-size:14.5px;margin:14px 0 4px;color:var(--azul-escuro);text-align:left}
+.parecer-txt h3 span{display:inline-block;min-width:20px;color:var(--dptc-vermelho)}
+.parecer-txt p{margin:0 0 8px}
+.parecer-txt p.ref{font-size:12.5px;text-align:left;padding-left:18px;text-indent:-18px;margin:0 0 4px}
+.parecer-sec{border-top:4px solid var(--azul)}
+.assinatura{border-top:1px dashed var(--cinza-borda);padding-top:8px;margin-top:10px}
+@media print{.parecer-sec{break-before:page}}
 .rodape-rel{font-size:12px;color:var(--cinza-texto);text-align:center;margin:10px 0 30px}
 @page{size:A4;margin:14mm 11mm 15mm 11mm;
   @bottom-left{content:"Fogo Forense · NIPED/PCAM · DPTC — documento automatizado, não substitui laudo pericial";font:7.5pt "Segoe UI",sans-serif;color:#5b6675}

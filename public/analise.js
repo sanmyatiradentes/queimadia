@@ -125,7 +125,7 @@
     }
   }
 
-  // ------------------------------------------------------------ quebra (método PolicIA, em JS para mostrar a conta)
+  // ------------------------------------------------------------ quebra (limiar de 3σ + confirmação do CCDC, em JS para mostrar a conta)
   // Critério do CCDC (Zhu & Woodcock, 2014; Arévalo et al., 2020): 6 observações consecutivas
   const OBS_CONSEC = 6;
   function quebra(serie, refIni, refFim) {
@@ -453,6 +453,7 @@
   };
 
   // ------------------------------------------------------------ parecer por IA
+  $("#aRelatorio").onclick = () => { if (A.evento?.id) window.open("relatorio.html?id=" + encodeURIComponent(A.evento.id), "_blank"); };
   $("#aParecer").onclick = async () => {
     $("#aParecer").disabled = true; $("#aParecerTxt").textContent = "Redigindo o parecer…";
     try {
@@ -460,6 +461,7 @@
       const d = await r.json();
       if (!r.ok) throw new Error(d.detail || "indisponível");
       $("#aParecerTxt").innerHTML = `<div style="white-space:pre-wrap;color:var(--texto);font-size:14.5px">${d.texto.replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c]))}</div><p class="nota" style="margin-top:8px">Texto gerado por IA (${d.modelo}) a partir dos números acima. Revise antes de usar.</p>`;
+      if (A.evento?.id) try { localStorage.setItem("ff_parecer_" + A.evento.id, JSON.stringify({...d, gerado_em: new Date().toISOString()})); } catch (x) {}
     } catch (e) { $("#aParecerTxt").textContent = "Parecer indisponível: " + e.message; }
     finally { $("#aParecer").disabled = false; }
   };

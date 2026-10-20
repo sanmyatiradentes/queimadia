@@ -1,4 +1,4 @@
-"""Análise de NDVI sob demanda (mesmo método do serviço ambiental do PolicIA).
+"""Análise de NDVI sob demanda: limiar de 3σ com a confirmação do CCDC (Zhu & Woodcock, 2014).
 
 Cada função faz uma tarefa curta (listar cenas, medir uma cena, gerar uma
 imagem), para que o painel orquestre em paralelo e mostre o progresso. Isso
@@ -291,8 +291,8 @@ def tmask(serie, ref_ini, ref_fim):
 
 
 def detectar_quebra(serie, ref_ini=None, ref_fim=None, n_consec=None):
-    """Método do PolicIA (servico-ambiental/ndvi.py), com confirmação pelo
-    critério do CCDC: base = mediana do período de referência; limiar = base −
+    """Limiar estatístico com a confirmação do CCDC (Zhu & Woodcock, 2014a;
+    Arévalo et al., 2020): base = mediana do período de referência; limiar = base −
     max(3·desvio, 0,15); quebra CONFIRMADA = 1ª de >= 6 observações consecutivas
     abaixo do limiar. Queda no fim da série ainda sem as 6 = mudança PROVÁVEL.
     Quedas que se recuperam antes = transitórias. A data é dada como intervalo."""
