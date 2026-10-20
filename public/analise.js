@@ -406,7 +406,7 @@
     const base = window.QUEIMADIA_DADOS + "analises/";
     $("#aStatus").hidden = false; prog(0.3, 1, "Carregando análise pronta…");
     let r;
-    try { r = await (await fetch(base + id + ".json?v=" + (window.Q?.versao || ""))).json(); }
+    try { r = await (await fetch(window.QD("analises/" + id + ".json", window.Q?.versao || ""))).json(); }
     catch (e) { prog(0, 1, "Análise não encontrada."); return; }
     const ev = window.Q.eventos.find(x => x.id === id) || window.Q.alertas.find(x => x.id === id);
     A.evento = ev || {id, ini: r.evento.inicio, fim: r.evento.fim, mun: r.evento.municipio, score: r.evento.score};

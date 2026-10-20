@@ -1,4 +1,5 @@
-// Envia public/dados ao Vercel Blob com a biblioteca oficial (@vercel/blob).
+// Envia public/dados ao Vercel Blob PRIVADO (prefixo painel/) com a biblioteca oficial (@vercel/blob).
+// O site lê esses arquivos por /api/dados, que exige login aprovado.
 // Requer BLOB_READ_WRITE_TOKEN. Dados do ciclo: cache de 60 s; análises novas ou
 // refeitas desde o último envio: cache de 1 h. Sai com erro se algum envio falhar.
 import { put } from "@vercel/blob";
@@ -36,8 +37,8 @@ async function trabalhador() {
   while (i < lista.length) {
     const [rel, idade] = lista[i++];
     try {
-      await put(rel, fs.readFileSync(path.join(dados, rel)), {
-        access: "public", token, addRandomSuffix: false, allowOverwrite: true,
+      await put("painel/" + rel, fs.readFileSync(path.join(dados, rel)), {
+        access: "private", token, addRandomSuffix: false, allowOverwrite: true,
         cacheControlMaxAge: idade, contentType: tipos[path.extname(rel)] || "application/octet-stream",
       });
       ok++;

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fogo Forense — NIPED/PCAM</title>
+<meta name="description" content="Fogo Forense: radar de queimadas suspeitas no Amazonas, do NIPED/PCAM com o DPTC. Acesso restrito a profissionais cadastrados.">
+<link rel="icon" href="img/dptc.png">
+<link rel="stylesheet" href="estilo.css">
+<style>
+body{background:#fff}
+.sb-topo .botao{font-size:14px}
+.heroi{background:linear-gradient(135deg,var(--azul-escuro),#13308a 60%,#1b3faa);color:#fff;padding:56px 20px 64px}
+.heroi .dentro,.faixa .dentro{max-width:1120px;margin:0 auto}
+.heroi .dentro{display:grid;grid-template-columns:1.05fr 1fr;gap:40px;align-items:center}
+.heroi h1{color:#fff;font-size:40px;line-height:1.1;margin:0 0 14px;letter-spacing:-.01em}
+.heroi h1 span{color:var(--amarelo-ouro)}
+.heroi p{font-size:17px;opacity:.92;margin:0 0 22px;max-width:560px}
+.heroi .acoes{display:flex;gap:12px;flex-wrap:wrap}
+.heroi .acoes .botao{font-size:16px;padding:11px 20px}
+.botao.ouro{background:var(--amarelo-ouro);color:var(--azul-escuro);border-color:var(--amarelo-ouro)}
+.botao.contorno{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.6)}
+.heroi img.vitrine{width:100%;border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.35);display:block}
+.selo-restrito{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:99px;padding:4px 12px;font-size:13px;margin-bottom:16px}
+.faixa{padding:56px 20px}
+.faixa.cinza{background:var(--cinza-claro)}
+.faixa h2{font-size:28px;margin:0 0 8px}
+.faixa .lead{color:var(--cinza-texto);font-size:16px;margin:0 0 28px;max-width:760px}
+.grade3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.grade4{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.bloco{background:#fff;border:1px solid var(--cinza-borda);border-radius:10px;padding:18px}
+.faixa.cinza .bloco{background:#fff}
+.bloco h3{font-size:16px;margin:8px 0 6px}
+.bloco p{margin:0;color:var(--cinza-texto);font-size:14.5px}
+.passo{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--azul-escuro);color:var(--amarelo-ouro);font-weight:700}
+.tela{display:grid;grid-template-columns:1.5fr 1fr;gap:28px;align-items:center;margin:0 0 40px}
+.tela:nth-child(even){grid-template-columns:1fr 1.5fr}
+.tela:nth-child(even) figure{order:2}
+.tela figure{margin:0}
+.tela img{width:100%;border-radius:10px;border:1px solid var(--cinza-borda);box-shadow:0 8px 28px rgba(10,31,86,.12);display:block;cursor:zoom-in}
+.tela h3{font-size:20px;margin:0 0 8px}
+.tela p{color:var(--cinza-texto);margin:0 0 8px}
+.tela ul{margin:6px 0 0;padding-left:18px;color:var(--cinza-texto)}
+.fontes{display:flex;flex-wrap:wrap;gap:8px}
+.fontes span{background:#fff;border:1px solid var(--cinza-borda);border-radius:99px;padding:6px 12px;font-size:13.5px}
+.acesso{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
+.acesso ol{margin:0;padding-left:20px}
+.acesso li{margin:0 0 10px}
+.aviso-lim{border-left:4px solid var(--dptc-vermelho);background:#fff8f7;border-radius:8px;padding:14px 16px;font-size:14.5px}
+.rodape-sb{background:var(--azul-escuro);color:#cfd8ee;text-align:center;padding:26px 20px;font-size:13.5px}
+.rodape-sb img{height:34px;margin:0 6px 10px;vertical-align:middle}
+#zoom{position:fixed;inset:0;background:rgba(5,12,35,.88);display:grid;place-items:center;z-index:100;padding:20px;cursor:zoom-out}
+#zoom img{max-width:100%;max-height:100%;border-radius:8px}
+@media (max-width:900px){
+  .heroi .dentro,.tela,.tela:nth-child(even),.acesso{grid-template-columns:1fr}
+  .tela:nth-child(even) figure{order:0}
+  .grade3,.grade4{grid-template-columns:1fr 1fr}
+  .heroi h1{font-size:30px}
+}
+@media (max-width:560px){.grade3,.grade4{grid-template-columns:1fr}.faixa{padding:40px 16px}.heroi{padding:36px 16px 44px}}
+</style>
+</head>
+<body>
+<header class="topo sb-topo">
+  <a class="marca" href="sobre.html"><img src="img/pcam.png" alt="Polícia Civil do Amazonas"><img src="img/dptc.png" alt="Departamento de Polícia Técnico-Científica">
+    <span class="nome">Fogo Forense<small>NIPED · PCAM/DPTC</small></span></a>
+  <span class="espaco"></span>
+  <a class="botao claro pequeno" href="#acesso">Solicitar acesso</a>
+  <a class="botao claro pequeno" href="entrar.html">Entrar</a>
+</header>
+
+<section class="heroi">
+  <div class="dentro">
+    <div>
+      <span class="selo-restrito">🔒 Acesso restrito a profissionais cadastrados</span>
+      <h1>Onde o fogo no Amazonas <span>pode ter sido criminoso</span></h1>
+      <p>O Fogo Forense acompanha os focos de calor detectados por satélite em todo o estado, cruza cada ocorrência com desmatamento, áreas protegidas, histórico do local e clima, e indica quais merecem verificação primeiro. Atualizado a cada 10 minutos.</p>
+      <div class="acoes"><a class="botao ouro" href="#acesso">Solicitar acesso</a><a class="botao contorno" href="entrar.html">Já tenho cadastro</a></div>
+    </div>
+    <img class="vitrine" src="img/telas/mapa.jpg" alt="Painel do Fogo Forense com o mapa de eventos e a fila de prioridades">
+  </div>
+</section>
+
+<section class="faixa">
+  <div class="dentro">
+    <h2>O que é</h2>
+    <p class="lead">Uma ferramenta de apoio à investigação de crimes ambientais com fogo, desenvolvida pelo NIPED da Polícia Civil do Amazonas com o Departamento de Polícia Técnico-Científica.</p>
+    <div class="grade3">
+      <div class="bloco"><h3>Prioriza a verificação</h3><p>Entre milhares de focos por temporada, ordena os eventos com mais sinais de ação humana intencional, para orientar onde olhar primeiro.</p></div>
+      <div class="bloco"><h3>Reúne a prova técnica</h3><p>Imagens de satélite antes e depois, perda de vegetação, severidade da queima, clima no início do fogo e cronologia das detecções num só lugar.</p></div>
+      <div class="bloco"><h3>Gera o relatório</h3><p>Documento imprimível por evento com área de interesse, consulta a CAR, UC, terras indígenas, quilombolas, embargos e mineração, e matriz de hipóteses.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="faixa cinza">
+  <div class="dentro">
+    <h2>Como funciona</h2>
+    <p class="lead">Um motor automático roda a cada 10 minutos, sem intervenção, e publica o resultado no painel.</p>
+    <div class="grade4">
+      <div class="bloco"><span class="passo">1</span><h3>Coleta</h3><p>Baixa os focos de calor do INPE e da NASA (VIIRS/MODIS), os alertas DETER, o clima e o vento.</p></div>
+      <div class="bloco"><span class="passo">2</span><h3>Agrupa</h3><p>Junta focos próximos no espaço e no tempo em <b>eventos</b> de fogo, cada um com sua cronologia.</p></div>
+      <div class="bloco"><span class="passo">3</span><h3>Cruza</h3><p>Compara cada evento com desmatamento prévio, terras indígenas, unidades de conservação, reincidência, período proibitivo e condição do tempo, e calcula a <b>prioridade de verificação</b>. Uma IA aponta os eventos atípicos.</p></div>
+      <div class="bloco"><span class="passo">4</span><h3>Confere no satélite</h3><p>Para os eventos prioritários, analisa a série de imagens Sentinel-2 e Landsat (NDVI e dNBR) e o radar Sentinel-1, que vê através de nuvem e fumaça.</p></div>
+    </div>
+    <p class="lead" style="margin:22px 0 0">A prioridade só ordena o trabalho: não é grau de certeza nem prova. A matriz de hipóteses apresenta, lado a lado e sem pesos, os elementos favoráveis à ignição intencional, os compatíveis com acidente ou queima tradicional e as lacunas, seguindo os guias de metodologia do NIPED.</p>
+  </div>
+</section>
+
+<section class="faixa">
+  <div class="dentro">
+    <h2>As telas</h2>
+    <p class="lead">Clique numa imagem para ampliar.</p>
+    <div class="tela"><figure><img src="img/telas/painel.jpg" alt="Tela inicial com indicadores e filtros"></figure>
+      <div><h3>Painel e filtros</h3><p>Visão do estado com os números da temporada: focos, eventos, suspeitas altas, ocorrências perto de Manaus e em áreas protegidas.</p>
+        <ul><li>Filtros por período, prioridade, município e região</li><li>Fila de prioridades, dos mais suspeitos aos menos</li></ul></div></div>
+    <div class="tela"><figure><img src="img/telas/mapa.jpg" alt="Mapa com camadas"></figure>
+      <div><h3>Mapa com camadas</h3><p>Eventos coloridos pela prioridade sobre imagem de satélite, com camadas que se ligam e desligam.</p>
+        <ul><li>Mosaicos Sentinel-2 e radar Sentinel-1 recentes</li><li>Terras indígenas, unidades de conservação, DETER, vento, radar de chuva e nuvens</li><li>Antenas de telefonia (Anatel), lixões e alertas de mudança</li></ul></div></div>
+    <div class="tela"><figure><img src="img/telas/ficha.jpg" alt="Ficha do evento"></figure>
+      <div><h3>Ficha do evento</h3><p>Explica em linguagem simples por que o evento entrou na lista e reúne focos, coordenadas, satélites, clima no início do fogo e cronologia das passagens.</p></div></div>
+    <div class="tela"><figure><img src="img/telas/matriz.jpg" alt="Matriz de hipóteses"></figure>
+      <div><h3>Matriz de hipóteses</h3><p>Separa o que favorece a ignição intencional, o que é compatível com acidente ou queima tradicional e o que ainda é inconclusivo. Origem, causa e autoria exigem demonstrações próprias, com perícia de local.</p></div></div>
+    <div class="tela"><figure><img src="img/telas/analise.jpg" alt="Análise de satélite"></figure>
+      <div><h3>Análise de satélite</h3><p>Imagens antes e depois do fogo, série de NDVI com linha de base e detecção de quebra, e mapa de severidade da queima (dNBR), com a proveniência de cada cena.</p></div></div>
+    <div class="tela"><figure><img src="img/telas/relatorio.jpg" alt="Relatório do evento"></figure>
+      <div><h3>Relatório do evento</h3><p>Documento pronto para imprimir ou salvar em PDF, no formato dos relatórios analíticos de alertas.</p>
+        <ul><li>Área de interesse e mapas de localização</li><li>Consulta por sobreposição e proximidade a CAR, UC, TI, quilombolas, embargos do IBAMA e ANM</li><li>Referências, limitações e glossário</li></ul></div></div>
+    <div class="tela"><figure><img src="img/telas/numeros.jpg" alt="Estatísticas"></figure>
+      <div><h3>Números</h3><p>Focos por mês e por ano, municípios mais afetados e satélites, para acompanhar a temporada e comparar com anos anteriores.</p></div></div>
+    <div class="tela"><figure><img src="img/telas/telao.jpg" alt="Modo telão"></figure>
+      <div><h3>Modo telão</h3><p>Tela para projetor ou TV de sala de situação: mapa em tela cheia, eventos em destaque em rotação e os indicadores das últimas 24 horas e 7 dias.</p></div></div>
+  </div>
+</section>
+
+<section class="faixa cinza">
+  <div class="dentro">
+    <h2>Fontes de dados</h2>
+    <p class="lead">Bases oficiais e abertas, combinadas automaticamente.</p>
+    <div class="fontes">
+      <span>INPE — focos de calor e risco de fogo</span><span>INPE — DETER</span><span>NASA FIRMS (VIIRS/MODIS)</span>
+      <span>ESA Copernicus Sentinel-1 e Sentinel-2</span><span>USGS Landsat 8/9</span><span>Open-Meteo — clima e vento</span>
+      <span>FUNAI — terras indígenas</span><span>MMA/ICMBio — unidades de conservação</span><span>INCRA — quilombolas</span>
+      <span>SICAR — CAR</span><span>IBAMA — embargos</span><span>ANM — SIGMINE</span><span>Anatel — estações rádio base</span>
+      <span>RainViewer e NASA GIBS — chuva e nuvens</span><span>Brasil MAIS (convênio) — alertas Planet</span>
+    </div>
+  </div>
+</section>
+
+<section class="faixa" id="acesso">
+  <div class="dentro acesso">
+    <div>
+      <h2>Como solicitar acesso</h2>
+      <p class="lead">O Fogo Forense contém dados de convênio e informações sensíveis para investigação, por isso o acesso é restrito e cada cadastro é analisado pela administração do NIPED.</p>
+      <ol>
+        <li>Clique em <b>Solicitar acesso</b> e preencha nome, e-mail, órgão, cargo e matrícula.</li>
+        <li>Crie uma senha de pelo menos 10 caracteres.</li>
+        <li>Aguarde a aprovação. Você poderá entrar assim que o cadastro for validado.</li>
+      </ol>
+      <div class="acoes" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px">
+        <a class="botao" href="entrar.html?cadastro=1" style="font-size:16px;padding:11px 20px">Solicitar acesso</a>
+        <a class="botao secundario" href="entrar.html" style="font-size:16px;padding:11px 20px">Entrar</a>
+      </div>
+    </div>
+    <div>
+      <h3 style="font-size:18px;margin:0 0 10px">Quem pode pedir</h3>
+      <p class="muted" style="margin:0 0 18px">Profissionais que atuam com crimes ambientais no Amazonas. Informe o órgão e o cargo: cada pedido é avaliado individualmente pela administração do NIPED.</p>
+      <div class="aviso-lim"><b>Uso responsável.</b> O sistema organiza indícios de fontes públicas e de convênio para orientar a verificação. Não substitui laudo pericial nem exame de local. A primeira detecção de satélite não marca a hora nem o ponto de ignição. Dados de convênio não devem ser divulgados.</div>
+    </div>
+  </div>
+</section>
+
+<footer class="rodape-sb">
+  <div><img src="img/pcam.png" alt="PCAM"><img src="img/dptc.png" alt="DPTC"></div>
+  Fogo Forense · Desenvolvido pelo NIPED/PCAM · Departamento de Polícia Técnico-Científica do Amazonas
+</footer>
+<div id="zoom" hidden><img alt=""></div>
+<script>
+const z = document.getElementById("zoom");
+document.addEventListener("click", e => {
+  const i = e.target.closest(".tela img, img.vitrine");
+  if (i) { z.querySelector("img").src = i.src; z.querySelector("img").alt = i.alt; z.hidden = false; return; }
+  if (e.target.closest("#zoom")) z.hidden = true;
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") z.hidden = true; });
+// quem já tem sessão vai direto ao painel pelo botão Entrar
+fetch("api/conta?acao=eu", {credentials: "same-origin"}).then(r => r.json()).then(d => {
+  if (d.usuario) document.querySelectorAll('a[href="entrar.html"]').forEach(a => { a.href = "./"; a.textContent = "Abrir o painel"; });
+}).catch(() => {});
+</script>
+</body>
+</html>

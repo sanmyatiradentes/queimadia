@@ -49,7 +49,7 @@ body{display:grid;place-items:center;min-height:100vh;padding:24px 16px}
   </form>
 
   <p class="troca" id="troca"><a id="aCad">Primeiro acesso / cadastre-se</a></p>
-  <a class="voltar" href="./">← Voltar ao Fogo Forense</a>
+  <a class="voltar" href="sobre.html">← Conheça o Fogo Forense</a>
 </main>
 <script>
 const $ = s => document.querySelector(s);
@@ -62,6 +62,7 @@ function alternar() {
   $("#aCad").onclick = alternar;
 }
 $("#aCad").onclick = alternar;
+if (new URLSearchParams(location.search).has("cadastro")) alternar();
 async function enviar(acao, corpo, botao) {
   botao.disabled = true;
   try {
@@ -74,7 +75,8 @@ $("#fEntrar").onsubmit = async e => {
   e.preventDefault();
   const [ok, d] = await enviar("entrar", dados(e.target), e.submitter);
   if (!ok) return msg(d.erro, "erro");
-  location.href = new URLSearchParams(location.search).get("voltar") || "./";
+  const v = new URLSearchParams(location.search).get("voltar") || "";
+  location.href = /^[a-z][\w.\-\/]*(\?[\w=&%.\-]*)?$/i.test(v) ? v : "./";
 };
 $("#fCad").onsubmit = async e => {
   e.preventDefault();

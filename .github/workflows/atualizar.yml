@@ -41,6 +41,8 @@ jobs:
         with:
           node-version: "22"
       - name: Recuperar análises já publicadas (se o estado não veio do cache)
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
         run: python -m motor.baixar_blob
       - name: Ciclo de atualização
         env:

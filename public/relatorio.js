@@ -14,7 +14,7 @@ const COR = {ai: "#ffdf00", car: "#ffffff", emb: "#ff1744", ti: "#d4a017", ucpi:
   brC: "#ff8a65", brF: "#ff1744", brI: "#ffea00", brD: "#76ff03", brG: "#e040fb"};
 let R = {}; const mapas = [];
 
-async function dj(n) { const r = await fetch(DADOS + n + "?v=" + Date.now()); if (!r.ok) throw new Error(n + " " + r.status); return r.json(); }
+async function dj(n) { const r = await fetch(window.QD(n, Date.now())); if (!r.ok) throw new Error(n + " " + r.status); return r.json(); }
 async function api(u) { const r = await fetch(u, {credentials: "same-origin"}); if (!r.ok) throw new Error(u + " " + r.status); return r.json(); }
 function estado(t, ok) { $("#estadoTxt").textContent = t; $("#estado").classList.toggle("atrasado", ok === false); }
 function descompactar(d) {
@@ -193,8 +193,8 @@ function render() {
     const img = (ndvi.imagens || []).filter(i => i.produto === "rgb");
     const dn = ndvi.dnbr;
     html.push(sec(N(), "Imagens de satélite e vegetação (NDVI e dNBR)", `
-      <div class="figs">${img.map((i, k) => `<figure><img src="${DADOS}analises/${esc(i.arquivo)}" alt="Imagem ${esc(i.rotulo)}"><figcaption><b>Figura ${4 + k}</b> — ${esc(i.rotulo)}: ${dBR(i.data)} · ${esc(i.colecao)} · NDVI médio ${br(i.ndvi, 3)}</figcaption></figure>`).join("")}
-      ${dn?.arquivo ? `<figure><img src="${DADOS}analises/${esc(dn.arquivo)}" alt="dNBR"><figcaption><b>Figura ${4 + img.length}</b> — Severidade da queima (dNBR) entre ${dBR(dn.antes)} e ${dBR(dn.depois)}: ${br(dn.queimado_ha, 1)} ha queimados.</figcaption></figure>` : ""}</div>
+      <div class="figs">${img.map((i, k) => `<figure><img src="${DADOS}analises/${encodeURIComponent(i.arquivo)}" alt="Imagem ${esc(i.rotulo)}"><figcaption><b>Figura ${4 + k}</b> — ${esc(i.rotulo)}: ${dBR(i.data)} · ${esc(i.colecao)} · NDVI médio ${br(i.ndvi, 3)}</figcaption></figure>`).join("")}
+      ${dn?.arquivo ? `<figure><img src="${DADOS}analises/${encodeURIComponent(dn.arquivo)}" alt="dNBR"><figcaption><b>Figura ${4 + img.length}</b> — Severidade da queima (dNBR) entre ${dBR(dn.antes)} e ${dBR(dn.depois)}: ${br(dn.queimado_ha, 1)} ha queimados.</figcaption></figure>` : ""}</div>
       ${dn?.areas_ha ? `<p class="rotulo">Área por classe de severidade (dNBR)</p>${tab(["Classe", "Área (ha)"], Object.entries(dn.areas_ha).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="n">${br(v, 1)}</td></tr>`))}` : ""}
       <p class="rotulo">Quebra na série de NDVI (linha de base CCDC, 6 observações consecutivas)</p>
       <p>${ndvi.quebra?.detectada ? `Queda sustentada detectada a partir de <b>${dBR(ndvi.quebra.data || ndvi.quebra.inicio)}</b>.` : esc(ndvi.quebra?.motivo || "Sem quebra detectada.")} NDVI de base ${br(ndvi.quebra?.ndvi_base, 3)} ± ${br(ndvi.quebra?.desvio_base, 3)} (limiar ${br(ndvi.quebra?.limiar, 3)}, ${ndvi.quebra?.n_base ?? "–"} observações).</p>

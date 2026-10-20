@@ -30,7 +30,13 @@ export async function gravarJSON(caminho, dados) {
 }
 
 export async function usuarios() { return (await lerJSON(USUARIOS, { usuarios: [] })).dados; }
-export async function salvarUsuarios(d) { await gravarJSON(USUARIOS, d); }
+export async function salvarUsuarios(d) { await gravarJSON(USUARIOS, d); cacheU = null; }
+// para as leituras frequentes (dados do painel): cadastro em memória por 30 s
+let cacheU = null;
+async function usuariosRecentes() {
+  if (!cacheU || Date.now() - cacheU.t > 30e3) cacheU = { t: Date.now(), d: await usuarios() };
+  return cacheU.d;
+}
 export const ehAdminEmail = email => ADMINS.includes(String(email).toLowerCase());
 
 // ---------------------------------------------------------------- senha
@@ -75,7 +81,7 @@ export const cookieSair = `${COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; M
 export async function usuarioAtual(req) {
   const s = lerSessao(req);
   if (!s) return null;
-  const d = await usuarios();
+  const d = await usuariosRecentes();
   const u = d.usuarios.find(x => x.email === s.e);
   return u && u.status === "aprovado" ? u : null;
 }
