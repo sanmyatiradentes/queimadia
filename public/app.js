@@ -449,7 +449,7 @@ async function iniciarMapa() {
   m.addLayer({id: "alertas", type: "circle", source: "alertas", paint: {"circle-radius": raio, "circle-color": "rgba(255,122,0,.15)", "circle-stroke-color": "#ff7a00", "circle-stroke-width": 2}});
   m.addLayer({id: "area", type: "line", source: "area", paint: {"line-color": "#ffdf00", "line-width": 2.5}});
   m.addLayer({id: "fumaca", type: "line", source: "fumaca", paint: {"line-color": "#8d6e63", "line-width": 2, "line-opacity": .8, "line-dasharray": [2, 2]}});
-  const corMud = ["match", ["get", "fonte"], "ambos", "#ff1744", "radar", "#00b8d4", "#ffd600"];
+  const corMud = ["match", ["get", "fonte"], "ambos", "#ffffff", "radar", "#00b8d4", "#ffd600"];
   m.addLayer({id: "mudancas", type: "fill", source: "mudancas", paint: {"fill-color": corMud, "fill-opacity": 0.35}});
   m.addLayer({id: "mudancas-l", type: "line", source: "mudancas", paint: {"line-color": corMud, "line-width": 1.6}});
   const corOp = ["match", ["get", "op"], "VIVO", "#7b1fa2", "TIM", "#1565c0", "CLARO", "#c62828", "#455a64"];
@@ -461,15 +461,14 @@ async function iniciarMapa() {
     "circle-stroke-color": "#ba68c8", "circle-stroke-width": 3, "circle-stroke-opacity": 0.9}});
   m.addLayer({id: "vento", type: "line", source: "vento", layout: {"line-cap": "round"},
     paint: {"line-width": 1.6, "line-color": ["interpolate", ["linear"], ["get", "v"], 0, "#90caf9", 10, "#1e88e5", 20, "#3949ab", 35, "#b71c1c"]}});
-  m.addLayer({id: "brmais", type: "circle", source: "brmais", layout: {visibility: "none"}, paint: {
-    "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 2, 12, 6], "circle-color": ["match", ["get", "t"], "C", BRM_COR.C, "F", BRM_COR.F, BRM_COR.I],
-    "circle-stroke-color": "#000", "circle-stroke-width": .5}});
-  m.addLayer({id: "desm-res", type: "circle", source: "desm-res", maxzoom: 9, layout: {visibility: "none"}, paint: {
-    "circle-radius": ["interpolate", ["linear"], ["get", "n"], 1, 2, 20, 5, 200, 10], "circle-color": ["match", ["get", "g"], "G", BRM_COR.G, BRM_COR.D],
-    "circle-opacity": .75, "circle-stroke-color": "#000", "circle-stroke-width": .3}}, "brmais");
-  m.addLayer({id: "desm", type: "circle", source: "desm", minzoom: 9, layout: {visibility: "none"}, paint: {
-    "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 3, 14, 7], "circle-color": ["match", ["get", "t"], "G", BRM_COR.G, BRM_COR.D],
-    "circle-stroke-color": "#000", "circle-stroke-width": .5}}, "brmais");
+  for (const k of Object.keys(BRM_COR)) if (!m.hasImage("brm-" + k)) m.addImage("brm-" + k, iconeForma(BRM_FORMA[k], BRM_COR[k], BRM_BORDA[k]), {pixelRatio: 2});
+  const simb = (img, tam, extra = {}) => ({visibility: "none", "icon-image": img, "icon-size": tam, "icon-allow-overlap": true, "icon-ignore-placement": true, ...extra});
+  m.addLayer({id: "brmais", type: "symbol", source: "brmais", layout: simb(["match", ["get", "t"], "C", "brm-C", "F", "brm-F", "brm-I"],
+    ["interpolate", ["linear"], ["zoom"], 5, .45, 12, 1], {"symbol-sort-key": ["match", ["get", "t"], "I", 3, "F", 2, 1]})});
+  m.addLayer({id: "desm-res", type: "symbol", source: "desm-res", maxzoom: 9, layout: simb(["match", ["get", "g"], "G", "brm-G", "brm-D"],
+    ["interpolate", ["linear"], ["get", "n"], 1, .35, 20, .6, 200, 1.1]), paint: {"icon-opacity": .8}}, "brmais");
+  m.addLayer({id: "desm", type: "symbol", source: "desm", minzoom: 9, layout: simb(["match", ["get", "t"], "G", "brm-G", "brm-D"],
+    ["interpolate", ["linear"], ["zoom"], 9, .5, 14, 1])}, "brmais");
   m.on("click", "desm", ev => { if (Q.modoPonto) return; const p = ev.features[0].properties, a = DESM.porId.get(String(p.id));
     if (a) new maplibregl.Popup({maxWidth: "300px"}).setLngLat(ev.lngLat).setHTML(popupDesm(a)).addTo(m); });
   m.on("click", "desm-res", ev => { if (Q.modoPonto) return; const p = ev.features[0].properties;
@@ -663,8 +662,8 @@ function montarControles() {
   el.addEventListener("input", e => { if (e.target.id === "ventoSl") { Q.ventoHora = +e.target.value; desenharVento(); } });
   $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "mostrar" : "ocultar"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };
   if (matchMedia("(max-width:640px)").matches) $("#ctlRec").click();
-  $("#legenda").innerHTML = `<b style="font-size:12px">Prioridade de verificação</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
-    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div><i style="background:#8e24aa"></i>Lixão/vazadouro</div><div><i style="background:#fff;border:2px solid #5e35b1"></i>ERB (zoom 7+): <span style="color:#7b1fa2">Vivo</span> · <span style="color:#1565c0">TIM</span> · <span style="color:#c62828">Claro</span></div><div><b style="font-size:11px">Alerta de mudança:</b></div><div><i style="background:#ffd600;border-radius:2px"></i>Óptico · <i style="background:#00b8d4;border-radius:2px;margin-left:4px"></i>Radar · <i style="background:#ff1744;border-radius:2px;margin-left:4px"></i>Ambos</div><div><i style="background:transparent;border:2px solid #ba68c8"></i>Fogo a até 1 km de lixão</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
+  $("#legenda").innerHTML = `<div class="nota" style="font-size:11px;margin-bottom:4px"><b>Pela forma:</b> ● evento · ○ alerta de agora · ▭ área de mudança${Q.usuario ? " · ◆ ■ Brasil MAIS" : ""}</div><b style="font-size:12px">Prioridade de verificação (círculos cheios)</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
+    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div><i style="background:#8e24aa"></i>Lixão/vazadouro</div><div><i style="background:#fff;border:2px solid #5e35b1"></i>ERB (zoom 7+): <span style="color:#7b1fa2">Vivo</span> · <span style="color:#1565c0">TIM</span> · <span style="color:#c62828">Claro</span></div><div><b style="font-size:11px">Alerta de mudança (áreas):</b></div><div><i style="background:#ffd600;border-radius:2px"></i>Óptico · <i style="background:#00b8d4;border-radius:2px;margin-left:4px"></i>Radar · <i style="background:#fff;border:1px solid #777;border-radius:2px;margin-left:4px"></i>Ambos</div><div><i style="background:transparent;border:2px solid #ba68c8"></i>Fogo a até 1 km de lixão</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
 }
 
 // ------------------------------------------------------------ ocorrências (tabela)
@@ -933,7 +932,22 @@ async function detectarModo() {
 // ------------------------------------------------------------ área restrita (login) e alertas Brasil MAIS
 // Os alertas do Brasil MAIS são de convênio: ficam no armazenamento privado e só chegam a usuários aprovados.
 const BRM = {meta: null, lista: [], porId: new Map(), vis: {C: true, F: true, I: true, D: true, G: true}, ano: ""};
-const BRM_COR = {C: "#ff8a65", F: "#ff1744", I: "#ffea00", D: "#76ff03", G: "#e040fb"};
+// cores fora da escala de prioridade (amarelo → vinho) e formas próprias: losango = fogo, quadrado = desmatamento
+const BRM_COR = {C: "#b388ff", F: "#ff00d4", I: "#ffffff", D: "#76ff03", G: "#00e5ff"};
+const BRM_FORMA = {C: "losango", F: "losango", I: "losango", D: "quadrado", G: "quadrado"};
+const BRM_BORDA = {C: "#311b92", F: "#4a0040", I: "#ff00d4", D: "#1b5e20", G: "#004d61"};
+// ícone desenhado em canvas (losango ou quadrado), para a camada de símbolos
+function iconeForma(forma, cor, borda, lado = 44) {
+  const c = document.createElement("canvas"); c.width = c.height = lado; const x = c.getContext("2d"), m = lado / 2, b = forma === "losango" ? 5 : 7;
+  x.beginPath();
+  if (forma === "losango") { x.moveTo(m, 3); x.lineTo(lado - 3, m); x.lineTo(m, lado - 3); x.lineTo(3, m); } else x.rect(b, b, lado - 2 * b, lado - 2 * b);
+  x.closePath(); x.fillStyle = cor; x.fill(); x.lineWidth = forma === "losango" && cor === "#ffffff" ? 7 : 4; x.strokeStyle = borda; x.stroke();
+  return x.getImageData(0, 0, lado, lado);
+}
+// a mesma forma em SVG, para a legenda e o menu de camadas
+const svgForma = (k, t = 14) => BRM_FORMA[k] === "losango"
+  ? `<svg width="${t}" height="${t}" viewBox="0 0 22 22" style="vertical-align:-2px;margin-right:4px;flex:none"><path d="M11 1.5 20.5 11 11 20.5 1.5 11Z" fill="${BRM_COR[k]}" stroke="${BRM_BORDA[k]}" stroke-width="${k === "I" ? 3.5 : 2}"/></svg>`
+  : `<svg width="${t}" height="${t}" viewBox="0 0 22 22" style="vertical-align:-2px;margin-right:4px;flex:none"><rect x="3.5" y="3.5" width="15" height="15" fill="${BRM_COR[k]}" stroke="${BRM_BORDA[k]}" stroke-width="2"/></svg>`;
 const DESM = {meta: null, celulas: new Set(), cel: new Map(), carregando: new Map(), porId: new Map()};
 const DESM_TIPOS_D = ["R", "D", "A", "S", "Q"];
 const BRM_RAIO_KM = 5, BRM_DIAS_ANTES = 30, BRM_DIAS_DEPOIS = 60;
@@ -970,15 +984,16 @@ async function carregarBrmais() {
   m.getSource("brmais").setData({type: "FeatureCollection",
     features: BRM.lista.map(a => ({type: "Feature", properties: {id: a[0], t: a[1], y: a[4].slice(0, 4)}, geometry: {type: "Point", coordinates: [a[6], a[5]]}}))});
   const anos = [...new Set([...Object.keys(BRM.meta.anos), ...(DESM.meta ? DESM.meta.resumo.map(r => r[2]) : [])])].sort().reverse();
-  const it = (b, t) => `<label><input type="checkbox" data-b="${b}" checked><span class="sw" style="background:${BRM_COR[b]}"></span>${t}</label>`;
+  const it = (b, t) => `<label><input type="checkbox" data-b="${b}" checked>${svgForma(b)}${t}</label>`;
   $("#ctlCorpo h4 + label input[data-c='eventos']")?.closest("label").previousElementSibling.insertAdjacentHTML("beforebegin",
     `<div class="brm-grupo"><h4>Brasil MAIS <span class="tarja">RESTRITO</span></h4>
       ${it("F", "Foco de queimada")}${it("I", "Foco de queimada por IA (início provável)")}${it("C", "Cicatriz de queimada")}
       ${DESM.meta ? it("D", "Desmatamento (corte raso, degradação, ramal)") + it("G", "Garimpo / extração mineral") : ""}
       <label class="brm-ano">Ano da imagem <select id="brmAno"><option value="">todos</option>${anos.map(a => `<option>${a}</option>`).join("")}</select></label>
       <p class="nota">Desmatamento: aproxime o mapa para ver cada alerta.</p></div>`);
-  $("#legenda")?.insertAdjacentHTML("beforeend", `<div><b style="font-size:11px">Brasil MAIS (restrito):</b></div><div><i style="background:${BRM_COR.F}"></i>Foco · <i style="background:${BRM_COR.I};margin-left:4px"></i>Foco IA · <i style="background:${BRM_COR.C};margin-left:4px"></i>Cicatriz</div>`
-    + (DESM.meta ? `<div><i style="background:${BRM_COR.D}"></i>Desmatamento · <i style="background:${BRM_COR.G};margin-left:4px"></i>Garimpo</div>` : ""));
+  $("#legenda")?.insertAdjacentHTML("beforeend", `<div><b style="font-size:11px">Brasil MAIS (restrito) · losango = fogo:</b></div>
+    <div>${svgForma("F")}Foco · ${svgForma("I")}Foco por IA · ${svgForma("C")}Cicatriz</div>`
+    + (DESM.meta ? `<div><b style="font-size:11px">quadrado = desmatamento:</b></div><div>${svgForma("D")}Desmatamento · ${svgForma("G")}Garimpo</div>` : ""));
   filtrarBrmais();
   if (Q.sel) selecionar(Q.sel, false);
 }
