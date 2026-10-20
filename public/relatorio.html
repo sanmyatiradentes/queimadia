@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Relatório do evento — Fogo Forense</title>
+<link rel="icon" href="img/dptc.png">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<link rel="stylesheet" href="estilo.css">
+<style>
+/* relatório: mesmo visual do painel (estilo.css), ajustado para leitura e impressão A4 */
+.rel{max-width:1000px}
+.rel .cartao h2{margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rel .cartao h2 .num-sec{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--azul-escuro);color:#fff;font-size:13px}
+.rel-capa{border-top:4px solid var(--dptc-vermelho)}
+.rel-capa h1{font-size:22px;margin:2px 0 4px}
+.rel-capa .sub{color:var(--cinza-texto);font-size:13px;margin:0}
+.rel-capa .linha-meta{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;margin-top:10px}
+.rel-capa .linha-meta b{color:var(--azul-escuro)}
+.rel .rotulo{font-size:12.5px;font-weight:700;color:var(--azul-escuro);margin:14px 0 6px}
+.rel table.kv td:first-child{width:34%;font-weight:600;color:var(--cinza-texto);background:var(--cinza-claro)}
+.rel .tabela td.n{text-align:right;font-family:var(--mono);white-space:nowrap}
+.rel .tabela{font-size:13px}
+.figs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0}
+.figs figure{margin:0;border:1px solid var(--cinza-borda);border-radius:8px;padding:8px;background:#fff;break-inside:avoid}
+.figs figure.larga{grid-column:1/-1}
+.figs figcaption{font-size:12px;color:var(--cinza-texto);margin-top:6px}
+.figs figcaption b{color:var(--azul-escuro)}
+.figs .mapa{height:300px;border-radius:6px;overflow:hidden}
+.figs .mapa.alto{height:400px}
+.figs img{width:100%;display:block;border-radius:6px}
+.leg-rel{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;margin-top:6px;color:var(--cinza-texto)}
+.leg-rel i{display:inline-block;width:12px;height:12px;margin-right:4px;vertical-align:-2px;border-radius:3px}
+.res-sim{color:var(--dptc-vermelho);font-weight:700}
+.res-nao{color:var(--verde);font-weight:600}
+.res-nd{color:var(--laranja);font-weight:600}
+.restrito{border:1px solid #e6b3ae;border-left:4px solid var(--dptc-vermelho);background:#fff8f7}
+.tarja{display:inline-block;background:var(--dptc-vermelho);color:#fff;font-size:11px;font-weight:700;letter-spacing:.05em;border-radius:99px;padding:2px 9px}
+.faixa-restrito{background:var(--dptc-vermelho);color:#fff;font-weight:700;text-align:center;padding:7px;border-radius:8px;margin-bottom:14px;font-size:13px;letter-spacing:.03em}
+.carregando{color:var(--laranja);font-style:italic}
+.glossario{display:grid;grid-template-columns:1fr 1fr;gap:4px 22px;font-size:13px}
+.glossario dt{font-weight:700;color:var(--azul-escuro);margin-top:6px}
+.glossario dd{margin:0}
+.rel .confronto h3{display:none}
+.ctl-rel{display:flex;align-items:center;gap:6px;font-size:13px;color:#fff}
+.ctl-rel input{width:76px;padding:4px 6px;border-radius:6px;border:0}
+.rodape-rel{font-size:12px;color:var(--cinza-texto);text-align:center;margin:10px 0 30px}
+@page{size:A4;margin:14mm 11mm 15mm 11mm;
+  @bottom-left{content:"Fogo Forense · NIPED/PCAM · DPTC — documento automatizado, não substitui laudo pericial";font:7.5pt "Segoe UI",sans-serif;color:#5b6675}
+  @bottom-right{content:"Pág. " counter(page) " / " counter(pages);font:8pt "Segoe UI",sans-serif;color:#5b6675}}
+@media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{background:#fff;font-size:12.5px}
+  .topo{position:static}
+  .topo .nao-imprime{display:none!important}
+  .rel{padding:10px 0 0;max-width:none}
+  .cartao{break-inside:auto;padding:12px 14px;margin-bottom:10px}
+  .cartao.inteiro,figure,.tabela tr,.indicador{break-inside:avoid}
+  .quebra{break-before:page}
+  a{color:inherit;text-decoration:none}
+}
+@media (max-width:700px){.figs,.glossario{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="topo">
+  <a class="marca" href="./"><img src="img/pcam.png" alt="Polícia Civil do Amazonas"><img src="img/dptc.png" alt="Departamento de Polícia Técnico-Científica">
+    <span class="nome">Fogo Forense<small>NIPED · PCAM/DPTC · Relatório analítico de evento de fogo</small></span></a>
+  <span class="espaco"></span>
+  <label class="ctl-rel nao-imprime" title="Raio do círculo usado como área de interesse (AI), em metros">Raio da AI (m) <input type="number" id="raio" min="100" max="5000" step="100" value="1000"></label>
+  <button type="button" class="botao claro pequeno nao-imprime" id="refazer">Recalcular</button>
+  <span class="ao-vivo nao-imprime" id="estado"><i></i><span id="estadoTxt">Montando…</span></span>
+  <button type="button" class="botao claro pequeno nao-imprime" id="imprimir">Imprimir / salvar PDF</button>
+</header>
+<main class="conteudo rel" id="folha"><div class="cartao"><p class="carregando">Montando o relatório…</p></div></main>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
+<script src="config.js"></script>
+<script src="relatorio.js"></script>
+</body>
+</html>
