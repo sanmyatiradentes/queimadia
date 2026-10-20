@@ -198,7 +198,6 @@ function selecionar(id, voar) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">${Q.est.analises?.[e.id] ? `<button type="button" class="botao fogo" id="fPronta">Ver análise NDVI${Q.est.analises[e.id].quebra ? (Q.est.analises[e.id].situacao === "provavel" ? " · queda provável " : " · quebra ") + dBR(Q.est.analises[e.id].quebra) : ""}</button>` : ""}
       ${Q.estatico ? (Q.est.analises?.[e.id] ? "" : `<span class="selo pend" title="O motor calcula a análise de NDVI dos eventos com prioridade ≥ 70, começando pelos mais recentes e mais perto de Manaus.">NDVI na fila de cálculo</span>`) : `<button type="button" class="botao ${Q.est.analises?.[e.id] ? "secundario" : "fogo"}" id="fAnalisar">Analisar NDVI agora</button>`}
       <a class="botao secundario" href="https://www.ventusky.com/?p=${lat};${lon};9&l=radar" target="_blank" rel="noopener" title="Tempo agora, radar e previsão no local do evento">Abrir no Ventusky</a>
-      <button type="button" class="botao secundario" id="fRelatorio" title="Relatório analítico imprimível (PDF) deste evento">Gerar relatório</button>
       <button type="button" class="botao secundario" id="fCopiar">Copiar resumo</button>
       <button type="button" class="botao" id="fRelatorio" title="Relatório imprimível com área de interesse, bases consultadas e matriz de hipóteses">Gerar relatório</button></div></div>
     ${porque}
@@ -234,7 +233,6 @@ function selecionar(id, voar) {
         <p class="nota" style="margin-top:10px">A prioridade soma indicadores objetivos de fontes públicas para ordenar a verificação; não é grau de certeza. Não substitui a perícia de local nem os procedimentos legais.</p></div>
     </div>`;
   if ($("#fAnalisar")) $("#fAnalisar").onclick = () => window.abrirAnalise?.(e);
-  $("#fRelatorio").onclick = () => window.open("relatorio.html?id=" + encodeURIComponent(e.id), "_blank");
   if ($("#fPronta")) $("#fPronta").onclick = () => window.mostrarAnalisePronta?.(e.id);
   $("#fRelatorio").onclick = () => {
     try { localStorage.setItem("ff_rel_" + e.id, JSON.stringify({porque, confronto: blocoConfronto(e), clima: blocoClima(e), cronologia: blocoCronologia(e),
@@ -867,7 +865,6 @@ const BRM_COR = {C: "#ff8a65", F: "#ff1744", I: "#ffea00", D: "#76ff03", G: "#e0
 const DESM = {meta: null, celulas: new Set(), cel: new Map(), carregando: new Map(), porId: new Map()};
 const DESM_TIPOS_D = ["R", "D", "A", "S", "Q"];
 const BRM_RAIO_KM = 5, BRM_DIAS_ANTES = 30, BRM_DIAS_DEPOIS = 60;
-Object.assign(window, {BRM, DESM});   // o relatório (relatorio.html) lê os alertas daqui, sem nova consulta
 async function iniciarConta() {
   let u = null;
   try { const r = await fetch("api/conta?acao=eu", {credentials: "same-origin"}); if (r.ok) u = (await r.json()).usuario; } catch (e) {}
