@@ -37,6 +37,14 @@ body{display:grid;place-items:center;min-height:100vh;padding:24px 16px}
     <button class="botao" type="submit">Entrar</button>
   </form>
 
+  <form id="fTroca" hidden autocomplete="on">
+    <p class="nota" style="margin:0">Sua senha foi redefinida pela administração. Crie agora uma senha nova, só sua.</p>
+    <input type="email" name="email" autocomplete="username" hidden>
+    <label>Senha nova (mínimo 10 caracteres)<input type="password" name="nova" required minlength="10" autocomplete="new-password"></label>
+    <label>Repita a senha nova<input type="password" name="nova2" required minlength="10" autocomplete="new-password"></label>
+    <button class="botao" type="submit">Salvar senha e entrar</button>
+  </form>
+
   <form id="fCad" hidden autocomplete="on">
     <label>Nome completo<input name="nome" required maxlength="120" autocomplete="name"></label>
     <label>E-mail<input type="email" name="email" required autocomplete="email"></label>
@@ -71,12 +79,28 @@ async function enviar(acao, corpo, botao) {
   } catch (e) { return [false, {erro: "Sem conexão. Tente novamente."}]; }
   finally { botao.disabled = false; }
 }
+let senhaAtual = "";
+const destino = () => { const v = new URLSearchParams(location.search).get("voltar") || ""; return /^[a-z][\w.\-\/]*(\?[\w=&%.\-]*)?$/i.test(v) ? v : "./"; };
 $("#fEntrar").onsubmit = async e => {
   e.preventDefault();
-  const [ok, d] = await enviar("entrar", dados(e.target), e.submitter);
+  const f = dados(e.target);
+  const [ok, d] = await enviar("entrar", f, e.submitter);
+  if (!ok && d.trocar_senha) {   // senha temporária: troca obrigatória antes de entrar
+    senhaAtual = f.senha; $("#fTroca").email.value = f.email;
+    $("#fEntrar").hidden = true; $("#troca").hidden = true; $("#fTroca").hidden = false; msg("", ""); $("#fTroca").nova.focus(); return;
+  }
   if (!ok) return msg(d.erro, "erro");
   const v = new URLSearchParams(location.search).get("voltar") || "";
   location.href = /^[a-z][\w.\-\/]*(\?[\w=&%.\-]*)?$/i.test(v) ? v : "./";
+};
+$("#fTroca").onsubmit = async e => {
+  e.preventDefault();
+  const f = dados(e.target);
+  if (f.nova !== f.nova2) return msg("As duas senhas não são iguais.", "erro");
+  const [ok, d] = await enviar("trocar", {email: f.email, senha: senhaAtual, nova: f.nova}, e.submitter);
+  if (!ok) return msg(d.erro, "erro");
+  senhaAtual = "";
+  if (d.usuario) location.href = destino(); else { msg("Senha trocada. Seu cadastro ainda aguarda aprovação.", "ok"); e.target.hidden = true; }
 };
 $("#fCad").onsubmit = async e => {
   e.preventDefault();

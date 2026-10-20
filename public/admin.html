@@ -27,11 +27,20 @@
     <div class="rolagem"><table class="tabela" id="tab"></table></div>
   </div>
 </main>
+<dialog id="dlgSenha" style="max-width:440px;border:1px solid var(--cinza-borda);border-radius:10px;padding:20px">
+  <h2 style="margin:0 0 6px">Senha temporária</h2>
+  <p class="nota" id="dlgPara" style="margin:0 0 10px"></p>
+  <div style="display:flex;gap:8px;align-items:center"><code id="dlgTemp" style="font-size:22px;font-weight:700;letter-spacing:.06em;background:var(--cinza-claro);padding:8px 12px;border-radius:8px;flex:1;text-align:center"></code>
+    <button type="button" class="botao secundario pequeno" id="dlgCopiar">Copiar</button></div>
+  <p class="nota" style="margin:12px 0">Envie à pessoa por um canal seguro (de preferência pessoalmente ou por mensagem direta). No próximo acesso ela entra com essa senha e é obrigada a criar uma nova. Esta senha não será mostrada de novo.</p>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="botao secundario pequeno" id="dlgMsg">Copiar mensagem pronta</button><button type="button" class="botao pequeno" id="dlgFechar">Fechar</button></div>
+</dialog>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const dt = s => s ? new Date(s).toLocaleString("pt-BR", {timeZone: "America/Manaus"}) : "–";
-let lista = [], filtro = "pendente";
+let lista = [], filtro = "pendente", euEmail = "";
+fetch("api/conta?acao=eu", {credentials: "same-origin"}).then(r => r.json()).then(d => { euEmail = d.usuario?.email || ""; render(); }).catch(() => {});
 async function carregar() {
   const r = await fetch("api/conta?acao=lista", {credentials: "same-origin"});
   if (r.status === 403) { location.href = "entrar.html?voltar=admin.html"; return; }
@@ -46,7 +55,8 @@ function render() {
   $("#tab").innerHTML = `<thead><tr><th>Nome</th><th>E-mail</th><th>Órgão</th><th>Cargo</th><th>Matrícula</th><th>Pedido em</th><th>Último acesso</th><th>Papel</th><th>Ações</th></tr></thead><tbody>`
     + (l.map(u => `<tr><td>${esc(u.nome)}</td><td>${esc(u.email)}</td><td>${esc(u.orgao)}</td><td>${esc(u.cargo)}</td><td>${esc(u.matricula || "")}</td>
       <td class="mono">${dt(u.criado_em)}</td><td class="mono">${dt(u.ultimo_acesso)}</td><td>${u.papel === "admin" ? '<span class="selo">admin</span>' : "usuário"}</td>
-      <td style="white-space:nowrap">${acoes(u)}</td></tr>`).join("") || `<tr><td colspan="9" class="nota">Nada nesta lista.</td></tr>`) + "</tbody>";
+      <td style="white-space:nowrap">${acoes(u)}${u.email !== euEmail ? `<button class="botao secundario pequeno" data-r="${esc(u.email)}" title="Gera uma senha temporária; a pessoa cria outra no próximo acesso">Redefinir senha</button>` : ""}
+      ${u.trocar_senha ? `<br><span class="nota">aguarda troca da senha (redefinida em ${dt(u.senha_redefinida_em)})</span>` : ""}</td></tr>`).join("") || `<tr><td colspan="9" class="nota">Nada nesta lista.</td></tr>`) + "</tbody>";
 }
 function acoes(u) {
   const b = (s, t, cls = "secundario") => `<button class="botao ${cls} pequeno" data-e="${esc(u.email)}" data-s="${s}">${t}</button> `;
@@ -55,6 +65,18 @@ function acoes(u) {
   return b("aprovado", "Reativar");
 }
 $("#tab").addEventListener("click", async e => {
+  const rd = e.target.closest("button[data-r]");
+  if (rd) {
+    const alvo = lista.find(u => u.email === rd.dataset.r);
+    if (!confirm(`Redefinir a senha de ${alvo?.nome || rd.dataset.r} (${rd.dataset.r})?\n\nA senha atual deixa de funcionar na hora.`)) return;
+    rd.disabled = true;
+    const r = await fetch("api/conta?acao=redefinir", {method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/json"}, body: JSON.stringify({email: rd.dataset.r})});
+    const d = await r.json(); rd.disabled = false;
+    if (!r.ok) return alert(d.erro || "Erro.");
+    $("#dlgTemp").textContent = d.temporaria; $("#dlgPara").textContent = `Para ${alvo?.nome || ""} · ${rd.dataset.r}`;
+    $("#dlgMsg").dataset.msg = `Olá, ${(alvo?.nome || "").split(" ")[0]}. Sua senha do Fogo Forense foi redefinida. Entre em ${location.origin}/entrar.html com o seu e-mail e a senha temporária ${d.temporaria} — no primeiro acesso o sistema vai pedir que você crie uma senha nova.`;
+    $("#dlgSenha").showModal(); carregar(); return;
+  }
   const bt = e.target.closest("button[data-s]"); if (!bt) return;
   if (bt.dataset.s !== "aprovado" && !confirm(`Confirmar: ${bt.textContent.trim()} ${bt.dataset.e}?`)) return;
   bt.disabled = true;
@@ -66,6 +88,10 @@ $("#tab").addEventListener("click", async e => {
 });
 $("#filtro").addEventListener("click", e => { const c = e.target.closest(".chip"); if (!c) return;
   document.querySelectorAll("#filtro .chip").forEach(x => x.setAttribute("aria-pressed", x === c)); filtro = c.dataset.s; render(); });
+const copiar = async (t, b) => { try { await navigator.clipboard.writeText(t); const o = b.textContent; b.textContent = "Copiado"; setTimeout(() => b.textContent = o, 1500); } catch (x) { prompt("Copie:", t); } };
+$("#dlgCopiar").onclick = e => copiar($("#dlgTemp").textContent, e.target);
+$("#dlgMsg").onclick = e => copiar(e.target.dataset.msg, e.target);
+$("#dlgFechar").onclick = () => { $("#dlgTemp").textContent = ""; $("#dlgSenha").close(); };
 carregar();
 </script>
 </body>
