@@ -958,8 +958,10 @@ async function iniciarConta() {
   if (!u) return;
   $("#conta").innerHTML = `<span class="quem" title="${esc(u.email)}">${esc(u.nome.split(" ")[0])}</span>
     ${u.papel === "admin" ? `<a class="botao claro pequeno" href="admin.html">Administração</a>` : ""}
+    <button type="button" class="botao claro pequeno" id="btnSenha" title="Trocar a sua senha"><span class="txt-longo">Trocar senha</span><span class="txt-curto">Senha</span></button>
     <button type="button" class="botao claro pequeno" id="btnSair">Sair</button>`;
   $("#btnSair").onclick = async () => { await fetch("api/conta?acao=sair", {method: "POST", credentials: "same-origin"}); location.reload(); };
+  $("#btnSenha").onclick = () => { const d = $("#dlgTroca"); d.querySelector("form").reset(); $("#trMsg").textContent = ""; d.showModal(); };
   carregarBrmais();
 }
 async function restrito(qual) {
@@ -1113,3 +1115,29 @@ async function atualizarChuva() {
     const h = $("#chuvaHora"); if (h) h.textContent = "· " + new Date(q.time * 1000).toLocaleTimeString("pt-BR", {timeZone: "America/Manaus", hour: "2-digit", minute: "2-digit"});
   } catch (e) { console.warn("RainViewer indisponível", e); }
 }
+
+// ------------------------------------------------------------ trocar a própria senha
+document.body.insertAdjacentHTML("beforeend", `<dialog id="dlgTroca" style="max-width:400px;width:calc(100% - 32px);border:1px solid var(--cinza-borda);border-radius:10px;padding:20px">
+  <form method="dialog" style="display:grid;gap:10px">
+    <h2 style="margin:0">Trocar a sua senha</h2>
+    <label style="display:grid;gap:4px;font-size:13px;font-weight:600">Senha atual<input type="password" name="senha" required autocomplete="current-password"></label>
+    <label style="display:grid;gap:4px;font-size:13px;font-weight:600">Senha nova (mínimo 10 caracteres)<input type="password" name="nova" required minlength="10" autocomplete="new-password"></label>
+    <label style="display:grid;gap:4px;font-size:13px;font-weight:600">Repita a senha nova<input type="password" name="nova2" required minlength="10" autocomplete="new-password"></label>
+    <p id="trMsg" class="nota" style="margin:0;color:var(--vermelho)"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end"><button type="button" class="botao secundario pequeno" id="trCancelar">Cancelar</button><button type="submit" class="botao pequeno" id="trSalvar">Salvar</button></div>
+  </form></dialog>`);
+$("#trCancelar").onclick = () => $("#dlgTroca").close();
+$("#dlgTroca form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const f = Object.fromEntries(new FormData(ev.target)), m = $("#trMsg");
+  if (f.nova !== f.nova2) return m.textContent = "As duas senhas novas não são iguais.";
+  $("#trSalvar").disabled = true; m.textContent = "";
+  try {
+    const r = await fetch("api/conta?acao=trocar", {method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({email: Q.usuario?.email, senha: f.senha, nova: f.nova})});
+    const d = await r.json();
+    if (!r.ok) { m.textContent = d.erro || "Não foi possível trocar a senha."; return; }
+    $("#dlgTroca").close(); toast("Senha trocada. Use a nova senha no próximo acesso.");
+  } catch (x) { m.textContent = "Sem conexão. Tente de novo."; }
+  finally { $("#trSalvar").disabled = false; }
+});
