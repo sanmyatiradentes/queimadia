@@ -52,13 +52,24 @@ export default async function handler(req, res) {
       const d = await usuarios();
       const u = d.usuarios.find(x => x.email === email);
       if (!u || !conferirSenha(String(b.senha || ""), u.senha)) {
+        console.warn("entrar recusado:", !u ? "e-mail não cadastrado" : "senha não confere");
         t.n += 1; if (t.n >= 5) { t.ate = Date.now() + 10 * 60e3; t.n = 0; } tentativas.set(email, t);
         await new Promise(r => setTimeout(r, 600));
         return json(res, 401, { erro: "E-mail ou senha incorretos." });
       }
       tentativas.delete(email);
-      if (u.trocar_senha && u.status === "aprovado")
-        return json(res, 403, { erro: "Crie uma senha nova para continuar.", trocar_senha: true });
+      if (u.trocar_senha && u.status === "aprovado") {
+        // senha temporária conferida: a nova, se veio junto, é gravada nesta mesma chamada
+        const nova = String(b.nova || "");
+        if (!nova) return json(res, 403, { erro: "Crie uma senha nova para continuar.", trocar_senha: true });
+        if (nova.length < 10) return json(res, 400, { erro: "A senha nova precisa ter pelo menos 10 caracteres.", trocar_senha: true });
+        if (nova === String(b.senha || "")) return json(res, 400, { erro: "A senha nova precisa ser diferente da temporária.", trocar_senha: true });
+        u.senha = hashSenha(nova); delete u.trocar_senha;
+        u.senha_trocada_em = u.ultimo_acesso = new Date().toISOString();
+        await salvarUsuarios(d);
+        console.log("senha trocada após redefinição");
+        return json(res, 200, { ok: true, usuario: publico(u) }, { "Set-Cookie": cookieSessao(criarSessao(u.email)) });
+      }
       if (u.status !== "aprovado") {
         const msg = { pendente: "Seu cadastro aguarda aprovação da administração.", recusado: "Seu cadastro não foi aprovado.",
           desativado: "Seu acesso está desativado." }[u.status] || "Acesso indisponível.";
@@ -79,6 +90,7 @@ export default async function handler(req, res) {
       const d = await usuarios();
       const u = d.usuarios.find(x => x.email === email);
       if (!u || !conferirSenha(String(b.senha || ""), u.senha)) {
+        console.warn("trocar recusado:", !u ? "e-mail não cadastrado" : "senha atual não confere");
         t.n += 1; if (t.n >= 5) { t.ate = Date.now() + 10 * 60e3; t.n = 0; } tentativas.set(email, t);
         await new Promise(r => setTimeout(r, 600));
         return json(res, 401, { erro: "Senha atual (ou temporária) incorreta." });

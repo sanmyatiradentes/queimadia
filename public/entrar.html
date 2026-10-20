@@ -99,10 +99,14 @@ $("#fTroca").onsubmit = async e => {
   e.preventDefault();
   const f = dados(e.target);
   if (f.nova !== f.nova2) return msg("As duas senhas não são iguais.", "erro");
-  const [ok, d] = await enviar("trocar", {email: f.email, senha: senhaAtual, nova: f.nova}, e.submitter);
-  if (!ok) return msg(d.erro, "erro");
+  // mesma chamada do login: confere a temporária e grava a nova de uma vez
+  const [ok, d] = await enviar("entrar", {email: f.email, senha: senhaAtual, nova: f.nova}, e.submitter);
+  if (!ok) {
+    if (!d.trocar_senha) { senhaAtual = ""; e.target.hidden = true; $("#fEntrar").hidden = false; $("#troca").hidden = false; }
+    return msg(d.trocar_senha ? d.erro : (d.erro || "Não foi possível salvar.") + " Entre de novo com a senha temporária.", "erro");
+  }
   senhaAtual = "";
-  if (d.usuario) location.href = destino(); else { msg("Senha trocada. Seu cadastro ainda aguarda aprovação.", "ok"); e.target.hidden = true; }
+  location.href = destino();
 };
 $("#fCad").onsubmit = async e => {
   e.preventDefault();
