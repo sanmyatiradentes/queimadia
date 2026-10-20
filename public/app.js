@@ -380,8 +380,8 @@ const BASES = {
   mapa: {nome: "Mapa (OpenStreetMap)", tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], attr: "© OpenStreetMap"},
   satelite: {nome: "Satélite (Esri)", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], attr: "Esri, Maxar, Earthstar"},
   topo: {nome: "Topográfico (Esri)", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}"], attr: "Esri"},
-  claro: {nome: "Claro (CARTO)", tiles: ["https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"], attr: "© CARTO © OSM"},
-  escuro: {nome: "Escuro (CARTO)", tiles: ["https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"], attr: "© CARTO © OSM"},
+  claro: {nome: "Claro (Esri)", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"], attr: "Esri, HERE, Garmin", max: 16},
+  escuro: {nome: "Escuro (Esri)", tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"], attr: "Esri, HERE, Garmin", max: 16},
   s2rgb: {nome: "Sentinel-2: cor real", pc: "rgb", grupo: "sat"},
   s2fogo: {nome: "Sentinel-2: incêndios (fogo ativo)", pc: "fogo", grupo: "sat", per: "periodo_fogo",
     leg: "Cor real com o fogo ativo em vermelho/laranja (SWIR alto). Imagens mais recentes dos últimos 15 dias: só mostra o fogo que queimava na passagem do satélite."},
@@ -415,7 +415,7 @@ async function iniciarMapa() {
   m.addControl(new maplibregl.ScaleControl({unit: "metric"}), "bottom-left");
   m.addControl(new maplibregl.FullscreenControl(), "bottom-left");
   await new Promise(r => m.on("load", r));
-  for (const [k, b] of Object.entries(BASES)) if (b.tiles) m.addSource("base-" + k, {type: "raster", tiles: b.tiles, tileSize: 256, attribution: b.attr, maxzoom: 19});
+  for (const [k, b] of Object.entries(BASES)) if (b.tiles) m.addSource("base-" + k, {type: "raster", tiles: b.tiles, tileSize: 256, attribution: b.attr, maxzoom: b.max || 19});
   m.addLayer({id: "base", type: "raster", source: "base-satelite"});
   const vazio = {type: "FeatureCollection", features: []};
   const [mun, tis, ucs] = await Promise.all(["municipios", "tis", "ucs"].map(n => json(`dados/${n}.json`)));
