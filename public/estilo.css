@@ -261,3 +261,5 @@ body:not(.estatico) .so-estatico{display:none!important}
 .brm-grupo{border:1px solid #f1c6c6;background:#fff7f7;border-radius:8px;padding:4px 8px 6px;margin:6px 0}
 .brm-grupo .tarja{display:inline-block;background:#b71c1c;color:#fff;font-size:10px;font-weight:700;border-radius:4px;padding:1px 5px;vertical-align:middle}
 .brm-grupo .brm-ano{display:flex;gap:6px;align-items:center;margin-top:4px}
+.ir-coord{display:flex;gap:6px;margin:0}
+.ir-coord input{flex:1;min-width:0;font-size:14px;padding:6px 8px}

@@ -568,19 +568,62 @@ async function trocarBase(k) {
   m.removeLayer("base"); m.addLayer({id: "base", type: "raster", source: "base-" + k}, "tis");
   $("#baseLeg").hidden = true;
 }
+// ------------------------------------------------------------ coordenadas digitadas
+// Aceita decimal ("-3.347, -59.446", "-3,347 -59,446") e graus/minutos/segundos ("3°20'49,3\"S 59°26'44,9\"W", "3 20 49 S 59 26 44 W").
+function lerCoord(txt) {
+  const t = String(txt || "").trim().toUpperCase().replace(/[″”“]/g, '"').replace(/[′’‘]/g, "'").replace(/º/g, "°");
+  const gms = [...t.matchAll(/(\d+(?:[.,]\d+)?)\s*°?\s*(?:(\d+(?:[.,]\d+)?)\s*'?\s*)?(?:(\d+(?:[.,]\d+)?)\s*(?:"|'')?\s*)?([NSLEOW])/g)];
+  let lat, lon;
+  if (gms.length >= 2) {
+    const v = m => { const n = s => s ? +s.replace(",", ".") : 0, x = n(m[1]) + n(m[2]) / 60 + n(m[3]) / 3600; return /[SOW]/.test(m[4]) ? -x : x; };
+    for (const m of gms) (/[NS]/.test(m[4]) ? (lat = v(m)) : (lon = v(m)));
+  } else {
+    const nums = t.replace(/;|,\s+/g, " ").replace(/,/g, ".").match(/-?\d+(?:\.\d+)?/g);
+    if (!nums || nums.length < 2) return null;
+    [lat, lon] = nums.slice(0, 2).map(Number);
+    if (Math.abs(lat) > 30 && Math.abs(lon) <= 30) [lat, lon] = [lon, lat];   // digitou longitude primeiro
+    if (lon > 0 && lon >= 55 && lon <= 75) lon = -lon;                        // esqueceu o sinal (oeste)
+    if (lat > 2.5 && lat <= 12) lat = -lat;                                   // esqueceu o sinal (sul): o AM vai de +2,3 a −9,9
+  }
+  return Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? {lat: +lat.toFixed(6), lon: +lon.toFixed(6)} : null;
+}
+window.lerCoord = lerCoord;
+const gmsTxt = (v, p, n) => { const a = Math.abs(v), g = Math.floor(a), m = Math.floor((a - g) * 60), s = ((a - g) * 60 - m) * 60;
+  return `${g}°${m}'${s.toFixed(1).replace(".", ",")}"${v < 0 ? n : p}`; };
+function irPara(c) {
+  const m = Q.mapa, foraAM = c.lat > 2.5 || c.lat < -10.5 || c.lon < -74.5 || c.lon > -56;
+  Q.marcaPonto?.remove();
+  const hoje = new Date().toISOString().slice(0, 10);
+  const pop = new maplibregl.Popup({offset: 24, maxWidth: "300px"}).setHTML(`<b>Ponto informado</b><br><span class="mono">${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}</span><br>
+    <span class="mono">${gmsTxt(c.lat, "N", "S")} ${gmsTxt(c.lon, "E", "W")}</span>${foraAM ? `<br><b style="color:var(--vermelho)">Atenção: fora do Amazonas. Confira os sinais e a ordem (latitude, longitude).</b>` : ""}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button type="button" class="botao pequeno" id="pAnalisar">Analisar satélite aqui</button>
+    <button type="button" class="botao secundario pequeno" id="pRelatorio">Relatório deste ponto</button></div>`);
+  Q.marcaPonto = new maplibregl.Marker({color: "#ffdf00"}).setLngLat([c.lon, c.lat]).setPopup(pop).addTo(m);
+  m.flyTo({center: [c.lon, c.lat], zoom: Math.max(m.getZoom(), 14), speed: 1.6});
+  pop.on("open", () => {
+    $("#pAnalisar").onclick = () => { window.abrirAnalise?.({lat: c.lat, lon: c.lon}); setTimeout(() => $("#aRodar")?.click(), 300); };
+    $("#pRelatorio").onclick = () => window.open(`relatorio.html?lat=${c.lat}&lon=${c.lon}&data=${hoje}`, "_blank");
+  });
+  Q.marcaPonto.togglePopup();
+  maisPerto({latitude: c.lat, longitude: c.lon}, true);
+}
+
 // no exame de local: avisa qual evento está mais perto da posição do aparelho (uma vez por ativação)
 let avisouPerto = false;
-function maisPerto(c) {
-  if (avisouPerto) return; avisouPerto = true; setTimeout(() => avisouPerto = false, 10 * 60e3);
+function maisPerto(c, sempre) {
+  if (avisouPerto && !sempre) return; if (!sempre) avisouPerto = true; setTimeout(() => avisouPerto = false, 10 * 60e3);
   const l = (Q.filtrados.length ? Q.filtrados : Q.eventos).map(e => ({e, km: Math.hypot(e.lat - c.latitude, (e.lon - c.longitude) * Math.cos(c.latitude * Math.PI / 180)) * 111}))
     .sort((a, b) => a.km - b.km);
-  if (l[0]) toast(`Evento mais perto de você: ${l[0].e.mun}, ${dBR(l[0].e.ini)}, a ${br(l[0].km, 1)} km (prioridade ${l[0].e.score}). Clique no círculo para abrir a ficha.`, 9000);
+  if (l[0]) toast(`Evento mais perto de você: ${l[0].e.mun}, ${dBR(l[0].e.ini)}, a ${br(l[0].km, 1)} km (prioridade ${l[0].e.score}). Clique no círculo para abrir a ficha.`.replace("perto de você", sempre ? "perto do ponto" : "perto de você"), 9000);
 }
 function montarControles() {
   const el = $("#mapaCtl");
   el.innerHTML = `<button type="button" class="recolher" id="ctlRec" aria-expanded="true"><b>☰ Camadas do mapa</b><span>ocultar</span></button><div id="ctlCorpo">
     <p class="ctl-dica">Marque ou desmarque para <b>ligar ou desligar</b> cada camada.</p>
-    <button type="button" class="botao pequeno" id="btnAqui" style="width:100%;margin:0 0 6px" title="Exame de local: centraliza o mapa na sua posição e acompanha enquanto você se desloca">📍 Onde estou</button>
+    <div class="ctl-acoes"><button type="button" class="botao pequeno" id="btnAqui" style="flex:1" title="Exame de local: centraliza o mapa na sua posição e acompanha enquanto você se desloca">📍 Onde estou</button>
+      <button type="button" class="botao fogo pequeno" id="btnAnalisarAqui" style="flex:1" title="Pega a posição do GPS e já roda a análise de satélite do local">🛰️ Analisar onde estou</button></div>
+    <form id="irCoord" class="ir-coord" autocomplete="off"><input id="irTxt" type="text" inputmode="text" placeholder="Coordenadas: -3.347, -59.446" aria-label="Ir para coordenadas (decimal ou graus, minutos e segundos)"><button type="submit" class="botao secundario pequeno">Ir</button></form>
+    <p class="nota" style="margin:2px 0 8px;font-size:11px">Decimal ou graus/minutos/segundos, ex.: 3°20'49"S 59°26'44"W</p>
     <div class="ctl-acoes"><button type="button" class="botao secundario pequeno" id="ctlNenhuma">Desmarcar todas</button><button type="button" class="botao secundario pequeno" id="ctlPadrao">Voltar ao padrão</button></div>
     <h4>Mapa de fundo</h4>${Object.entries(BASES).filter(([, b]) => !b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}" ${k === "satelite" ? "checked" : ""}> ${b.nome}</label>`).join("")}
     <h4>Imagens de satélite recentes</h4>${Object.entries(BASES).filter(([, b]) => b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}"> ${b.nome}</label>`).join("")}
@@ -602,6 +645,19 @@ function montarControles() {
     const k = c.dataset.c, v = padrao ? (k ? CAMADAS.find(x => x[0] === k)?.[3] ?? false : true) : false;
     if (c.checked !== v) { c.checked = v; c.dispatchEvent(new Event("change", {bubbles: true})); } });
   $("#ctlNenhuma").onclick = () => marcar(false);
+  $("#btnAnalisarAqui").onclick = () => {
+    if (!navigator.geolocation) return toast("Este aparelho não informa a localização.");
+    const bt = $("#btnAnalisarAqui"); bt.disabled = true; bt.textContent = "🛰️ Localizando…";
+    navigator.geolocation.getCurrentPosition(p => {
+      bt.disabled = false; bt.textContent = "🛰️ Analisar onde estou";
+      toast(`Analisando a sua posição (±${Math.round(p.coords.accuracy)} m). Ao terminar, use "Relatório completo (PDF)" no fim da página.`, 7000);
+      window.abrirAnalise?.({lat: p.coords.latitude, lon: p.coords.longitude}); setTimeout(() => $("#aRodar")?.click(), 300);
+    }, err => { bt.disabled = false; bt.textContent = "🛰️ Analisar onde estou";
+      toast(err.code === 1 ? "Permita o acesso à localização no navegador para usar este botão." : "Não foi possível obter a localização."); },
+    {enableHighAccuracy: true, timeout: 20000, maximumAge: 30000});
+  };
+  $("#irCoord").onsubmit = ev => { ev.preventDefault(); const c = lerCoord($("#irTxt").value);
+    if (!c) return toast("Não entendi as coordenadas. Exemplos: -3.347, -59.446  ou  3°20'49\"S 59°26'44\"W"); irPara(c); };
   $("#btnAqui").onclick = () => { $("#btnAqui").textContent = "📍 Localizando…"; Q.geo?.trigger(); };
   $("#ctlPadrao").onclick = () => marcar(true);
   el.addEventListener("input", e => { if (e.target.id === "ventoSl") { Q.ventoHora = +e.target.value; desenharVento(); } });

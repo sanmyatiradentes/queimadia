@@ -467,6 +467,13 @@
     if (!A.pronta && A.med?.length) try { localStorage.setItem("ff_cenas_" + chave, JSON.stringify({t: Date.now(), cenas: A.med})); } catch (x) {}
     window.open(ev ? "relatorio.html?id=" + encodeURIComponent(ev.id) : `relatorio.html?lat=${lat}&lon=${lon}&data=${data}`, "_blank");
   };
+  // coordenadas digitadas: vírgula decimal, sinal esquecido ou graus/minutos/segundos viram decimal
+  for (const [id, eixo] of [["#aLat", "lat"], ["#aLon", "lon"]]) $(id).addEventListener("change", e => {
+    const v = e.target.value.trim(); if (!v) return;
+    const par = window.lerCoord?.(eixo === "lat" ? `${v} 0E` : `0N ${v}`) || window.lerCoord?.(eixo === "lat" ? `${v}, -60` : `-3, ${v}`);
+    if (par) e.target.value = (eixo === "lat" ? par.lat : par.lon).toFixed(5);
+    window.miniMapa?.();
+  });
   // exame de local: preenche as coordenadas com a posição do aparelho
   $("#aAqui").onclick = () => {
     if (!navigator.geolocation) return alert("Este aparelho não informa a localização.");

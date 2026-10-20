@@ -167,7 +167,7 @@ async function postar(u, corpo) {
 }
 async function analisarAgora(e, cenasProntas) {
   const RAIO = 600, LADO = 4000, ini = e.ini.slice(0, 10), fim = e.fim.slice(0, 10), hoje = iso(new Date());
-  const aIni = somaDias(ini, -730), refFim = somaDias(ini, -60), f = somaDias(fim, 120), aFim = f > hoje ? hoje : f;
+  const aIni = somaDias(ini, -730), refFim = somaDias(ini, -60), f = somaDias(fim, 120), aFim = e.ponto || f > hoje ? hoje : f;
   const loc = `lat=${e.lat}&lon=${e.lon}`;
   let med = cenasProntas;
   if (!med?.length) {
