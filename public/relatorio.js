@@ -366,8 +366,9 @@ function render() {
   const ctx = [guardado?.clima, guardado?.cronologia, guardado?.erbs].filter(Boolean).join("");
   if (ctx) html.push(sec(N(), "Clima, cronologia das detecções e telefonia", ctx));
   if (guardado?.brmais && usuario) html.push(sec(N(), "Alertas Brasil MAIS próximos (ficha do painel)", guardado.brmais, "restrito"));
-  html.push(sec(N(), "Matriz de hipóteses", guardado?.confronto ||
-    `<p class="nota">Abra o relatório pelo botão da ficha para incluir a matriz de hipóteses calculada no painel.</p>`));
+  html.push(sec(N(), "Matriz de hipóteses", guardado?.confronto || (e.ponto
+    ? `<p class="nota">Não há evento de foco de calor associado a este ponto, então a matriz de hipóteses (que confronta focos, clima, desmatamento e área protegida de um evento) não se aplica. A análise de satélite, o parecer e a consulta às bases acima orientam o exame de local.</p>`
+    : `<p class="nota">Abra o relatório pelo botão da ficha para incluir a matriz de hipóteses calculada no painel.</p>`)));
 
   // 7. limitações, referências e glossário
   html.push(sec(N(), "Limitações", `<ul>
