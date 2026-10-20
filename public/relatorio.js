@@ -202,6 +202,71 @@ async function analisarAgora(e, cenasProntas) {
   progresso("Análise de satélite concluída", 1);
   return ndvi;
 }
+// ------------------------------------------------------------ gráfico da série de NDVI (SVG, imprimível)
+function serieValida(ndvi) {
+  const rem = new Set((ndvi.quebra?.removidas_tmask || []).map(r => r.data + r.colecao));
+  return (ndvi.cenas || []).filter(c => c.ndvi != null && (c.frac_valida ?? 1) >= .5)
+    .map(c => ({...c, tm: c.tmask || rem.has(c.data + c.colecao)})).sort((a, b) => a.data.localeCompare(b.data));
+}
+function graficoNDVI(ndvi, e) {
+  const pts = serieValida(ndvi); if (pts.length < 2) return "";
+  const q = ndvi.quebra || {}, W = 900, H = 320, m = {l: 46, r: 14, t: 18, b: 34}, w = W - m.l - m.r, h = H - m.t - m.b;
+  const t = d => +new Date(String(d).slice(0, 10) + "T12:00:00Z");
+  const t0 = Math.min(t(ndvi.periodo?.[0] || pts[0].data), t(pts[0].data)), t1 = Math.max(t(ndvi.periodo?.[1] || pts.at(-1).data), t(pts.at(-1).data));
+  const vmin = Math.max(-.1, Math.floor((Math.min(...pts.map(p => p.ndvi_p10 ?? p.ndvi), q.limiar ?? 1) - .05) * 10) / 10);
+  const X = d => m.l + (t(d) - t0) / (t1 - t0) * w, Y = v => m.t + (1 - (v - vmin) / (1 - vmin)) * h;
+  const g = [];
+  // faixas: linha de base, fogo, quebra
+  const faixa = (a, b, cor, op, rot) => { const xa = Math.max(m.l, X(a)), xb = Math.min(m.l + w, Math.max(X(b), X(a) + 3));
+    g.push(`<rect x="${xa}" y="${m.t}" width="${xb - xa}" height="${h}" fill="${cor}" opacity="${op}"/>`);
+    if (rot) g.push(`<text x="${xa + 4}" y="${m.t + 12}" font-size="11" fill="${cor}" font-weight="700">${rot}</text>`); };
+  if (ndvi.linha_base) faixa(ndvi.linha_base[0], ndvi.linha_base[1], "#1b3faa", .07, "Linha de base");
+  faixa(e.ini, e.fim, "#c8302f", .28, e.ponto ? "Referência" : "Fogo");
+  if (q.data_primeira_abaixo) faixa(q.data_ultima_estavel || q.data_primeira_abaixo, q.data_primeira_abaixo, "#7a1420", .35, q.situacao === "provavel" ? "Queda provável" : "Quebra");
+  // grade e eixos
+  for (let v = Math.ceil(vmin * 10) / 10; v <= 1.0001; v += .1) g.push(`<line x1="${m.l}" x2="${m.l + w}" y1="${Y(v)}" y2="${Y(v)}" stroke="#e6e9ef"/><text x="${m.l - 6}" y="${Y(v) + 4}" font-size="11" text-anchor="end" fill="#5b6675">${v.toFixed(1).replace(".", ",")}</text>`);
+  const d0 = new Date(t0); for (let d = new Date(Date.UTC(d0.getUTCFullYear(), Math.floor(d0.getUTCMonth() / 3) * 3 + 3, 1)); +d <= t1; d.setUTCMonth(d.getUTCMonth() + 3)) {
+    const x = m.l + (+d - t0) / (t1 - t0) * w;
+    g.push(`<line x1="${x}" x2="${x}" y1="${m.t + h}" y2="${m.t + h + 4}" stroke="#5b6675"/><text x="${x}" y="${m.t + h + 17}" font-size="11" text-anchor="middle" fill="#5b6675">${String(d.getUTCMonth() + 1).padStart(2, "0")}/${String(d.getUTCFullYear()).slice(2)}</text>`); }
+  g.push(`<line x1="${m.l}" x2="${m.l + w}" y1="${m.t + h}" y2="${m.t + h}" stroke="#5b6675"/><text x="12" y="${m.t + h / 2}" font-size="11" fill="#5b6675" transform="rotate(-90 12 ${m.t + h / 2})" text-anchor="middle">NDVI</text>`);
+  // base e limiar
+  if (q.ndvi_base != null) g.push(`<line x1="${m.l}" x2="${m.l + w}" y1="${Y(q.ndvi_base)}" y2="${Y(q.ndvi_base)}" stroke="#1b3faa" stroke-dasharray="6 4" stroke-width="1.5"/><text x="${m.l + w - 4}" y="${Y(q.ndvi_base) - 5}" font-size="11" text-anchor="end" fill="#1b3faa">base ${br(q.ndvi_base, 3)}</text>`);
+  if (q.limiar != null) g.push(`<line x1="${m.l}" x2="${m.l + w}" y1="${Y(q.limiar)}" y2="${Y(q.limiar)}" stroke="#c8302f" stroke-dasharray="3 3" stroke-width="1.5"/><text x="${m.l + w - 4}" y="${Y(q.limiar) + 14}" font-size="11" text-anchor="end" fill="#c8302f">limiar ${br(q.limiar, 3)}</text>`);
+  // linha da série (sem as removidas) e pontos com a variação dentro do círculo (p10–p90)
+  const ok = pts.filter(p => !p.tm);
+  g.push(`<polyline points="${ok.map(p => `${X(p.data).toFixed(1)},${Y(p.ndvi).toFixed(1)}`).join(" ")}" fill="none" stroke="#14284f" stroke-width="1.2" opacity=".55"/>`);
+  for (const p of pts) {
+    const x = X(p.data), y = Y(p.ndvi), s2 = String(p.colecao).startsWith("sentinel"), cor = p.tm ? "#9aa4b2" : s2 ? "#0a7a36" : "#b86a00";
+    if (p.ndvi_p10 != null && p.ndvi_p90 != null && !p.tm) g.push(`<line x1="${x}" x2="${x}" y1="${Y(p.ndvi_p90)}" y2="${Y(p.ndvi_p10)}" stroke="${cor}" opacity=".35"/>`);
+    g.push(s2 ? `<circle cx="${x}" cy="${y}" r="3.6" fill="${p.tm ? "#fff" : cor}" stroke="${cor}" stroke-width="1.4"><title>${dBR(p.data)} · Sentinel-2 · NDVI ${br(p.ndvi, 3)}</title></circle>`
+      : `<rect x="${x - 3.4}" y="${y - 3.4}" width="6.8" height="6.8" fill="${p.tm ? "#fff" : cor}" stroke="${cor}" stroke-width="1.4"><title>${dBR(p.data)} · Landsat · NDVI ${br(p.ndvi, 3)}</title></rect>`);
+  }
+  return `<figure class="larga grafico-ndvi"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Série temporal de NDVI" style="display:block;font-family:'Segoe UI',system-ui,sans-serif">${g.join("")}</svg>
+    <div class="leg-rel"><span><svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#0a7a36"/></svg> Sentinel-2</span><span><svg width="10" height="10"><rect x="1" y="1" width="8" height="8" fill="#b86a00"/></svg> Landsat 8/9</span>
+      <span><svg width="10" height="10"><circle cx="5" cy="5" r="4" fill="#fff" stroke="#9aa4b2" stroke-width="1.4"/></svg> removida pela triagem Tmask</span><span>| traço vertical: variação no círculo (10%–90%)</span>
+      <span><i style="background:#1b3faa;opacity:.25"></i>linha de base</span><span><i style="background:#c8302f;opacity:.45"></i>${e.ponto ? "data de referência" : "período do fogo"}</span>${q.data_primeira_abaixo ? `<span><i style="background:#7a1420;opacity:.6"></i>intervalo da quebra</span>` : ""}</div>
+    <figcaption><b>Gráfico</b> — Série temporal do NDVI (mediana dos pixels válidos num círculo de ${ndvi.area?.raio_m || 600} m), ${dBR(pts[0].data)} a ${dBR(pts.at(-1).data)}.</figcaption></figure>`;
+}
+// leitura do gráfico: os números que sustentam a interpretação
+function leituraNDVI(ndvi, e) {
+  const pts = serieValida(ndvi).filter(p => !p.tm); if (pts.length < 2) return "";
+  const q = ndvi.quebra || {}, ini = e.ini.slice(0, 10), fim = e.fim.slice(0, 10), dia = 864e5, t = d => +new Date(d.slice(0, 10));
+  const med = l => { if (!l.length) return null; const v = l.map(p => p.ndvi).sort((a, b) => a - b), k = Math.floor(v.length / 2); return v.length % 2 ? v[k] : (v[k - 1] + v[k]) / 2; };
+  const antes = pts.filter(p => p.data < ini && t(p.data) >= t(ini) - 90 * dia), depois = pts.filter(p => p.data > fim && t(p.data) <= t(fim) + 90 * dia);
+  const ma = med(antes), md = med(depois), s2 = pts.filter(p => String(p.colecao).startsWith("sentinel")).length;
+  const minimo = pts.filter(p => p.data >= ini).sort((a, b) => a.ndvi - b.ndvi)[0];
+  const itens = [
+    `<b>${pts.length} observações válidas</b> (${s2} Sentinel-2 e ${pts.length - s2} Landsat)${q.removidas_tmask?.length ? `; ${q.removidas_tmask.length} retirada(s) da linha de base pela triagem Tmask (névoa ou sombra residual)` : ""}.`,
+    q.ndvi_base != null ? `<b>Linha de base</b> (${dBR(ndvi.linha_base?.[0])} a ${dBR(ndvi.linha_base?.[1])}): NDVI mediano ${br(q.ndvi_base, 3)}, desvio-padrão ${br(q.desvio_base, 3)}, em ${q.n_base} observações. <b>Limiar</b> de perda: ${br(q.limiar, 3)} (base − max(3σ; 0,15)).` : "",
+    ma != null || md != null ? `<b>${e.ponto ? "Em torno da data de referência" : "Em torno do fogo"}</b>: NDVI mediano ${ma != null ? br(ma, 3) : "–"} nos 90 dias antes (${antes.length} obs.) e ${md != null ? br(md, 3) : "–"} nos 90 dias depois (${depois.length} obs.)${ma != null && md != null ? ` — variação de <b>${md - ma >= 0 ? "+" : ""}${br(md - ma, 3)}</b>${q.limiar != null && md < q.limiar ? ", abaixo do limiar" : ""}` : ""}.` : "",
+    minimo ? `<b>Menor valor</b> ${e.ponto ? "após a referência" : "a partir do fogo"}: ${br(minimo.ndvi, 3)} em ${dBR(minimo.data)}${q.limiar != null ? (minimo.ndvi < q.limiar ? " (abaixo do limiar)" : " (acima do limiar)") : ""}.` : "",
+    `<b>Situação</b>: ${textoQuebra(q)}`,
+    q.limiar != null && pts.at(-1).ndvi < q.limiar && q.situacao !== "confirmada" ? `<b>Atenção</b>: a observação mais recente (${dBR(pts.at(-1).data)}, NDVI ${br(pts.at(-1).ndvi, 3)}) já está abaixo do limiar. Ainda não há as 6 observações seguidas exigidas para confirmar perda de vegetação: as próximas imagens dirão se a queda se mantém.` : "",
+    q.quedas_transitorias?.length ? `<b>Quedas passageiras</b> (com recuperação, não contam como perda): ${q.quedas_transitorias.map(x => `${dBR(x.de)} a ${dBR(x.ate)} (${x.obs} obs.)`).join("; ")}.` : "",
+  ].filter(Boolean);
+  return `<p class="rotulo">Leitura do gráfico</p><ul class="leitura">${itens.map(i => `<li>${i}</li>`).join("")}</ul>
+    <p class="nota">Valores de NDVI acima de ~0,8 são típicos de floresta densa; quedas abruptas e persistentes indicam remoção da vegetação (corte, queima intensa), enquanto quedas curtas seguidas de recuperação costumam ser nuvem fina, fumaça ou variação sazonal.</p>`;
+}
 function textoQuebra(q) {
   if (!q) return "Sem resultado de quebra.";
   const base = `NDVI de base ${br(q.ndvi_base, 3)} ± ${br(q.desvio_base, 3)} (limiar ${br(q.limiar, 3)}, ${q.n_base ?? "–"} observações na linha de base).`;
@@ -337,11 +402,10 @@ function render() {
     const img = (ndvi.imagens || []).filter(i => i.produto === "rgb");
     const dn = ndvi.dnbr;
     html.push(sec(N(), "Imagens de satélite e vegetação (NDVI e dNBR)", `
+      <div class="figs">${graficoNDVI(ndvi, e)}</div>${leituraNDVI(ndvi, e)}
       <div class="figs">${img.map((i, k) => `<figure><img src="${i.src || DADOS + "analises/" + encodeURIComponent(i.arquivo)}" alt="Imagem ${esc(i.rotulo)}"><figcaption><b>Figura ${4 + k}</b> — ${esc(i.rotulo)}: ${dBR(i.data)} · ${esc(i.colecao)} · NDVI médio ${br(i.ndvi, 3)}</figcaption></figure>`).join("")}
       ${dn?.arquivo || dn?.src ? `<figure><img src="${dn.src || DADOS + "analises/" + encodeURIComponent(dn.arquivo)}" alt="dNBR"><figcaption><b>Figura ${4 + img.length}</b> — Severidade da queima (dNBR) entre ${dBR(dn.antes)} e ${dBR(dn.depois)}: ${br(dn.queimado_ha, 1)} ha queimados.</figcaption></figure>` : ""}</div>
       ${dn?.areas_ha ? `<p class="rotulo">Área por classe de severidade (dNBR)</p>${tab(["Classe", "Área (ha)"], Object.entries(dn.areas_ha).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="n">${br(v, 1)}</td></tr>`))}` : ""}
-      <p class="rotulo">Quebra na série de NDVI (limiar de 3σ e 6 observações consecutivas; Zhu &amp; Woodcock, 2014a)</p>
-      <p>${textoQuebra(ndvi.quebra)}</p>
       <p class="nota">Período analisado: ${dBR(ndvi.periodo?.[0])} a ${dBR(ndvi.periodo?.[1])} · ${ndvi.n_validas ?? "–"} cenas válidas.</p>
       <p class="nota"><b>Método.</b> ${METODO_LIT}</p>`));
     html.push(sec(N(), "Parecer técnico preliminar (IA)", `<div id="parecerCorpo">${parecerHTML(R.parecer)}</div>`, "parecer-sec"));
