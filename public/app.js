@@ -199,7 +199,8 @@ function selecionar(id, voar) {
       ${Q.estatico ? (Q.est.analises?.[e.id] ? "" : `<span class="selo pend" title="O motor calcula a análise de NDVI dos eventos com prioridade ≥ 70, começando pelos mais recentes e mais perto de Manaus.">NDVI na fila de cálculo</span>`) : `<button type="button" class="botao ${Q.est.analises?.[e.id] ? "secundario" : "fogo"}" id="fAnalisar">Analisar NDVI agora</button>`}
       <a class="botao secundario" href="https://www.ventusky.com/?p=${lat};${lon};9&l=radar" target="_blank" rel="noopener" title="Tempo agora, radar e previsão no local do evento">Abrir no Ventusky</a>
       <button type="button" class="botao secundario" id="fRelatorio" title="Relatório analítico imprimível (PDF) deste evento">Gerar relatório</button>
-      <button type="button" class="botao secundario" id="fCopiar">Copiar resumo</button></div></div>
+      <button type="button" class="botao secundario" id="fCopiar">Copiar resumo</button>
+      <button type="button" class="botao" id="fRelatorio" title="Relatório imprimível com área de interesse, bases consultadas e matriz de hipóteses">Gerar relatório</button></div></div>
     ${porque}
     <div class="fatos">
       <div><span>Focos</span><b>${e.n}</b></div><div><span>Máx. no mesmo dia</span><b>${e.maxDia}</b></div>
@@ -235,6 +236,11 @@ function selecionar(id, voar) {
   if ($("#fAnalisar")) $("#fAnalisar").onclick = () => window.abrirAnalise?.(e);
   $("#fRelatorio").onclick = () => window.open("relatorio.html?id=" + encodeURIComponent(e.id), "_blank");
   if ($("#fPronta")) $("#fPronta").onclick = () => window.mostrarAnalisePronta?.(e.id);
+  $("#fRelatorio").onclick = () => {
+    try { localStorage.setItem("ff_rel_" + e.id, JSON.stringify({porque, confronto: blocoConfronto(e), clima: blocoClima(e), cronologia: blocoCronologia(e),
+      mudanca: blocoMudanca(e), erbs: blocoErbs(e), brmais: blocoBrmais(e), restrito: !!Q.usuario, t: Date.now()})); } catch (x) {}
+    window.open("relatorio.html?id=" + encodeURIComponent(e.id), "_blank");
+  };
   $("#fCopiar").onclick = () => { const t = `Fogo Forense ${e.id} — ${e.mun}, ${dBR(e.ini)}. Prioridade ${e.score} (${e.ind.map(k => IND_TXT[k]).join("; ") || "sem indicadores"}). ${e.n} focos, ${lat}, ${lon}. ${d.ti || d.uc || ""}`;
     navigator.clipboard?.writeText(t).then(() => toast("Resumo copiado."), () => toast(t, 10000)); };
 }
