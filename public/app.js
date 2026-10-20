@@ -263,6 +263,9 @@ function blocoConfronto(e) {
   if (!(e.maxDia >= 3) && e.n > 2) acid.push("Focos espalhados ao longo dos dias, sem detecções simultâneas");
   if (d.lixao) acid.push(`A ${br(d.lixao.dist_m, 0)} m de um lixão/vazadouro (${d.lixao.nome}): possível fonte térmica não vegetal ou queima de resíduos; fumaça tóxica`);
   // inconclusivos e lacunas: o que ainda não permite discriminar
+  const brD = desmPerto(e).filter(x => x.a[4] <= e.ini.slice(0, 10));
+  if (brD.length) { const ha = brD.reduce((t, x) => t + x.a[2], 0), gar = brD.some(x => x.a[1] === "G");
+    intenc.push(`Brasil MAIS (restrito): ${brD.length} alerta(s) de ${gar ? "desmatamento/garimpo" : "desmatamento"} a até ${BRM_RAIO_KM} km nos 12 meses antes do fogo (${br(ha, 1)} ha; o mais recente com imagem de ${dBR(brD.map(x => x.a[4]).sort().pop())})`); }
   const brI = brmaisPerto(e).filter(x => x.a[1] === "I");
   if (brI.length) inconc.push(`Brasil MAIS (restrito): ${brI.length} indício(s) de local de início por IA, o mais próximo a ${br(brI[0].km, 1)} km. É hipótese espacial do produto (só em vegetação primária), não ponto de ignição demonstrado: confrontar em campo`);
   if (!an) inconc.push("Análise de vegetação (NDVI) ainda não calculada para este evento");
@@ -394,6 +397,7 @@ const CAMADAS = [
   ["lixoes", "Lixões e vazadouros (fumaça tóxica)", "#8e24aa", true],
   ["mudancas", "Alertas de mudança (Sentinel-2 + radar)", "#00b8d4", true],
   ["erbs", "ERBs de telefonia (Anatel)", "#5e35b1", true],
+  ["sel", "Evento selecionado (anel amarelo)", "#ffdf00", true],
 ];
 async function iniciarMapa() {
   const m = Q.mapa = new maplibregl.Map({container: "mapa", center: [-62.5, -4.3], zoom: 5, maxZoom: 18, attributionControl: {compact: true},
@@ -408,7 +412,7 @@ async function iniciarMapa() {
   const [mun, tis, ucs] = await Promise.all(["municipios", "tis", "ucs"].map(n => json(`dados/${n}.json`)));
   m.addSource("mun", {type: "geojson", data: mun}); m.addSource("tis", {type: "geojson", data: tis}); m.addSource("ucs", {type: "geojson", data: ucs});
   m.addSource("deter", {type: "geojson", data: vazio});
-  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca", "lixoes", "perto-lixao", "mudancas", "erbs", "brmais"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
+  ["eventos", "alertas", "focos", "sel", "area", "vento", "fumaca", "lixoes", "perto-lixao", "mudancas", "erbs", "brmais", "desm", "desm-res"].forEach(s => m.addSource(s, {type: "geojson", data: vazio}));
   m.addLayer({id: "tis", type: "fill", source: "tis", paint: {"fill-color": "#b8860b", "fill-opacity": .08, "fill-outline-color": "#b8860b"}});
   m.addLayer({id: "tis-l", type: "line", source: "tis", paint: {"line-color": "#d4a017", "line-width": 1.3, "line-dasharray": [3, 2]}});
   m.addLayer({id: "ucs", type: "fill", source: "ucs", paint: {"fill-color": "#0a7a36", "fill-opacity": .07}});
@@ -441,6 +445,17 @@ async function iniciarMapa() {
   m.addLayer({id: "brmais", type: "circle", source: "brmais", layout: {visibility: "none"}, paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 2, 12, 6], "circle-color": ["match", ["get", "t"], "C", BRM_COR.C, "F", BRM_COR.F, BRM_COR.I],
     "circle-stroke-color": "#000", "circle-stroke-width": .5}});
+  m.addLayer({id: "desm-res", type: "circle", source: "desm-res", maxzoom: 9, layout: {visibility: "none"}, paint: {
+    "circle-radius": ["interpolate", ["linear"], ["get", "n"], 1, 2, 20, 5, 200, 10], "circle-color": ["match", ["get", "g"], "G", BRM_COR.G, BRM_COR.D],
+    "circle-opacity": .75, "circle-stroke-color": "#000", "circle-stroke-width": .3}}, "brmais");
+  m.addLayer({id: "desm", type: "circle", source: "desm", minzoom: 9, layout: {visibility: "none"}, paint: {
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 9, 3, 14, 7], "circle-color": ["match", ["get", "t"], "G", BRM_COR.G, BRM_COR.D],
+    "circle-stroke-color": "#000", "circle-stroke-width": .5}}, "brmais");
+  m.on("click", "desm", ev => { if (Q.modoPonto) return; const p = ev.features[0].properties, a = DESM.porId.get(String(p.id));
+    if (a) new maplibregl.Popup({maxWidth: "300px"}).setLngLat(ev.lngLat).setHTML(popupDesm(a)).addTo(m); });
+  m.on("click", "desm-res", ev => { if (Q.modoPonto) return; const p = ev.features[0].properties;
+    new maplibregl.Popup().setLngLat(ev.lngLat).setHTML(`<b>Brasil MAIS · ${p.g === "G" ? "garimpo" : "desmatamento"}</b><br>${p.n} alerta(s) em ${p.y}, ${br(p.ha, 1)} ha nesta área<br><span class="nota">Aproxime o mapa para ver cada alerta. Dado restrito.</span>`).addTo(m); });
+  m.on("moveend", () => carregarCelulasVisiveis());
   m.on("click", "brmais", ev => { if (Q.modoPonto) return; const a = BRM.porId.get(String(ev.features[0].properties.id));
     if (a) new maplibregl.Popup({maxWidth: "300px"}).setLngLat(ev.lngLat).setHTML(popupBrmais(a)).addTo(m); });
   m.addLayer({id: "sel", type: "circle", source: "sel", paint: {"circle-radius": 16, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#ffdf00", "circle-stroke-width": 3}});
@@ -538,20 +553,28 @@ function montarControles() {
   const el = $("#mapaCtl");
   el.innerHTML = `<button type="button" class="recolher" id="ctlRec" aria-expanded="true"><b>☰ Camadas do mapa</b><span>ocultar</span></button><div id="ctlCorpo">
     <p class="ctl-dica">Marque ou desmarque para <b>ligar ou desligar</b> cada camada.</p>
+    <div class="ctl-acoes"><button type="button" class="botao secundario pequeno" id="ctlNenhuma">Desmarcar todas</button><button type="button" class="botao secundario pequeno" id="ctlPadrao">Voltar ao padrão</button></div>
     <h4>Mapa de fundo</h4>${Object.entries(BASES).filter(([, b]) => !b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}" ${k === "satelite" ? "checked" : ""}> ${b.nome}</label>`).join("")}
     <h4>Imagens de satélite recentes</h4>${Object.entries(BASES).filter(([, b]) => b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}"> ${b.nome}</label>`).join("")}
     <h4>Camadas</h4>${CAMADAS.map(([k, t, c, on]) => `<label><input type="checkbox" data-c="${k}" ${on ? "checked" : ""}><span class="sw" style="background:${c}"></span>${t}</label>`).join("")}
     <div id="ventoCtl"><h4>Hora do vento</h4><input type="range" id="ventoSl" min="0" max="47" value="0" style="width:100%"><div class="nota" id="ventoHora"></div></div></div>`;
   el.addEventListener("change", e => {
     if (e.target.name === "base") return trocarBase(e.target.value);
+    if (e.target.dataset.b) { BRM.vis[e.target.dataset.b] = e.target.checked; return filtrarBrmais(); }
+    if (e.target.id === "brmAno") { BRM.ano = e.target.value; return filtrarBrmais(); }
     const k = e.target.dataset.c; if (!k) return;
-    const ids = {tis: ["tis", "tis-l"], ucs: ["ucs", "ucs-l"]}[k] || [k];
+    const ids = {tis: ["tis", "tis-l"], ucs: ["ucs", "ucs-l"], sel: ["sel", "area"]}[k] || [k];
     ids.forEach(id => Q.mapa.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none"));
     if (k === "mudancas") Q.mapa.setLayoutProperty("mudancas-l", "visibility", e.target.checked ? "visible" : "none");
     if (k === "lixoes") Q.mapa.setLayoutProperty("lixoes-anel", "visibility", e.target.checked ? "visible" : "none");
     if (k === "vento") { $("#ventoCtl").hidden = !e.target.checked; const sl = $("#ventoSl");
       if (Q.vento) { sl.max = Q.vento.horas_utc.length - 1; sl.value = Q.ventoHora || 0; } desenharVento(); }
   });
+  const marcar = padrao => $$("#ctlCorpo input[type=checkbox]").forEach(c => {
+    const k = c.dataset.c, v = padrao ? (k ? CAMADAS.find(x => x[0] === k)?.[3] ?? false : true) : false;
+    if (c.checked !== v) { c.checked = v; c.dispatchEvent(new Event("change", {bubbles: true})); } });
+  $("#ctlNenhuma").onclick = () => marcar(false);
+  $("#ctlPadrao").onclick = () => marcar(true);
   el.addEventListener("input", e => { if (e.target.id === "ventoSl") { Q.ventoHora = +e.target.value; desenharVento(); } });
   $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "mostrar" : "ocultar"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };
   if (matchMedia("(max-width:640px)").matches) $("#ctlRec").click();
@@ -823,8 +846,10 @@ async function detectarModo() {
 
 // ------------------------------------------------------------ área restrita (login) e alertas Brasil MAIS
 // Os alertas do Brasil MAIS são de convênio: ficam no armazenamento privado e só chegam a usuários aprovados.
-const BRM = {meta: null, lista: [], porId: new Map()};
-const BRM_COR = {C: "#ff8a65", F: "#ff1744", I: "#ffea00"};
+const BRM = {meta: null, lista: [], porId: new Map(), vis: {C: true, F: true, I: true, D: true, G: true}, ano: ""};
+const BRM_COR = {C: "#ff8a65", F: "#ff1744", I: "#ffea00", D: "#76ff03", G: "#e040fb"};
+const DESM = {meta: null, celulas: new Set(), cel: new Map(), carregando: new Map(), porId: new Map()};
+const DESM_TIPOS_D = ["R", "D", "A", "S", "Q"];
 const BRM_RAIO_KM = 5, BRM_DIAS_ANTES = 30, BRM_DIAS_DEPOIS = 60;
 async function iniciarConta() {
   let u = null;
@@ -847,17 +872,83 @@ async function carregarBrmais() {
     BRM.meta = await restrito("brmais_indice");
     const anos = await Promise.all(Object.keys(BRM.meta.anos).map(a => restrito("brmais_" + a).catch(() => null)));
     BRM.lista = anos.filter(Boolean).flatMap(a => a.alertas);
+    DESM.meta = await restrito("desm_resumo").catch(() => null);
   } catch (e) { console.error(e); return; }
+  if (DESM.meta) {
+    DESM.celulas = new Set(DESM.meta.celulas);
+    m0().getSource("desm-res").setData({type: "FeatureCollection", features: DESM.meta.resumo.map(([la, lo, y, g, n, ha]) =>
+      ({type: "Feature", properties: {y, g, n, ha}, geometry: {type: "Point", coordinates: [lo, la]}}))});
+  }
   BRM.porId = new Map(BRM.lista.map(a => [String(a[0]), a]));
   const m = Q.mapa;
   m.getSource("brmais").setData({type: "FeatureCollection",
-    features: BRM.lista.map(a => ({type: "Feature", properties: {id: a[0], t: a[1]}, geometry: {type: "Point", coordinates: [a[6], a[5]]}}))});
-  m.setLayoutProperty("brmais", "visibility", "visible");
-  const lista = $("#ctlCorpo input[data-c='erbs']")?.closest("label");
-  if (lista && !$("#ctlCorpo input[data-c='brmais']")) lista.insertAdjacentHTML("afterend",
-    `<label title="Dado de convênio: acesso restrito a usuários aprovados"><input type="checkbox" data-c="brmais" checked><span class="sw" style="background:${BRM_COR.F}"></span>Alertas Brasil MAIS (restrito)</label>`);
-  $("#legenda")?.insertAdjacentHTML("beforeend", `<div><b style="font-size:11px">Brasil MAIS (restrito):</b></div><div><i style="background:${BRM_COR.C}"></i>Cicatriz · <i style="background:${BRM_COR.F};margin-left:4px"></i>Foco · <i style="background:${BRM_COR.I};margin-left:4px"></i>Foco (IA)</div>`);
+    features: BRM.lista.map(a => ({type: "Feature", properties: {id: a[0], t: a[1], y: a[4].slice(0, 4)}, geometry: {type: "Point", coordinates: [a[6], a[5]]}}))});
+  const anos = [...new Set([...Object.keys(BRM.meta.anos), ...(DESM.meta ? DESM.meta.resumo.map(r => r[2]) : [])])].sort().reverse();
+  const it = (b, t) => `<label><input type="checkbox" data-b="${b}" checked><span class="sw" style="background:${BRM_COR[b]}"></span>${t}</label>`;
+  $("#ctlCorpo h4 + label input[data-c='eventos']")?.closest("label").previousElementSibling.insertAdjacentHTML("beforebegin",
+    `<div class="brm-grupo"><h4>Brasil MAIS <span class="tarja">RESTRITO</span></h4>
+      ${it("F", "Foco de queimada")}${it("I", "Foco de queimada por IA (início provável)")}${it("C", "Cicatriz de queimada")}
+      ${DESM.meta ? it("D", "Desmatamento (corte raso, degradação, ramal)") + it("G", "Garimpo / extração mineral") : ""}
+      <label class="brm-ano">Ano da imagem <select id="brmAno"><option value="">todos</option>${anos.map(a => `<option>${a}</option>`).join("")}</select></label>
+      <p class="nota">Desmatamento: aproxime o mapa para ver cada alerta.</p></div>`);
+  $("#legenda")?.insertAdjacentHTML("beforeend", `<div><b style="font-size:11px">Brasil MAIS (restrito):</b></div><div><i style="background:${BRM_COR.F}"></i>Foco · <i style="background:${BRM_COR.I};margin-left:4px"></i>Foco IA · <i style="background:${BRM_COR.C};margin-left:4px"></i>Cicatriz</div>`
+    + (DESM.meta ? `<div><i style="background:${BRM_COR.D}"></i>Desmatamento · <i style="background:${BRM_COR.G};margin-left:4px"></i>Garimpo</div>` : ""));
+  filtrarBrmais();
   if (Q.sel) selecionar(Q.sel, false);
+}
+const m0 = () => Q.mapa;
+// aplica os tipos marcados e o ano escolhido às três camadas do Brasil MAIS
+function filtrarBrmais() {
+  const m = Q.mapa, v = BRM.vis, ano = BRM.ano ? [["==", ["get", "y"], BRM.ano]] : [];
+  const fogo = ["C", "F", "I"].filter(t => v[t]), grupos = ["D", "G"].filter(g => v[g]);
+  const tiposDesm = [...(v.D ? DESM_TIPOS_D : []), ...(v.G ? ["G"] : [])];
+  m.setLayoutProperty("brmais", "visibility", fogo.length ? "visible" : "none");
+  m.setFilter("brmais", ["all", ["in", ["get", "t"], ["literal", fogo]], ...ano]);
+  m.setLayoutProperty("desm-res", "visibility", grupos.length && DESM.meta ? "visible" : "none");
+  m.setFilter("desm-res", ["all", ["in", ["get", "g"], ["literal", grupos]], ...ano]);
+  m.setLayoutProperty("desm", "visibility", tiposDesm.length && DESM.meta ? "visible" : "none");
+  m.setFilter("desm", ["all", ["in", ["get", "t"], ["literal", tiposDesm]], ...ano]);
+  carregarCelulasVisiveis();
+}
+// quadrículas de 0,5° com os alertas de desmatamento, sob demanda
+const celDe = (la, lo) => `${Math.floor(la / 0.5)}_${Math.floor(lo / 0.5)}`;
+function carregarCelula(c) {
+  if (DESM.cel.has(c)) return Promise.resolve(false);
+  if (!DESM.celulas.has(c)) { DESM.cel.set(c, []); return Promise.resolve(false); }
+  if (!DESM.carregando.has(c)) DESM.carregando.set(c, restrito("desm/c_" + c).then(d => {
+    DESM.cel.set(c, d.alertas); d.alertas.forEach(a => DESM.porId.set(String(a[0]), a)); return true;
+  }).catch(() => false).finally(() => DESM.carregando.delete(c)));
+  return DESM.carregando.get(c);
+}
+function desenharDesm() {
+  Q.mapa.getSource("desm").setData({type: "FeatureCollection", features: [...DESM.cel.values()].flat().map(a =>
+    ({type: "Feature", properties: {id: a[0], t: a[1], y: a[4].slice(0, 4)}, geometry: {type: "Point", coordinates: [a[6], a[5]]}}))});
+}
+async function carregarCelulasVisiveis() {
+  const m = Q.mapa;
+  if (!DESM.meta || m.getZoom() < 9 || !(BRM.vis.D || BRM.vis.G)) return;
+  const b = m.getBounds(), l = [];
+  for (let i = Math.floor(b.getSouth() / 0.5); i <= Math.floor(b.getNorth() / 0.5); i++)
+    for (let j = Math.floor(b.getWest() / 0.5); j <= Math.floor(b.getEast() / 0.5); j++) l.push(`${i}_${j}`);
+  if (l.length > 16) return;
+  if ((await Promise.all(l.map(carregarCelula))).some(Boolean)) desenharDesm();
+}
+// alertas de desmatamento a até BRM_RAIO_KM do evento, com imagem "depois" de 12 meses antes do 1º foco a 60 dias depois do último
+function desmPerto(e) {
+  if (!DESM.meta) return [];
+  const g = BRM_RAIO_KM / 111, gl = g / Math.max(Math.cos(e.lat * Math.PI / 180), .2), cs = new Set();
+  for (const la of [e.lat - g, e.lat + g]) for (const lo of [e.lon - gl, e.lon + gl]) cs.add(celDe(la, lo));
+  const falta = [...cs].filter(c => !DESM.cel.has(c));
+  if (falta.length) { Promise.all(falta.map(carregarCelula)).then(r => { if (r.some(Boolean)) { desenharDesm(); if (Q.sel === e.id) selecionar(e.id, false); } }); return []; }
+  const dia = 864e5, t0 = new Date(e.ini.slice(0, 10)) - 365 * dia, t1 = +new Date(e.fim.slice(0, 10)) + BRM_DIAS_DEPOIS * dia;
+  return [...cs].flatMap(c => DESM.cel.get(c)).filter(a => Math.abs(a[5] - e.lat) < g && Math.abs(a[6] - e.lon) < gl)
+    .filter(a => { const t = +new Date(a[4]); return t >= t0 && t <= t1; })
+    .map(a => ({a, km: kmEntre(e.lat, e.lon, a[5], a[6])})).filter(x => x.km <= BRM_RAIO_KM).sort((x, y) => x.a[4] < y.a[4] ? 1 : -1);
+}
+function popupDesm(a) {
+  return `<b>Brasil MAIS · ${esc(DESM.meta.tipos[a[1]] || a[1])}</b><br>Alerta nº ${esc(a[0])} · ${esc(a[7])}<br>${br(a[2], 2)} ha · imagens de ${dBR(a[3])} e ${dBR(a[4])}<br>
+    ${a[8] ? `<a href="${brmImg({10: a[8]}, "before")}" target="_blank" rel="noopener">Imagem antes</a> · <a href="${brmImg({10: a[8]}, "after")}" target="_blank" rel="noopener">Imagem depois</a> · ` : ""}<a href="${brmRaa(a)}" target="_blank" rel="noopener">RAA</a>
+    <br><span class="nota">Dado restrito (convênio). Não divulgar.</span>`;
 }
 const brmImg = (a, qual) => BRM.meta.img.replace("{uuid}", a[10]).replace("{qual}", qual);
 const brmRaa = a => BRM.meta.raa.replace("{id}", a[0]);
@@ -890,6 +981,19 @@ function blocoBrmais(e) {
       <td class="n">${br(a[2], 2)} ha</td><td class="mono">${dBR(a[3])}</td><td class="mono">${dBR(a[4])}</td><td class="n">${br(km, 1)} km</td>
       <td>${a[10] ? `<a href="${brmImg(a, "before")}" target="_blank" rel="noopener">antes</a> · <a href="${brmImg(a, "after")}" target="_blank" rel="noopener">depois</a>` : "–"}</td></tr>`).join("")}</tbody></table></div>
     ${l.length > 20 ? `<p class="nota">Mostrando 20 de ${l.length}.</p>` : ""}`
-      : `<p class="nota">Nenhum alerta do Brasil MAIS a até ${BRM_RAIO_KM} km nesse período.</p>`}
+      : `<p class="nota">Nenhum alerta de queimada do Brasil MAIS a até ${BRM_RAIO_KM} km nesse período.</p>`}
+    ${blocoDesm(e)}
     <p class="nota">Fonte: Brasil MAIS (Polícia Federal), imagens Planet de 3 m. Imagens e RAA exigem login na plataforma da PF. O "foco de queimada (IA)" indica a área provável de início segundo o produto, só em vegetação primária: é hipótese a confrontar, não ponto de ignição demonstrado. Dado de convênio: uso restrito, não divulgar.</p></div>`;
+}
+function blocoDesm(e) {
+  if (!DESM.meta) return "";
+  const l = desmPerto(e);
+  return `<h4 style="margin:12px 0 4px">Desmatamento e garimpo a até ${BRM_RAIO_KM} km</h4>
+    ${l.length ? `<p class="nota">${l.length} alerta(s) com imagem posterior entre 12 meses antes do primeiro foco e ${BRM_DIAS_DEPOIS} dias depois do último (${br(l.reduce((t, x) => t + x.a[2], 0), 1)} ha). Mais recentes primeiro:</p>
+    <div class="rolagem"><table class="tabela"><thead><tr><th>Alerta nº</th><th>Tipo</th><th>Área</th><th>Antes</th><th>Depois</th><th>Distância</th><th>Imagens Planet</th></tr></thead><tbody>
+    ${l.slice(0, 20).map(({a, km}) => `<tr><td class="mono"><a href="${brmRaa(a)}" target="_blank" rel="noopener">${esc(a[0])}</a></td><td>${esc(DESM.meta.tipos[a[1]] || a[1])}</td>
+      <td class="n">${br(a[2], 2)} ha</td><td class="mono">${dBR(a[3])}</td><td class="mono">${dBR(a[4])}</td><td class="n">${br(km, 1)} km</td>
+      <td>${a[8] ? `<a href="${brmImg({10: a[8]}, "before")}" target="_blank" rel="noopener">antes</a> · <a href="${brmImg({10: a[8]}, "after")}" target="_blank" rel="noopener">depois</a>` : "–"}</td></tr>`).join("")}</tbody></table></div>
+    ${l.length > 20 ? `<p class="nota">Mostrando 20 de ${l.length}.</p>` : ""}`
+      : `<p class="nota">Nenhum alerta de desmatamento ou garimpo nesse raio e período.</p>`}`;
 }
