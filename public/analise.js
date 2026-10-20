@@ -453,7 +453,12 @@
   };
 
   // ------------------------------------------------------------ parecer por IA
-  $("#aRelatorio").onclick = () => { if (A.evento?.id) window.open("relatorio.html?id=" + encodeURIComponent(A.evento.id), "_blank"); };
+  $("#aRelatorio").onclick = () => {
+    if (!A.evento?.id) return alert("O relatório é por evento: abra a análise a partir da ficha de um evento.");
+    // análise feita agora no painel: o relatório reaproveita as cenas já medidas, sem medir de novo
+    if (!A.pronta && A.med?.length) try { localStorage.setItem("ff_cenas_" + A.evento.id, JSON.stringify({t: Date.now(), cenas: A.med})); } catch (x) {}
+    window.open("relatorio.html?id=" + encodeURIComponent(A.evento.id), "_blank");
+  };
   $("#aParecer").onclick = async () => {
     $("#aParecer").disabled = true; $("#aParecerTxt").textContent = "Redigindo o parecer…";
     try {

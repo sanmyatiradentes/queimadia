@@ -42,24 +42,7 @@ def _grava(nome, obj):
     tmp.replace(DIR / nome)
 
 
-def escolher_periodos(validas, quebra, n=4):
-    v = [m for m in validas if m["colecao"].startswith("sentinel")] or validas
-    if not v:
-        return []
-    marcas = {v[0]["data"]: "Início", v[-1]["data"]: "Fim"}
-    if quebra.get("data_primeira_abaixo"):
-        antes = [m for m in v if m["data"] <= quebra["data_ultima_estavel"]]
-        depois = [m for m in v if m["data"] >= quebra["data_primeira_abaixo"]]
-        if antes:
-            marcas[antes[-1]["data"]] = "Antes da quebra"
-        if depois:
-            marcas[depois[0]["data"]] = "Depois da quebra"
-    j = 1
-    while len(marcas) < n and j < 3 * n:
-        m = v[round(j * (len(v) - 1) / n)]
-        marcas.setdefault(m["data"], "")
-        j += 1
-    return [dict(next(m for m in v if m["data"] == d), rotulo=r) for d, r in sorted(marcas.items())]
+escolher_periodos = ndvi.escolher_periodos
 
 
 def analisar(ev):

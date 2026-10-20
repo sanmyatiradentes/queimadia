@@ -339,6 +339,55 @@ def detectar_quebra(serie, ref_ini=None, ref_fim=None, n_consec=None):
             "motivo": "Sem queda sustentada abaixo do limiar da linha de base."}
 
 
+def escolher_periodos(validas, quebra, n=4):
+    v = [m for m in validas if m["colecao"].startswith("sentinel")] or validas
+    if not v:
+        return []
+    marcas = {v[0]["data"]: "Início", v[-1]["data"]: "Fim"}
+    if quebra.get("data_primeira_abaixo"):
+        antes = [m for m in v if m["data"] <= quebra["data_ultima_estavel"]]
+        depois = [m for m in v if m["data"] >= quebra["data_primeira_abaixo"]]
+        if antes:
+            marcas[antes[-1]["data"]] = "Antes da quebra"
+        if depois:
+            marcas[depois[0]["data"]] = "Depois da quebra"
+    j = 1
+    while len(marcas) < n and j < 3 * n:
+        m = v[round(j * (len(v) - 1) / n)]
+        marcas.setdefault(m["data"], "")
+        j += 1
+    return [dict(next(m for m in v if m["data"] == d), rotulo=r) for d, r in sorted(marcas.items())]
+
+
+def par_dnbr(validas, quebra, ini, fim):
+    """Par de cenas para o dNBR: em volta da quebra, se houver; senão, a última antes e a primeira depois do fogo."""
+    v = [m for m in validas if m.get("nbr") is not None]
+    if quebra.get("data_primeira_abaixo"):
+        a = [m for m in v if m["data"] <= quebra["data_ultima_estavel"]]
+        b = [m for m in v if m["data"] >= quebra["data_primeira_abaixo"]]
+    else:
+        a = [m for m in v if m["data"] < ini]
+        b = [m for m in v if m["data"] > fim]
+    return (a[-1], b[0]) if a and b else None
+
+
+def serie_completa(med, ref_ini, ref_fim, ini, fim, min_valido=0.5):
+    """Da lista de cenas medidas ao resultado: triagem Tmask, quebra, relação com o fogo, períodos das imagens e par do dNBR."""
+    validas = [m for m in med if m.get("ndvi") is not None and (m.get("frac_valida") or 0) >= min_valido]
+    validas.sort(key=lambda m: (m["data"], m["colecao"]))
+    validas, removidas = tmask(validas, ref_ini, ref_fim)
+    q = detectar_quebra(validas, ref_ini, ref_fim)
+    q["removidas_tmask"] = [{"data": m["data"], "colecao": m["colecao"], "motivo": m["tmask"], "ndvi": m["ndvi"]} for m in removidas]
+    if q.get("situacao") in ("confirmada", "provavel"):
+        from datetime import date, timedelta
+        d = lambda s: date.fromisoformat(s[:10])
+        prim, ult, i0 = d(q["data_primeira_abaixo"]), d(q["data_ultima_estavel"]), d(ini)
+        q["relacao_fogo"] = ("antes_do_fogo" if prim < i0 - timedelta(days=5)
+                             else "no_fogo" if ult >= i0 - timedelta(days=5) else "indefinida")
+    par = par_dnbr(validas, q, ini[:10], fim[:10])
+    return {"quebra": q, "n_validas": len(validas), "periodos": escolher_periodos(validas, q),
+            "par_dnbr": [{k: m[k] for k in ("id", "colecao", "data")} for m in par] if par else None}
+
 # ------------------------------------------------------------------ imagens
 def _cores(nome):
     paradas = {"ndvi": [(0, (165, 0, 38)), (0.25, (244, 109, 67)), (0.45, (254, 224, 139)),

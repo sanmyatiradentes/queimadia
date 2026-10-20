@@ -52,6 +52,12 @@ def dnbr(col_a: str, id_a: str, col_b: str, id_b: str, lat: float, lon: float,
     return JSONResponse({"png": base64.b64encode(png).decode(), **stats}, headers=CACHE_IMG)
 
 
+@router.post("/serie")
+def serie(corpo: dict):
+    """Resultado completo a partir das cenas já medidas (usado pelo relatório de um clique)."""
+    return ndvi.serie_completa(corpo.get("cenas", []), corpo["ref_ini"], corpo["ref_fim"], corpo["inicio"], corpo["fim"])
+
+
 @router.post("/quebra")
 def quebra(corpo: dict):
     return ndvi.detectar_quebra(corpo.get("serie", []), corpo.get("ref_ini"), corpo.get("ref_fim"))

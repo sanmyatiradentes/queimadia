@@ -118,6 +118,7 @@ async function montar() {
 
   let ndvi = null;
   if (est.analises?.[e.id]) try { ndvi = await dj(`analises/${e.id}.json`); } catch (x) {}
+  if (!ndvi) try { const g = JSON.parse(localStorage.getItem("ff_ndvi_" + ID) || "null"); if (g && Date.now() - g.t < 7 * 864e5) ndvi = g.ndvi; } catch (x) {}
 
   // parecer: o mais recente entre o redigido no painel (memória do navegador) e o do motor
   let parecer = null; try { parecer = JSON.parse(localStorage.getItem("ff_parecer_" + ID) || "null"); } catch (x) {}
@@ -125,10 +126,79 @@ async function montar() {
   const antigo = parecer?.texto && /polic\s*ia|queimadia/i.test(parecer.texto);   // citava o sistema, não a literatura
   R = {e, est, mun, ai, aiHa, raioM, centro, bb, camadas, brm, ndvi, usuario, guardado, parecer: antigo ? null : parecer};
   estado("Desenhando…");
+  R.analisando = !ndvi;
   render();
   desenharMapas();
-  if (ndvi && !R.parecer?.texto && usuario) gerarParecer();
+  // um clique: o que faltar (análise de satélite e parecer) é feito aqui mesmo, em sequência
+  R.tarefas = (async () => {
+    if (!R.ndvi) {
+      let cenas = null; try { cenas = JSON.parse(localStorage.getItem("ff_cenas_" + ID) || "null")?.cenas; } catch (x) {}
+      try { R.ndvi = await analisarAgora(e, cenas); } catch (x) { console.error(x); R.erroAnalise = x.message; }
+      R.analisando = false; render(); desenharMapas();
+    }
+    if (R.ndvi && !R.parecer?.texto) await gerarParecer();
+  })();
+  await R.tarefas;
   estado("Pronto para imprimir");
+}
+
+// ------------------------------------------------------------ análise de satélite feita pelo próprio relatório
+const iso = d => d.toISOString().slice(0, 10);
+const somaDias = (s, n) => { const d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+function progresso(t, f) {
+  estado(t);
+  const el = $("#progAnalise"); if (!el) return;
+  el.querySelector(".txt").textContent = t; el.querySelector("i").style.width = Math.round((f || 0) * 100) + "%";
+}
+async function postar(u, corpo) {
+  const r = await fetch(u, {method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/json"}, body: JSON.stringify(corpo)});
+  const d = await r.json(); if (!r.ok) throw new Error(d.detail || d.erro || r.status); return d;
+}
+async function analisarAgora(e, cenasProntas) {
+  const RAIO = 600, LADO = 4000, ini = e.ini.slice(0, 10), fim = e.fim.slice(0, 10), hoje = iso(new Date());
+  const aIni = somaDias(ini, -730), refFim = somaDias(ini, -60), f = somaDias(fim, 120), aFim = f > hoje ? hoje : f;
+  const loc = `lat=${e.lat}&lon=${e.lon}`;
+  let med = cenasProntas;
+  if (!med?.length) {
+    progresso("Análise de satélite · buscando imagens Sentinel-2 e Landsat dos últimos 2 anos…", .03);
+    const [c1, c2] = await Promise.all([api(`api/cenas?${loc}&inicio=${aIni}&fim=${refFim}&modo=mes&nuvem_max=70&raio_m=${RAIO}`),
+      api(`api/cenas?${loc}&inicio=${refFim}&fim=${aFim}&modo=todas&nuvem_max=80`)]);
+    const vistos = new Set(), cenas = [...c1, ...c2].filter(c => !vistos.has(c.id) && vistos.add(c.id));
+    if (!cenas.length) throw new Error("nenhuma imagem encontrada para o local e o período");
+    med = []; let k = 0, feitos = 0;
+    await Promise.all(Array.from({length: 6}, async () => { while (k < cenas.length) { const c = cenas[k++];
+      const r = await api(`api/medir?colecao=${c.colecao}&id=${encodeURIComponent(c.id)}&${loc}&raio_m=${RAIO}`).catch(x => ({erro: x.message}));
+      med.push({...c, ...r}); feitos++;
+      progresso(`Análise de satélite · medindo a vegetação em ${feitos} de ${cenas.length} imagens…`, .05 + .7 * feitos / cenas.length); } }));
+  }
+  progresso("Análise de satélite · procurando quebra na série de NDVI…", .78);
+  const s = await postar("api/serie", {cenas: med, ref_ini: aIni, ref_fim: refFim, inicio: e.ini, fim: e.fim});
+  const imagens = s.periodos.flatMap(p => ["rgb", "ndvi"].map(prod => ({produto: prod, data: p.data, colecao: p.colecao, rotulo: p.rotulo, ndvi: p.ndvi,
+    src: `api/imagem?colecao=${p.colecao}&id=${encodeURIComponent(p.id)}&${loc}&lado_m=${LADO}&produto=${prod}&raio_m=${RAIO}`})));
+  let dnbr = null;
+  if (s.par_dnbr) {
+    progresso("Análise de satélite · calculando a severidade da queima (dNBR)…", .88);
+    const [a, b] = s.par_dnbr;
+    try {
+      const d = await api(`api/dnbr?col_a=${a.colecao}&id_a=${encodeURIComponent(a.id)}&col_b=${b.colecao}&id_b=${encodeURIComponent(b.id)}&${loc}&lado_m=${LADO}&raio_m=${RAIO}`);
+      dnbr = {...d, png: undefined, src: "data:image/png;base64," + d.png, antes: a.data, depois: b.data, cena_antes: a.id, cena_depois: b.id};
+    } catch (x) { console.warn("dNBR", x); }
+  }
+  const ndvi = {evento: {id: e.id, municipio: e.mun, inicio: e.ini, fim: e.fim, score: e.score, lat: e.lat, lon: e.lon},
+    area: {lat: e.lat, lon: e.lon, raio_m: RAIO, lado_m: LADO}, periodo: [aIni, aFim], linha_base: [aIni, refFim],
+    quebra: s.quebra, dnbr, imagens, cenas: med, n_validas: s.n_validas, gerado_em: new Date().toISOString(), origem: "relatório"};
+  try { localStorage.setItem("ff_ndvi_" + e.id, JSON.stringify({t: Date.now(), ndvi})); } catch (x) {}
+  progresso("Análise de satélite concluída", 1);
+  return ndvi;
+}
+function textoQuebra(q) {
+  if (!q) return "Sem resultado de quebra.";
+  const base = `NDVI de base ${br(q.ndvi_base, 3)} ± ${br(q.desvio_base, 3)} (limiar ${br(q.limiar, 3)}, ${q.n_base ?? "–"} observações na linha de base).`;
+  const rel = {antes_do_fogo: " A perda de vegetação começou <b>antes</b> dos focos: compatível com derrubada seguida de queima.",
+    no_fogo: " A perda de vegetação coincide com o período do fogo.", indefinida: " A relação temporal com o fogo é indefinida pelo intervalo entre imagens."}[q.relacao_fogo] || "";
+  if (q.situacao === "confirmada") return `<b>Quebra confirmada</b>: o NDVI caiu para ${br(q.ndvi_apos, 3)} (queda de ${br(q.queda, 3)}) entre ${dBR(q.data_ultima_estavel)} (última imagem estável) e ${dBR(q.data_primeira_abaixo)} (primeira abaixo do limiar), com ${q.obs_abaixo} observações seguidas abaixo do limiar.${rel} ${base}`;
+  if (q.situacao === "provavel") return `<b>Queda provável</b> desde ${dBR(q.data_primeira_abaixo)} (${q.obs_abaixo} observação(ões) abaixo do limiar no fim da série); a confirmação exige 6 consecutivas e aguarda novas imagens.${rel} ${base}`;
+  return `${esc(q.motivo || "Sem queda sustentada abaixo do limiar.")} ${base}${q.quedas_transitorias?.length ? ` Houve ${q.quedas_transitorias.length} queda(s) passageira(s), com recuperação.` : ""}`;
 }
 
 // ------------------------------------------------------------ método e parecer (literatura científica)
@@ -240,15 +310,22 @@ function render() {
     ${!usuario ? `<p class="nota">Alertas do Brasil MAIS (Planet, 3 m) aparecem apenas para usuários com login aprovado.</p>` : ""}`, brm ? "restrito" : ""));
 
   // 4. imagens e vegetação
+  if (!ndvi && R.analisando) {
+    html.push(sec(N(), "Imagens de satélite e vegetação (NDVI e dNBR)", `<div id="progAnalise" class="prog-analise"><div class="barra"><i></i></div><p class="txt">Preparando a análise de satélite…</p>
+      <p class="nota">Este evento ainda não tinha análise pronta: ela está sendo feita agora (de 1 a 3 minutos). O parecer é redigido em seguida. Pode aguardar nesta página.</p></div>`));
+    html.push(sec(N(), "Parecer técnico preliminar (IA)", `<p class="nota">Aguardando a análise de satélite para redigir o parecer.</p>`, "parecer-sec"));
+  } else if (!ndvi && R.erroAnalise) {
+    html.push(sec(N(), "Imagens de satélite e vegetação (NDVI e dNBR)", `<p class="nota">Não foi possível fazer a análise de satélite agora (${esc(R.erroAnalise)}). Clique em <b>Recalcular</b> no topo para tentar de novo.</p>`));
+  }
   if (ndvi) {
     const img = (ndvi.imagens || []).filter(i => i.produto === "rgb");
     const dn = ndvi.dnbr;
     html.push(sec(N(), "Imagens de satélite e vegetação (NDVI e dNBR)", `
-      <div class="figs">${img.map((i, k) => `<figure><img src="${DADOS}analises/${encodeURIComponent(i.arquivo)}" alt="Imagem ${esc(i.rotulo)}"><figcaption><b>Figura ${4 + k}</b> — ${esc(i.rotulo)}: ${dBR(i.data)} · ${esc(i.colecao)} · NDVI médio ${br(i.ndvi, 3)}</figcaption></figure>`).join("")}
-      ${dn?.arquivo ? `<figure><img src="${DADOS}analises/${encodeURIComponent(dn.arquivo)}" alt="dNBR"><figcaption><b>Figura ${4 + img.length}</b> — Severidade da queima (dNBR) entre ${dBR(dn.antes)} e ${dBR(dn.depois)}: ${br(dn.queimado_ha, 1)} ha queimados.</figcaption></figure>` : ""}</div>
+      <div class="figs">${img.map((i, k) => `<figure><img src="${i.src || DADOS + "analises/" + encodeURIComponent(i.arquivo)}" alt="Imagem ${esc(i.rotulo)}"><figcaption><b>Figura ${4 + k}</b> — ${esc(i.rotulo)}: ${dBR(i.data)} · ${esc(i.colecao)} · NDVI médio ${br(i.ndvi, 3)}</figcaption></figure>`).join("")}
+      ${dn?.arquivo || dn?.src ? `<figure><img src="${dn.src || DADOS + "analises/" + encodeURIComponent(dn.arquivo)}" alt="dNBR"><figcaption><b>Figura ${4 + img.length}</b> — Severidade da queima (dNBR) entre ${dBR(dn.antes)} e ${dBR(dn.depois)}: ${br(dn.queimado_ha, 1)} ha queimados.</figcaption></figure>` : ""}</div>
       ${dn?.areas_ha ? `<p class="rotulo">Área por classe de severidade (dNBR)</p>${tab(["Classe", "Área (ha)"], Object.entries(dn.areas_ha).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="n">${br(v, 1)}</td></tr>`))}` : ""}
       <p class="rotulo">Quebra na série de NDVI (limiar de 3σ e 6 observações consecutivas; Zhu &amp; Woodcock, 2014a)</p>
-      <p>${ndvi.quebra?.detectada ? `Queda sustentada detectada a partir de <b>${dBR(ndvi.quebra.data || ndvi.quebra.inicio)}</b>.` : esc(ndvi.quebra?.motivo || "Sem quebra detectada.")} NDVI de base ${br(ndvi.quebra?.ndvi_base, 3)} ± ${br(ndvi.quebra?.desvio_base, 3)} (limiar ${br(ndvi.quebra?.limiar, 3)}, ${ndvi.quebra?.n_base ?? "–"} observações).</p>
+      <p>${textoQuebra(ndvi.quebra)}</p>
       <p class="nota">Período analisado: ${dBR(ndvi.periodo?.[0])} a ${dBR(ndvi.periodo?.[1])} · ${ndvi.n_validas ?? "–"} cenas válidas.</p>
       <p class="nota"><b>Método.</b> ${METODO_LIT}</p>`));
     html.push(sec(N(), "Parecer técnico preliminar (IA)", `<div id="parecerCorpo">${parecerHTML(R.parecer)}</div>`, "parecer-sec"));
@@ -357,7 +434,8 @@ function desenharMapas() {
 function quandoProntos() {
   return Promise.all(mapas.map(m => new Promise(r => { if (m.loaded() && m.areTilesLoaded()) return r(); m.once("idle", r); setTimeout(r, 15000); })));
 }
-$("#imprimir").onclick = async () => { estado("Aguardando mapas…"); await quandoProntos(); estado("Pronto para imprimir"); window.print(); };
+$("#imprimir").onclick = async () => { if (R.tarefas) { estado("Concluindo análise e parecer…"); await R.tarefas; } estado("Aguardando mapas e imagens…"); await quandoProntos();
+  await Promise.all([...document.querySelectorAll("#folha img")].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; setTimeout(r, 20000); }))); estado("Pronto para imprimir"); window.print(); };
 $("#refazer").onclick = () => montar().catch(erro);
 function erro(x) { console.error(x); estado("Erro ao montar", false); $("#folha").innerHTML = `<div class="cartao"><p>Não foi possível montar o relatório: ${esc(x.message)}</p></div>`; }
 montar().catch(erro);

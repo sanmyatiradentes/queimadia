@@ -199,7 +199,7 @@ function selecionar(id, voar) {
       ${Q.estatico ? (Q.est.analises?.[e.id] ? "" : `<span class="selo pend" title="O motor calcula a análise de NDVI dos eventos com prioridade ≥ 70, começando pelos mais recentes e mais perto de Manaus.">NDVI na fila de cálculo</span>`) : `<button type="button" class="botao ${Q.est.analises?.[e.id] ? "secundario" : "fogo"}" id="fAnalisar">Analisar NDVI agora</button>`}
       <a class="botao secundario" href="https://www.ventusky.com/?p=${lat};${lon};9&l=radar" target="_blank" rel="noopener" title="Tempo agora, radar e previsão no local do evento">Abrir no Ventusky</a>
       <button type="button" class="botao secundario" id="fCopiar">Copiar resumo</button>
-      <button type="button" class="botao" id="fRelatorio" title="Relatório imprimível com área de interesse, bases consultadas e matriz de hipóteses">Gerar relatório</button></div></div>
+      <button type="button" class="botao" id="fRelatorio" title="Um clique: faz a análise de satélite que faltar, redige o parecer e monta o relatório em PDF com mapas, bases consultadas e matriz de hipóteses">Gerar relatório completo</button></div></div>
     ${porque}
     <div class="fatos">
       <div><span>Focos</span><b>${e.n}</b></div><div><span>Máx. no mesmo dia</span><b>${e.maxDia}</b></div>
