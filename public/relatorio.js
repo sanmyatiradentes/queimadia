@@ -8,7 +8,10 @@ const br = (v, d = 2) => v == null || Number.isNaN(v) ? "–" : Number(v).toLoca
 const fmt = n => (n ?? 0).toLocaleString("pt-BR");
 const dBR = s => s ? String(s).slice(0, 10).split("-").reverse().join("/") : "–";
 const DADOS = window.QUEIMADIA_DADOS;
-const ID = new URLSearchParams(location.search).get("id");
+const PQ = new URLSearchParams(location.search);
+// por evento (?id=) ou por ponto de interesse (?lat=&lon=&data=), quando a análise foi feita numa coordenada
+const PONTO = !PQ.get("id") && PQ.get("lat") && PQ.get("lon") ? {lat: +PQ.get("lat"), lon: +PQ.get("lon"), data: (PQ.get("data") || new Date().toISOString()).slice(0, 10)} : null;
+const ID = PQ.get("id") || (PONTO && Number.isFinite(PONTO.lat + PONTO.lon) ? `P${PONTO.lat.toFixed(4)}_${PONTO.lon.toFixed(4)}_${PONTO.data}` : null);
 const RAIO_ALERTAS_KM = 5, PROX_KM = 10;
 const COR = {ai: "#ffdf00", car: "#ffffff", emb: "#ff1744", ti: "#d4a017", ucpi: "#00c853", ucus: "#69f0ae", quil: "#ff9100", anm: "#40c4ff",
   brC: "#ff8a65", brF: "#ff1744", brI: "#ffea00", brD: "#76ff03", brG: "#e040fb"};
@@ -45,6 +48,14 @@ function noRetangulo(fc, bb) {
   return (fc?.features || []).filter(f => { try { return turf.booleanIntersects(f, caixa); } catch (e) { return false; } });
 }
 
+function eventoDoPonto(p, mun) {
+  const pt = turf.point([p.lon, p.lat]);
+  const m = mun.features.find(f => { try { return turf.booleanPointInPolygon(pt, f); } catch (x) { return false; } });
+  return {id: ID, ponto: true, lat: p.lat, lon: p.lon, ini: p.data + " 00:00", fim: p.data + " 00:00", n: 0, maxDia: 0,
+    mun: m?.properties?.nome || "Município não identificado", dist: Math.round(kmEntre(p.lat, p.lon, -3.119, -60.0217)),
+    det: {}, sats: [], score: null, ia: null, ind: []};
+}
+
 // ------------------------------------------------------------ montagem
 async function montar() {
   if (!ID) { $("#folha").innerHTML = `<div class="cartao"><p>Abra o relatório pelo botão <b>Gerar relatório</b> na ficha de um evento.</p></div>`; return; }
@@ -52,7 +63,7 @@ async function montar() {
   const raioM = Math.min(5000, Math.max(100, +$("#raio").value || 1000));
   const [est, ev, al, mun, tis, ucs, quil] = await Promise.all([dj("estatisticas.json"), dj("eventos.json"), dj("alertas.json"),
     dj("municipios.json"), dj("tis.json"), dj("ucs.json"), fetch("bases/quilombolas_am.json").then(r => r.json()).catch(() => null)]);
-  const e = [...descompactar(ev), ...descompactar(al)].find(x => x.id === ID);
+  const e = PONTO ? eventoDoPonto(PONTO, mun) : [...descompactar(ev), ...descompactar(al)].find(x => x.id === ID);
   if (!e) { $("#folha").innerHTML = `<div class="cartao"><p>Evento ${esc(ID)} não encontrado nos dados atuais.</p></div>`; estado("Evento não encontrado", false); return; }
   let usuario = null; try { usuario = (await api("api/conta?acao=eu")).usuario; } catch (x) {}
   let guardado = null; try { guardado = JSON.parse(localStorage.getItem("ff_rel_" + ID) || "null"); } catch (x) {}
@@ -264,10 +275,10 @@ function render() {
   if (restrito) html.push(`<div class="faixa-restrito">DOCUMENTO COM DADOS DE ACESSO RESTRITO (CONVÊNIO BRASIL MAIS) · USO INTERNO · NÃO DIVULGAR</div>`);
 
   html.push(`<section class="cartao rel-capa inteiro"><span class="nota">PC/AM — Polícia Civil do Amazonas · DPTC · NIPED</span>
-    <h1>Relatório analítico de evento de fogo</h1>
+    <h1>${e.ponto ? "Relatório analítico de ponto de interesse" : "Relatório analítico de evento de fogo"}</h1>
     <p class="sub">Documento automatizado gerado pelo Fogo Forense a partir de focos de calor por satélite, imagens Sentinel-2/Landsat e bases públicas${restrito ? ", com alertas do Brasil MAIS (imagens Planet de 3 m)" : ""}. Não substitui laudo pericial.</p>
-    <div class="linha-meta"><span><b>Evento:</b> ${esc(e.id)}</span><span><b>Município:</b> ${esc(e.mun)} - AM</span>
-      <span><b>Período dos focos:</b> ${dBR(e.ini)} a ${dBR(e.fim)}</span><span><b>Data do relatório:</b> ${hoje}</span>
+    <div class="linha-meta"><span><b>${e.ponto ? "Ponto" : "Evento"}:</b> ${e.ponto ? `${e.lat.toFixed(5)}, ${e.lon.toFixed(5)}` : esc(e.id)}</span><span><b>Município:</b> ${esc(e.mun)} - AM</span>
+      <span><b>${e.ponto ? "Data de referência" : "Período dos focos"}:</b> ${e.ponto ? dBR(e.ini) : `${dBR(e.ini)} a ${dBR(e.fim)}`}</span><span><b>Data do relatório:</b> ${hoje}</span>
       ${usuario ? `<span><b>Gerado por:</b> ${esc(usuario.nome)} (${esc(usuario.orgao)})</span>` : ""}</div></section>`);
 
   // 1. área de interesse
@@ -277,9 +288,14 @@ function render() {
       <tr><td>Área de interesse</td><td>Círculo de ${fmt(raioM)} m de raio no centro do evento · ${br(aiHa, 2)} ha</td></tr>
       <tr><td>Centroide da AI</td><td class="mono">${centroide(e.lat, e.lon)} (${e.lat.toFixed(5)}, ${e.lon.toFixed(5)})</td></tr>
       <tr><td>Sistema de referência</td><td>WGS 84 (EPSG:4326), compatível com SIRGAS 2000 na escala do relatório</td></tr>
+      ${e.ponto ? `
+      <tr><td>Data de referência</td><td>${dBR(e.ini)} · análise de satélite de 2 anos antes a 120 dias depois</td></tr>
+      <tr><td>Origem do ponto</td><td>Coordenada informada na análise de satélite, sem evento de foco de calor associado a até 3 km</td></tr>
+` : `
       <tr><td>Focos de calor no evento</td><td>${e.n} focos · até ${e.maxDia} no mesmo dia · primeiro ${esc(e.ini)} UTC · último ${esc(e.fim)} UTC</td></tr>
       <tr><td>Satélites</td><td>${esc(e.sats.join(", ") || "AQUA_M-T")}</td></tr>
       <tr><td>Prioridade de verificação</td><td>${e.score} de 100${e.ia != null ? ` · atipicidade (IA) ${e.ia}/100` : ""}</td></tr>
+`}
       <tr><td>Área protegida (painel)</td><td>${esc(d.ti || d.uc || "Fora de TI/UC")}</td></tr>
       <tr><td>Distância de Manaus</td><td>${fmt(e.dist)} km</td></tr>
     </tbody></table>

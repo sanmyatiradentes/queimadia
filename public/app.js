@@ -414,6 +414,11 @@ async function iniciarMapa() {
   m.addControl(new maplibregl.NavigationControl(), "bottom-left");
   m.addControl(new maplibregl.ScaleControl({unit: "metric"}), "bottom-left");
   m.addControl(new maplibregl.FullscreenControl(), "bottom-left");
+  // exame de local: mostra e acompanha a posição do aparelho (GPS)
+  Q.geo = new maplibregl.GeolocateControl({positionOptions: {enableHighAccuracy: true, timeout: 20000}, trackUserLocation: true, showAccuracyCircle: true, fitBoundsOptions: {maxZoom: 15}});
+  m.addControl(Q.geo, "bottom-left");
+  Q.geo.on("error", err => toast(err.code === 1 ? "Permita o acesso à localização no navegador para o mapa seguir você." : "Não foi possível obter a sua localização."));
+  Q.geo.on("geolocate", p => { const el = $("#btnAqui"); if (el) el.textContent = `📍 Seguindo você (±${Math.round(p.coords.accuracy)} m)`; maisPerto(p.coords); });
   await new Promise(r => m.on("load", r));
   for (const [k, b] of Object.entries(BASES)) if (b.tiles) m.addSource("base-" + k, {type: "raster", tiles: b.tiles, tileSize: 256, attribution: b.attr, maxzoom: b.max || 19});
   m.addLayer({id: "base", type: "raster", source: "base-satelite"});
@@ -563,10 +568,19 @@ async function trocarBase(k) {
   m.removeLayer("base"); m.addLayer({id: "base", type: "raster", source: "base-" + k}, "tis");
   $("#baseLeg").hidden = true;
 }
+// no exame de local: avisa qual evento está mais perto da posição do aparelho (uma vez por ativação)
+let avisouPerto = false;
+function maisPerto(c) {
+  if (avisouPerto) return; avisouPerto = true; setTimeout(() => avisouPerto = false, 10 * 60e3);
+  const l = (Q.filtrados.length ? Q.filtrados : Q.eventos).map(e => ({e, km: Math.hypot(e.lat - c.latitude, (e.lon - c.longitude) * Math.cos(c.latitude * Math.PI / 180)) * 111}))
+    .sort((a, b) => a.km - b.km);
+  if (l[0]) toast(`Evento mais perto de você: ${l[0].e.mun}, ${dBR(l[0].e.ini)}, a ${br(l[0].km, 1)} km (prioridade ${l[0].e.score}). Clique no círculo para abrir a ficha.`, 9000);
+}
 function montarControles() {
   const el = $("#mapaCtl");
   el.innerHTML = `<button type="button" class="recolher" id="ctlRec" aria-expanded="true"><b>☰ Camadas do mapa</b><span>ocultar</span></button><div id="ctlCorpo">
     <p class="ctl-dica">Marque ou desmarque para <b>ligar ou desligar</b> cada camada.</p>
+    <button type="button" class="botao pequeno" id="btnAqui" style="width:100%;margin:0 0 6px" title="Exame de local: centraliza o mapa na sua posição e acompanha enquanto você se desloca">📍 Onde estou</button>
     <div class="ctl-acoes"><button type="button" class="botao secundario pequeno" id="ctlNenhuma">Desmarcar todas</button><button type="button" class="botao secundario pequeno" id="ctlPadrao">Voltar ao padrão</button></div>
     <h4>Mapa de fundo</h4>${Object.entries(BASES).filter(([, b]) => !b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}" ${k === "satelite" ? "checked" : ""}> ${b.nome}</label>`).join("")}
     <h4>Imagens de satélite recentes</h4>${Object.entries(BASES).filter(([, b]) => b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}"> ${b.nome}</label>`).join("")}
@@ -588,6 +602,7 @@ function montarControles() {
     const k = c.dataset.c, v = padrao ? (k ? CAMADAS.find(x => x[0] === k)?.[3] ?? false : true) : false;
     if (c.checked !== v) { c.checked = v; c.dispatchEvent(new Event("change", {bubbles: true})); } });
   $("#ctlNenhuma").onclick = () => marcar(false);
+  $("#btnAqui").onclick = () => { $("#btnAqui").textContent = "📍 Localizando…"; Q.geo?.trigger(); };
   $("#ctlPadrao").onclick = () => marcar(true);
   el.addEventListener("input", e => { if (e.target.id === "ventoSl") { Q.ventoHora = +e.target.value; desenharVento(); } });
   $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "mostrar" : "ocultar"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };

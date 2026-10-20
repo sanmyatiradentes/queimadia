@@ -454,10 +454,29 @@
 
   // ------------------------------------------------------------ parecer por IA
   $("#aRelatorio").onclick = () => {
-    if (!A.evento?.id) return alert("O relatório é por evento: abra a análise a partir da ficha de um evento.");
+    const lat = +$("#aLat").value, lon = +$("#aLon").value;
+    let ev = A.evento?.id ? A.evento : null;
+    if (!ev) {   // análise por coordenada: usa o evento mais próximo (até 3 km) no período analisado, se houver
+      const ini = $("#aIni").value, fim = $("#aFim").value, km = (a, b) => Math.hypot(a.lat - lat, (a.lon - lon) * Math.cos(lat * Math.PI / 180)) * 111;
+      ev = [...(window.Q?.eventos || []), ...(window.Q?.alertas || [])].filter(x => x.ini.slice(0, 10) >= ini && x.ini.slice(0, 10) <= fim && km(x) <= 3)
+        .sort((a, b) => km(a) - km(b))[0] || null;
+    }
+    const data = ev ? null : addDias($("#aRefFim").value, 60);
+    const chave = ev ? ev.id : `P${lat.toFixed(4)}_${lon.toFixed(4)}_${data}`;
     // análise feita agora no painel: o relatório reaproveita as cenas já medidas, sem medir de novo
-    if (!A.pronta && A.med?.length) try { localStorage.setItem("ff_cenas_" + A.evento.id, JSON.stringify({t: Date.now(), cenas: A.med})); } catch (x) {}
-    window.open("relatorio.html?id=" + encodeURIComponent(A.evento.id), "_blank");
+    if (!A.pronta && A.med?.length) try { localStorage.setItem("ff_cenas_" + chave, JSON.stringify({t: Date.now(), cenas: A.med})); } catch (x) {}
+    window.open(ev ? "relatorio.html?id=" + encodeURIComponent(ev.id) : `relatorio.html?lat=${lat}&lon=${lon}&data=${data}`, "_blank");
+  };
+  // exame de local: preenche as coordenadas com a posição do aparelho
+  $("#aAqui").onclick = () => {
+    if (!navigator.geolocation) return alert("Este aparelho não informa a localização.");
+    const bt = $("#aAqui"); bt.disabled = true; bt.textContent = "Localizando…";
+    navigator.geolocation.getCurrentPosition(p => {
+      $("#aLat").value = p.coords.latitude.toFixed(5); $("#aLon").value = p.coords.longitude.toFixed(5);
+      bt.disabled = false; bt.textContent = `📍 Aqui (±${Math.round(p.coords.accuracy)} m)`; window.miniMapa?.();
+    }, err => { bt.disabled = false; bt.textContent = "📍 Usar minha localização";
+      alert(err.code === 1 ? "Permita o acesso à localização no navegador para usar este botão." : "Não foi possível obter a localização: " + err.message); },
+    {enableHighAccuracy: true, timeout: 20000, maximumAge: 30000});
   };
   $("#aParecer").onclick = async () => {
     $("#aParecer").disabled = true; $("#aParecerTxt").textContent = "Redigindo o parecer…";
