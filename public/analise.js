@@ -372,8 +372,85 @@
   }
   const baixar = (n, t, tp) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t], {type: tp})); a.download = n; a.click(); };
   $("#aJson").onclick = () => baixar(`queimadia_ndvi_${$("#aLat").value}_${$("#aLon").value}.json`, JSON.stringify(proveniencia(), null, 1), "application/json");
-  $("#aCsv").onclick = () => baixar(`queimadia_ndvi_${$("#aLat").value}_${$("#aLon").value}.csv`, "﻿" + ["data;colecao;plataforma;ndvi;nbr;ndmi;frac_valida;n_validos;nuvem_cena;baseline;cena",
-    ...A.med.map(m => [m.data, m.colecao, m.plataforma, m.ndvi, m.nbr, m.ndmi, m.frac_valida, m.n_validos, m.nuvem_cena, m.baseline, m.id].map(v => v ?? "").join(";"))].join("\n"), "text/csv");
+  const csvCenas = () => "﻿" + ["data;colecao;plataforma;ndvi;nbr;ndmi;frac_valida;n_validos;nuvem_cena;baseline;cena",
+    ...A.med.map(m => [m.data, m.colecao, m.plataforma, m.ndvi, m.nbr, m.ndmi, m.frac_valida, m.n_validos, m.nuvem_cena, m.baseline, m.id].map(v => v ?? "").join(";"))].join("\n");
+  $("#aCsv").onclick = () => baixar(`queimadia_ndvi_${$("#aLat").value}_${$("#aLon").value}.csv`, csvCenas(), "text/csv");
+
+  // ------------------------------------------------------------ baixar: vídeo da linha do tempo e ZIP das imagens
+  const nomeBase = () => `fogo-forense_${A.evento?.id || `${(+$("#aLat").value).toFixed(4)}_${(+$("#aLon").value).toFixed(4)}`}`;
+  const baixarBlob = (n, b) => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = n; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60e3); };
+  async function carregarImg(src) { const im = new Image(); im.src = src; await im.decode(); return im; }
+  $("#tlVideo").onclick = async () => {
+    if (!TL.quadros.length) return;
+    const tipo = ["video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm"].find(t => window.MediaRecorder?.isTypeSupported?.(t));
+    if (!tipo) return alert("Este navegador não grava vídeo. Use Chrome, Edge ou Safari atualizados.");
+    const bt = $("#tlVideo"); bt.disabled = true; bt.textContent = "Gerando vídeo…"; pararTL();
+    try {
+      const imgs = await Promise.all(TL.quadros.map(q => carregarImg(q.src)));
+      const L = 1080, TOPO = 96, BASE = 104, cv = document.createElement("canvas"); cv.width = L; cv.height = TOPO + L + BASE;
+      const c = cv.getContext("2d"); c.imageSmoothingQuality = "high";
+      const ev = A.evento, titulo = ev ? `${ev.mun || ""} · evento ${ev.id}` : `${$("#aLat").value}, ${$("#aLon").value}`;
+      const fonte = (p, w = 600) => `${w} ${p}px "Segoe UI", system-ui, sans-serif`;
+      const quadro = i => {
+        const q = TL.quadros[i], im = imgs[i], n = TL.quadros.length;
+        c.fillStyle = "#0a1f56"; c.fillRect(0, 0, cv.width, cv.height);
+        c.fillStyle = "#fff"; c.font = fonte(34, 700); c.fillText("Fogo Forense", 32, 48);
+        c.fillStyle = "#c9d3ee"; c.font = fonte(24, 500); c.fillText(`${titulo} · ${NOMES_P[TL.prod] || TL.prod}`, 32, 82);
+        const s = Math.max(L / im.naturalWidth, L / im.naturalHeight), w = im.naturalWidth * s, h = im.naturalHeight * s;
+        c.save(); c.beginPath(); c.rect(0, TOPO, L, L); c.clip(); c.drawImage(im, (L - w) / 2, TOPO + (L - h) / 2, w, h); c.restore();
+        const d = dBR(q.data); c.font = fonte(52, 800); const tw = c.measureText(d).width;
+        c.fillStyle = "rgba(10,31,86,.85)"; c.fillRect(L - tw - 64, TOPO + 24, tw + 40, 76);
+        c.fillStyle = "#ffdf00"; c.fillText(d, L - tw - 44, TOPO + 82);
+        c.fillStyle = "rgba(255,255,255,.25)"; c.fillRect(0, TOPO + L, L, 8);
+        c.fillStyle = "#ffdf00"; c.fillRect(0, TOPO + L, L * (i + 1) / n, 8);
+        c.fillStyle = "#fff"; c.font = fonte(26, 600); c.fillText(q.rot || d, 32, TOPO + L + 50);
+        c.fillStyle = "#c9d3ee"; c.font = fonte(21, 500);
+        c.fillText(`Imagem ${i + 1} de ${n} · ESA Copernicus Sentinel-2 / USGS Landsat · NIPED/PCAM · DPTC`, 32, TOPO + L + 84);
+      };
+      quadro(0);
+      const rec = new MediaRecorder(cv.captureStream(30), {mimeType: tipo, videoBitsPerSecond: 8e6}), partes = [];
+      rec.ondataavailable = e => e.data.size && partes.push(e.data);
+      const fim = new Promise(r => rec.onstop = r);
+      rec.start(250);
+      const segurar = async (i, ms) => { for (let t = 0; t < ms; t += 100) { quadro(i); await new Promise(r => setTimeout(r, 100)); } };
+      for (let i = 0; i < imgs.length; i++) { bt.textContent = `Gravando ${i + 1} de ${imgs.length}…`; await segurar(i, i === imgs.length - 1 ? 2500 : 1400); }
+      rec.stop(); await fim;
+      const ext = tipo.startsWith("video/mp4") ? "mp4" : "webm";
+      baixarBlob(`${nomeBase()}_linha-do-tempo_${TL.prod}.${ext}`, new Blob(partes, {type: tipo.split(";")[0]}));
+    } catch (e) { console.error(e); alert("Não foi possível gerar o vídeo: " + e.message); }
+    finally { bt.disabled = false; bt.textContent = "Baixar vídeo"; }
+  };
+  async function jszip() {
+    if (window.JSZip) return window.JSZip;
+    await new Promise((ok, erro) => { const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"; s.onload = ok; s.onerror = erro; document.head.append(s); });
+    return window.JSZip;
+  }
+  $("#aZip").onclick = async () => {
+    const bt = $("#aZip"); bt.disabled = true; bt.textContent = "Preparando ZIP…";
+    try {
+      const Z = new (await jszip())(), base = nomeBase(), nomes = new Set();
+      const figs = $$("#aGal figure[data-prod]");
+      for (const [k, f] of figs.entries()) {
+        bt.textContent = `Imagem ${k + 1} de ${figs.length}…`;
+        const src = f.querySelector("img").src, r = await fetch(src, {credentials: "same-origin"}); if (!r.ok) continue;
+        let n = `${f.dataset.data}_${f.dataset.prod}.png`; for (let j = 2; nomes.has(n); j++) n = `${f.dataset.data}_${f.dataset.prod}_${j}.png`;
+        nomes.add(n); Z.file(`imagens/${n}`, await r.blob());
+      }
+      const dn = $("#dRes img"); if (dn) { const r = await fetch(dn.src, {credentials: "same-origin"}); if (r.ok) Z.file("dnbr_severidade.png", await r.blob()); }
+      if (A.med?.length) Z.file("cenas.csv", csvCenas());
+      Z.file("proveniencia.json", JSON.stringify(proveniencia(), null, 1));
+      Z.file("LEIA-ME.txt", [`Fogo Forense — NIPED/PCAM · DPTC`, `Análise ${A.evento ? "do evento " + A.evento.id + " (" + (A.evento.mun || "") + ")" : "de ponto"}, exportada em ${new Date().toLocaleString("pt-BR", {timeZone: "America/Manaus"})} (hora de Manaus).`, "",
+        "imagens/             recortes Sentinel-2 / Landsat por data (cor real e NDVI); nome = data_produto.png",
+        "dnbr_severidade.png  severidade da queima (dNBR), quando calculada",
+        "cenas.csv            todas as cenas avaliadas, com NDVI, nuvem e identificador da cena (proveniência)",
+        "proveniencia.json    parâmetros, método e resultado da quebra de NDVI", "",
+        "Fontes: ESA Copernicus Sentinel-2 e USGS Landsat 8/9, via Microsoft Planetary Computer.",
+        "Documento técnico automatizado: não substitui laudo pericial."].join("\r\n"));
+      bt.textContent = "Compactando…";
+      baixarBlob(`${base}_imagens.zip`, await Z.generateAsync({type: "blob"}));
+    } catch (e) { console.error(e); alert("Não foi possível gerar o ZIP: " + e.message); }
+    finally { bt.disabled = false; bt.textContent = "Baixar todas (ZIP)"; }
+  };
 
   // ------------------------------------------------------------ parecer por IA
   $("#aParecer").onclick = async () => {

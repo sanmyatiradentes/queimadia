@@ -182,13 +182,13 @@
           <div class="grafico"><svg id="gSerie"></svg></div></div>
         <div class="cartao" id="aQuebraC" hidden><h2>A conta, passo a passo</h2><p class="nota" style="margin:4px 0 8px">Para quem quiser conferir: como o sistema decide se e quando a vegetação foi perdida (método do PolicIA).</p><div class="calculo" id="aCalc"></div></div>
         <div class="cartao" id="aTlC" hidden>
-          <div class="cab"><h2>Linha do tempo animada</h2><div class="chips" id="tlProd"></div></div>
+          <div class="cab"><h2>Linha do tempo animada</h2><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div class="chips" id="tlProd"></div><button type="button" class="botao secundario pequeno" id="tlVideo" title="Grava a animação em vídeo, com data e legenda, para slides">Baixar vídeo</button></div></div>
           <div class="tl-quadro"><img id="tlImg" alt="Imagem da linha do tempo"><span class="tl-data" id="tlData"></span></div>
           <div class="tl-ctl"><button type="button" class="botao pequeno" id="tlPlay">▶ Reproduzir</button>
             <input type="range" id="tlSl" min="0" max="0" value="0" aria-label="Escolher a data"><span class="nota" id="tlPos"></span></div>
           <p class="nota">As mesmas imagens da galeria, em ordem de data, no recorte da análise. Para um timelapse com mais datas, use os botões "Copernicus" na ficha do evento e o ícone Timelapse do Copernicus Browser.</p>
         </div>
-        <div class="cartao" id="aGalC" hidden><div class="cab"><h2>Imagens por período</h2><span class="nota">Clique numa imagem para ampliar</span></div><div class="galeria" id="aGal"></div></div>
+        <div class="cartao" id="aGalC" hidden><div class="cab"><h2>Imagens por período</h2><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="nota">Clique numa imagem para ampliar</span><button type="button" class="botao secundario pequeno" id="aZip" title="Todas as imagens, o dNBR, as cenas (CSV) e a proveniência (JSON) num arquivo ZIP">Baixar todas (ZIP)</button></div></div><div class="galeria" id="aGal"></div></div>
         <div class="cartao" id="aDnbrC" hidden>
           <div class="cab"><h2>Severidade da queima (dNBR)</h2>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
