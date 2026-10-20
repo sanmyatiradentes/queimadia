@@ -641,7 +641,7 @@ function montarControles() {
       if (Q.vento) { sl.max = Q.vento.horas_utc.length - 1; sl.value = Q.ventoHora || 0; } desenharVento(); }
   });
   const marcar = padrao => $$("#ctlCorpo input[type=checkbox]").forEach(c => {
-    const k = c.dataset.c, v = padrao ? (k ? CAMADAS.find(x => x[0] === k)?.[3] ?? false : true) : false;
+    const k = c.dataset.c, v = padrao && k ? CAMADAS.find(x => x[0] === k)?.[3] ?? false : false;   // Brasil MAIS (data-b) fica desligado no padrão
     if (c.checked !== v) { c.checked = v; c.dispatchEvent(new Event("change", {bubbles: true})); } });
   $("#ctlNenhuma").onclick = () => marcar(false);
   $("#btnAnalisarAqui").onclick = () => {
@@ -931,7 +931,7 @@ async function detectarModo() {
 
 // ------------------------------------------------------------ área restrita (login) e alertas Brasil MAIS
 // Os alertas do Brasil MAIS são de convênio: ficam no armazenamento privado e só chegam a usuários aprovados.
-const BRM = {meta: null, lista: [], porId: new Map(), vis: {C: true, F: true, I: true, D: true, G: true}, ano: ""};
+const BRM = {meta: null, lista: [], porId: new Map(), vis: {C: false, F: false, I: false, D: false, G: false}, ano: ""};   // desligado por padrão: polui o mapa
 // cores fora da escala de prioridade (amarelo → vinho) e formas próprias: losango = fogo, quadrado = desmatamento
 const BRM_COR = {C: "#b388ff", F: "#ff00d4", I: "#ffffff", D: "#76ff03", G: "#00e5ff"};
 const BRM_FORMA = {C: "losango", F: "losango", I: "losango", D: "quadrado", G: "quadrado"};
@@ -984,13 +984,14 @@ async function carregarBrmais() {
   m.getSource("brmais").setData({type: "FeatureCollection",
     features: BRM.lista.map(a => ({type: "Feature", properties: {id: a[0], t: a[1], y: a[4].slice(0, 4)}, geometry: {type: "Point", coordinates: [a[6], a[5]]}}))});
   const anos = [...new Set([...Object.keys(BRM.meta.anos), ...(DESM.meta ? DESM.meta.resumo.map(r => r[2]) : [])])].sort().reverse();
-  const it = (b, t) => `<label><input type="checkbox" data-b="${b}" checked>${svgForma(b)}${t}</label>`;
+  const it = (b, t) => `<label><input type="checkbox" data-b="${b}">${svgForma(b)}${t}</label>`;
+  BRM.ano = anos[0] || "";   // ao ligar, começa pelo ano mais recente
   $("#ctlCorpo h4 + label input[data-c='eventos']")?.closest("label").previousElementSibling.insertAdjacentHTML("beforebegin",
     `<div class="brm-grupo"><h4>Brasil MAIS <span class="tarja">RESTRITO</span></h4>
       ${it("F", "Foco de queimada")}${it("I", "Foco de queimada por IA (início provável)")}${it("C", "Cicatriz de queimada")}
       ${DESM.meta ? it("D", "Desmatamento (corte raso, degradação, ramal)") + it("G", "Garimpo / extração mineral") : ""}
-      <label class="brm-ano">Ano da imagem <select id="brmAno"><option value="">todos</option>${anos.map(a => `<option>${a}</option>`).join("")}</select></label>
-      <p class="nota">Desmatamento: aproxime o mapa para ver cada alerta.</p></div>`);
+      <label class="brm-ano">Ano da imagem <select id="brmAno">${anos.map(a => `<option${a === BRM.ano ? " selected" : ""}>${a}</option>`).join("")}<option value="">todos os anos</option></select></label>
+      <p class="nota">Desligado por padrão. Marque o tipo que quiser ver; o ano começa no mais recente. Desmatamento: aproxime o mapa para ver cada alerta.</p></div>`);
   $("#legenda")?.insertAdjacentHTML("beforeend", `<div><b style="font-size:11px">Brasil MAIS (restrito) · losango = fogo:</b></div>
     <div>${svgForma("F")}Foco · ${svgForma("I")}Foco por IA · ${svgForma("C")}Cicatriz</div>`
     + (DESM.meta ? `<div><b style="font-size:11px">quadrado = desmatamento:</b></div><div>${svgForma("D")}Desmatamento · ${svgForma("G")}Garimpo</div>` : ""));
