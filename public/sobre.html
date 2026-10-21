@@ -41,6 +41,10 @@ body{background:#fff}
 .tela h3{font-size:20px;margin:0 0 8px}
 .tela p{color:var(--cinza-texto);margin:0 0 8px}
 .tela ul{margin:6px 0 0;padding-left:18px;color:var(--cinza-texto)}
+.grade-campo{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grade-campo p{margin:4px 0 0;color:var(--cinza-texto);font-size:14.5px}
+.passo{min-width:32px;width:auto;padding:0 8px;border-radius:99px}
+@media (max-width:560px){.grade-campo{grid-template-columns:1fr}}
 .fontes{display:flex;flex-wrap:wrap;gap:8px}
 .fontes span{background:#fff;border:1px solid var(--cinza-borda);border-radius:99px;padding:6px 12px;font-size:13.5px}
 .acesso{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
@@ -65,6 +69,8 @@ body{background:#fff}
   <a class="marca" href="sobre.html"><img src="img/pcam.png" alt="Polícia Civil do Amazonas"><img src="img/dptc.png" alt="Departamento de Polícia Técnico-Científica">
     <span class="nome">Fogo Forense<small>NIPED · PCAM/DPTC</small></span></a>
   <span class="espaco"></span>
+  <a class="botao claro pequeno txt-longo" href="#campo">Em campo</a>
+  <a class="botao claro pequeno txt-longo" href="#ia">Uso de IA</a>
   <a class="botao claro pequeno" href="#acesso">Solicitar acesso</a>
   <a class="botao claro pequeno" href="entrar.html">Entrar</a>
 </header>
@@ -74,7 +80,7 @@ body{background:#fff}
     <div>
       <span class="selo-restrito">🔒 Acesso restrito a profissionais cadastrados</span>
       <h1>Onde o fogo no Amazonas <span>pode ter sido criminoso</span></h1>
-      <p>O Fogo Forense acompanha os focos de calor detectados por satélite em todo o estado, cruza cada ocorrência com desmatamento, áreas protegidas, histórico do local e clima, e indica quais merecem verificação primeiro. Atualizado a cada 10 minutos.</p>
+      <p>O Fogo Forense acompanha os focos de calor detectados por satélite em todo o estado, cruza cada ocorrência com desmatamento, áreas protegidas, histórico do local e clima, e indica quais merecem verificação primeiro. Atualizado a cada 10 minutos — no escritório e em campo, pelo celular.</p>
       <div class="acoes"><a class="botao ouro" href="#acesso">Solicitar acesso</a><a class="botao contorno" href="entrar.html">Já tenho cadastro</a></div>
     </div>
     <img class="vitrine" src="img/telas/mapa.jpg" alt="Painel do Fogo Forense com o mapa de eventos e a fila de prioridades">
@@ -85,10 +91,11 @@ body{background:#fff}
   <div class="dentro">
     <h2>O que é</h2>
     <p class="lead">Uma ferramenta de apoio à investigação de crimes ambientais com fogo, desenvolvida pelo NIPED da Polícia Civil do Amazonas com o Departamento de Polícia Técnico-Científica.</p>
-    <div class="grade3">
+    <div class="grade4">
       <div class="bloco"><h3>Prioriza a verificação</h3><p>Entre milhares de focos por temporada, ordena os eventos com mais sinais de ação humana intencional, para orientar onde olhar primeiro.</p></div>
       <div class="bloco"><h3>Reúne a prova técnica</h3><p>Imagens de satélite antes e depois, perda de vegetação, severidade da queima, clima no início do fogo e cronologia das detecções num só lugar.</p></div>
-      <div class="bloco"><h3>Gera o relatório</h3><p>Documento imprimível por evento com área de interesse, consulta a CAR, UC, terras indígenas, quilombolas, embargos e mineração, e matriz de hipóteses.</p></div>
+      <div class="bloco"><h3>Relatório em um clique</h3><p>Faz a análise de satélite que faltar, redige o parecer e monta o PDF: área de interesse, gráfico de NDVI, consulta a CAR, UC, TI, quilombolas, embargos e mineração, e matriz de hipóteses.</p></div>
+      <div class="bloco"><h3>Vai a campo</h3><p>No celular, mostra onde você está, analisa o local pelo GPS ou por coordenadas digitadas e gera o relatório do ponto durante o exame.</p></div>
     </div>
   </div>
 </section>
@@ -104,6 +111,40 @@ body{background:#fff}
       <div class="bloco"><span class="passo">4</span><h3>Confere no satélite</h3><p>Para os eventos prioritários, analisa a série de imagens Sentinel-2 e Landsat (NDVI e dNBR) e o radar Sentinel-1, que vê através de nuvem e fumaça.</p></div>
     </div>
     <p class="lead" style="margin:22px 0 0">A prioridade só ordena o trabalho: não é grau de certeza nem prova. A matriz de hipóteses apresenta, lado a lado e sem pesos, os elementos favoráveis à ignição intencional, os compatíveis com acidente ou queima tradicional e as lacunas, seguindo os guias de metodologia do NIPED.</p>
+  </div>
+</section>
+
+<section class="faixa" id="campo">
+  <div class="dentro">
+    <h2>Em campo, pelo celular</h2>
+    <p class="lead">O mesmo sistema funciona no celular durante o exame de local: localiza a equipe, analisa o ponto exato e entrega o relatório ali mesmo.</p>
+    <div class="tela" style="margin-bottom:24px"><figure><img src="img/telas/campo.jpg" alt="Mapa com o ponto informado e os atalhos de análise e relatório"></figure>
+      <div>
+        <div class="grade-campo">
+          <div><b>📍 Onde estou</b><p>O mapa vai até a sua posição pelo GPS e acompanha enquanto você se desloca, com o círculo de precisão. Avisa qual evento de fogo está mais perto.</p></div>
+          <div><b>🛰️ Analisar onde estou</b><p>Um toque: pega a posição e analisa dois anos de imagens Sentinel-2 e Landsat do local, em 1 a 3 minutos.</p></div>
+          <div><b>⌨️ Coordenadas digitadas</b><p>Aceita decimal (-3,347, -59,446) ou graus, minutos e segundos (3°20'49"S 59°26'44"W) e corrige o sinal esquecido. O ponto ganha os atalhos <i>Analisar satélite aqui</i> e <i>Relatório deste ponto</i>.</p></div>
+          <div><b>📄 Relatório do ponto</b><p>Sem evento de foco por perto, sai o relatório do ponto de interesse, com análise de satélite, parecer e consulta às bases. Salva em PDF no próprio celular.</p></div>
+        </div>
+      </div></div>
+    <p class="nota"><b>Dicas:</b> precisa de internet (dados móveis bastam). Em área sem sinal, anote as coordenadas e gere o relatório ao voltar. Mantenha a tela ligada enquanto a análise roda.</p>
+  </div>
+</section>
+
+<section class="faixa cinza" id="ia">
+  <div class="dentro">
+    <h2>Inteligência artificial: o que faz e o que não faz</h2>
+    <p class="lead">A IA entra em pontos específicos e sempre identificada. As decisões de prioridade e os cálculos de satélite seguem regras e métodos publicados, que podem ser conferidos e reproduzidos.</p>
+    <div class="grade3">
+      <div class="bloco"><span class="passo">IA</span><h3>Atipicidade do evento</h3><p>Um modelo de aprendizado de máquina (<i>Isolation Forest</i>) compara cada evento com todos os outros da temporada — focos, duração, simultaneidade, desmatamento, reincidência, área protegida e distância — e dá uma nota de 0 a 100 para o quanto ele foge do padrão. A nota aparece ao lado da prioridade e não a altera.</p></div>
+      <div class="bloco"><span class="passo">IA</span><h3>Parecer técnico preliminar</h3><p>Um modelo de linguagem (Google Gemini) redige o parecer a partir dos números já calculados: série de NDVI, quebra, severidade da queima, clima e indicadores. Ele não inventa fatos, não atribui autoria, apresenta as hipóteses sem pesos, cita a literatura científica e declara as limitações. Exige revisão de perito antes de qualquer uso.</p></div>
+      <div class="bloco"><span class="passo">IA</span><h3>Foco de queimada por IA (Brasil MAIS)</h3><p>Produto do Brasil MAIS, da Polícia Federal, não do Fogo Forense: indica o local provável de início da queimada, só em vegetação primária. Aqui ele entra como hipótese espacial a confrontar em campo, nunca como ponto de ignição demonstrado.</p></div>
+    </div>
+    <div class="grade3" style="margin-top:18px">
+      <div class="bloco"><h3>Não é IA (regras e métodos)</h3><p>Agrupamento dos focos em eventos (DBSCAN), prioridade de verificação (indicadores explícitos), NDVI, quebra e dNBR (Rouse et al., 1974; Zhu e Woodcock, 2014; Key e Benson, 2006), matriz de hipóteses e consulta às bases.</p></div>
+      <div class="bloco"><h3>O que a IA nunca faz</h3><p>Não decide prioridade, não acusa ninguém, não conclui origem, causa ou autoria e não substitui o exame de local. Origem, causa e autoria exigem demonstrações próprias, como orientam os guias do NIPED.</p></div>
+      <div class="bloco"><h3>Dados protegidos</h3><p>Os alertas do Brasil MAIS e os dados de quem usa o sistema não são enviados ao modelo de linguagem. Ele recebe apenas os números da análise de satélite e os indicadores públicos do evento.</p></div>
+    </div>
   </div>
 </section>
 
@@ -127,8 +168,11 @@ body{background:#fff}
       <div><h3>Linha do tempo animada</h3><p>As imagens do local passam em sequência, da mais antiga à mais recente, mostrando a área antes e depois do fogo. Dá para pausar, arrastar até uma data e alternar entre cor real e NDVI.</p>
         <ul><li>Fica na aba Análise de satélite, ao abrir a análise de um evento</li><li>Baixa em vídeo (MP4), com data e legenda, pronto para slides; as imagens, o dNBR e a proveniência saem num ZIP</li><li>Para mais datas, os botões Copernicus da ficha abrem o timelapse do Copernicus Browser no local e no período do evento</li></ul></div></div>
     <div class="tela"><figure><img src="img/telas/relatorio.jpg" alt="Relatório do evento"></figure>
-      <div><h3>Relatório do evento</h3><p>Documento pronto para imprimir ou salvar em PDF, no formato dos relatórios analíticos de alertas.</p>
-        <ul><li>Área de interesse e mapas de localização</li><li>Consulta por sobreposição e proximidade a CAR, UC, TI, quilombolas, embargos do IBAMA e ANM</li><li>Referências, limitações e glossário</li></ul></div></div>
+      <div><h3>Relatório do evento, em um clique</h3><p>O botão <b>Gerar relatório completo</b> faz a análise de satélite que faltar, redige o parecer e monta o documento pronto para imprimir ou salvar em PDF, com barra de progresso.</p>
+        <ul><li>Área de interesse e mapas de localização</li><li>Consulta por sobreposição e proximidade a CAR, UC, TI, quilombolas, embargos do IBAMA e ANM</li><li>Parecer técnico preliminar, referências científicas, limitações e glossário</li></ul></div></div>
+    <div class="tela"><figure><img src="img/telas/relatorio-ndvi.jpg" alt="Gráfico da série de NDVI no relatório"></figure>
+      <div><h3>Gráfico de NDVI com a leitura pronta</h3><p>A série de dois anos de imagens, com linha de base, limiar de perda, período do fogo e intervalo da quebra marcados, separando Sentinel-2 e Landsat.</p>
+        <ul><li>Vegetação 90 dias antes e depois do fogo, com a variação</li><li>Situação da quebra: confirmada, provável ou sem queda</li><li>Aviso quando a queda ainda aguarda novas imagens</li></ul></div></div>
     <div class="tela"><figure><img src="img/telas/numeros.jpg" alt="Estatísticas"></figure>
       <div><h3>Números</h3><p>Focos por mês e por ano, municípios mais afetados e satélites, para acompanhar a temporada e comparar com anos anteriores.</p></div></div>
     <div class="tela"><figure><img src="img/telas/telao.jpg" alt="Modo telão"></figure>
@@ -145,7 +189,8 @@ body{background:#fff}
       <span>ESA Copernicus Sentinel-1 e Sentinel-2</span><span>USGS Landsat 8/9</span><span>Open-Meteo — clima e vento</span>
       <span>FUNAI — terras indígenas</span><span>MMA/ICMBio — unidades de conservação</span><span>INCRA — quilombolas</span>
       <span>SICAR — CAR</span><span>IBAMA — embargos</span><span>ANM — SIGMINE</span><span>Anatel — estações rádio base</span>
-      <span>RainViewer e NASA GIBS — chuva e nuvens</span><span>Brasil MAIS (convênio) — alertas Planet</span>
+      <span>RainViewer e NASA GIBS — chuva e nuvens</span><span>Brasil MAIS (convênio) — alertas de queimada, desmatamento e garimpo, imagens Planet 3 m</span>
+      <span>Google Gemini — redação do parecer</span>
     </div>
   </div>
 </section>
@@ -160,6 +205,7 @@ body{background:#fff}
         <li>Crie uma senha de pelo menos 10 caracteres.</li>
         <li>Aguarde a aprovação. Você poderá entrar assim que o cadastro for validado.</li>
       </ol>
+      <p class="muted" style="margin:10px 0 0;font-size:14.5px"><b>Senha:</b> já dentro do sistema, use <b>Trocar senha</b> no topo. Se esquecer, peça à administração do NIPED: você recebe uma senha temporária e cria uma nova no primeiro acesso.</p>
       <div class="acoes" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:18px">
         <a class="botao" href="entrar.html?cadastro=1" style="font-size:16px;padding:11px 20px">Solicitar acesso</a>
         <a class="botao secundario" href="entrar.html" style="font-size:16px;padding:11px 20px">Entrar</a>
