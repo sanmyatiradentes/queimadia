@@ -136,12 +136,12 @@ body{background:#fff}
     <h2>Inteligência artificial: o que faz e o que não faz</h2>
     <p class="lead">A IA entra em pontos específicos e sempre identificada. As decisões de prioridade e os cálculos de satélite seguem regras e métodos publicados, que podem ser conferidos e reproduzidos.</p>
     <div class="grade3">
-      <div class="bloco"><span class="passo">IA</span><h3>Atipicidade do evento</h3><p>Um modelo de aprendizado de máquina (<i>Isolation Forest</i>) compara cada evento com todos os outros da temporada — focos, duração, simultaneidade, desmatamento, reincidência, área protegida e distância — e dá uma nota de 0 a 100 para o quanto ele foge do padrão. A nota aparece ao lado da prioridade e não a altera.</p></div>
+      <div class="bloco"><span class="passo">IA</span><h3>Atipicidade do evento</h3><p>Um modelo de aprendizado de máquina (<i>Isolation Forest</i>) compara cada evento com todos os outros da temporada — focos, duração, simultaneidade, desmatamento, reincidência, área protegida, distância, floresta, conversão e fogo histórico do MapBiomas — e dá uma nota de 0 a 100 para o quanto ele foge do padrão. A nota aparece ao lado da prioridade e não a altera.</p></div>
       <div class="bloco"><span class="passo">IA</span><h3>Parecer técnico preliminar</h3><p>Um modelo de linguagem (Google Gemini) redige o parecer a partir dos números já calculados: série de NDVI, quebra, severidade da queima, clima e indicadores. Ele não inventa fatos, não atribui autoria, apresenta as hipóteses sem pesos, cita a literatura científica e declara as limitações. Exige revisão de perito antes de qualquer uso.</p></div>
       <div class="bloco"><span class="passo">IA</span><h3>Foco de queimada por IA (Brasil MAIS)</h3><p>Produto do Brasil MAIS, da Polícia Federal, não do Fogo Forense: indica o local provável de início da queimada, só em vegetação primária. Aqui ele entra como hipótese espacial a confrontar em campo, nunca como ponto de ignição demonstrado.</p></div>
     </div>
     <div class="grade3" style="margin-top:18px">
-      <div class="bloco"><h3>Não é IA (regras e métodos)</h3><p>Agrupamento dos focos em eventos (DBSCAN), prioridade de verificação (indicadores explícitos), NDVI, quebra e dNBR (Rouse et al., 1974; Zhu e Woodcock, 2014; Key e Benson, 2006), matriz de hipóteses e consulta às bases.</p></div>
+      <div class="bloco"><h3>Não é IA (regras e métodos)</h3><p>Agrupamento dos focos em eventos (DBSCAN), prioridade de verificação (indicadores explícitos), NDVI, quebra e dNBR (Rouse et al., 1974; Zhu e Woodcock, 2014; Key e Benson, 2006), conversão de floresta e fogo histórico (MapBiomas), hora da 1ª detecção GOES, matriz de hipóteses e consulta às bases.</p></div>
       <div class="bloco"><h3>O que a IA nunca faz</h3><p>Não decide prioridade, não acusa ninguém, não conclui origem, causa ou autoria e não substitui o exame de local. Origem, causa e autoria exigem demonstrações próprias, como orientam os guias do NIPED.</p></div>
       <div class="bloco"><h3>Dados protegidos</h3><p>Os alertas do Brasil MAIS e os dados de quem usa o sistema não são enviados ao modelo de linguagem. Ele recebe apenas os números da análise de satélite e os indicadores públicos do evento.</p></div>
     </div>
@@ -190,6 +190,8 @@ body{background:#fff}
       <span>FUNAI — terras indígenas</span><span>MMA/ICMBio — unidades de conservação</span><span>INCRA — quilombolas</span>
       <span>SICAR — CAR</span><span>IBAMA — embargos</span><span>ANM — SIGMINE</span><span>Anatel — estações rádio base</span>
       <span>RainViewer e NASA GIBS — chuva e nuvens</span><span>Brasil MAIS (convênio) — alertas de queimada, desmatamento e garimpo, imagens Planet 3 m</span>
+      <span>MapBiomas — uso da terra (1985–2024) e fogo histórico</span><span>GOES-16/19 — fogo a cada 10 min</span>
+      <span>Copernicus CAMS — fumaça e PM2,5</span><span>NASA GPM IMERG — chuva por satélite</span><span>Copernicus DEM — relevo</span>
       <span>Google Gemini — redação do parecer</span>
     </div>
   </div>

@@ -285,6 +285,7 @@ const REFS_LIT = [
   "Zhu, Z.; Woodcock, C. E. (2014a). Continuous change detection and classification of land cover using all available Landsat data. <i>Remote Sensing of Environment</i>, 144, 152–171.",
   "Zhu, Z.; Woodcock, C. E. (2014b). Automated cloud, cloud shadow, and snow detection in multitemporal Landsat data. <i>Remote Sensing of Environment</i>, 152, 217–234.",
   "Arévalo, P.; Bullock, E. L.; Woodcock, C. E.; Olofsson, P. (2020). A suite of tools for continuous land change monitoring in Google Earth Engine. <i>Frontiers in Climate</i>, 2, 576740.",
+  "Souza, C. M. et al. (2020). Reconstructing three decades of land use and land cover changes in Brazilian biomes with Landsat archive and Earth Engine. <i>Remote Sensing</i>, 12(17), 2735.",
   "Key, C. H.; Benson, N. C. (2006). Landscape Assessment: sampling and analysis methods. In: <i>FIREMON</i>. USDA Forest Service, RMRS-GTR-164-CD.",
 ];
 const SECOES = "Objeto|Dados e m[ée]todo|Dados|M[ée]todo|Resultados|Matriz de hip[óo]teses|Interpreta[çc][ãa]o t[ée]cnica|Interpreta[çc][ãa]o|Limita[çc][õo]es|Dilig[êe]ncias sugeridas|Dilig[êe]ncias|Refer[êe]ncias";
@@ -427,6 +428,7 @@ function render() {
     ${c.itens.length > 25 ? `<p class="nota">Mostrando 25 de ${c.itens.length}.</p>` : ""}`).join("")));
 
   // 6. contexto do painel (clima, cronologia, ERBs) e matriz
+  if (guardado?.territorio) html.push(sec(N(), "Território: uso da terra, fogo histórico e relevo", guardado.territorio));
   const ctx = [guardado?.clima, guardado?.cronologia, guardado?.erbs].filter(Boolean).join("");
   if (ctx) html.push(sec(N(), "Clima, cronologia das detecções e telefonia", ctx));
   if (guardado?.brmais && usuario) html.push(sec(N(), "Alertas Brasil MAIS próximos (ficha do painel)", guardado.brmais, "restrito"));

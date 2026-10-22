@@ -47,6 +47,7 @@ PESOS = {
     "periodo_proibitivo": 10,
     "cicatriz_deter": 15,
     "ignicao_desfavoravel": 10,
+    "conversao_florestal": 15,
 }
 INDICADORES = list(PESOS)
 DESCRICAO_INDICADORES = {
@@ -57,7 +58,8 @@ DESCRICAO_INDICADORES = {
     "uso_sustentavel": ("UC de uso sustentável",
                         "RDS, RESEX, APA (grupo US): roça tradicional é permitida, peso reduzido; não soma com o anterior"),
     "reincidencia": ("Reincidência",
-                     "fogo na mesma célula de ~1 km (0,01°) em 2 ou mais anos anteriores, satélite de referência"),
+                     "fogo na mesma célula de ~1 km (0,01°) em 2 ou mais anos anteriores (satélite de referência do INPE), "
+                     "ou, a até 500 m, ao menos 10% da área queimada em 3 ou mais anos desde 1985 (MapBiomas Fogo)"),
     "multiplos_focos_dia": ("3 ou mais focos no mesmo dia", "ignições simultâneas dentro do mesmo evento"),
     "periodo_proibitivo": ("Início em período proibitivo", "mês do 1º foco entre julho e novembro (parâmetro)"),
     "cicatriz_deter": ("Cicatriz de queimada no DETER",
@@ -65,6 +67,9 @@ DESCRICAO_INDICADORES = {
     "ignicao_desfavoravel": ("Ignição em condição desfavorável ao fogo",
                              "no 1º foco: risco de fogo do INPE < 0,3, ou chuva ≥ 10 mm nas 72 h anteriores, ou umidade mínima das 24 h anteriores ≥ 80%: "
                              "o fogo dificilmente começaria ou se espalharia sozinho"),
+    "conversao_florestal": ("Conversão recente de floresta (MapBiomas)",
+                            "a até 500 m do evento, a floresta natural caiu ≥ 20 pontos percentuais nos 5 anos anteriores ao fogo "
+                            "(partindo de ≥ 50%) e o uso antrópico chegou a ≥ 20% (pastagem, agricultura, mosaico, mineração ou área não vegetada)"),
 }
 
 CREDITO = "Desenvolvido pelo NIPED/PCAM"

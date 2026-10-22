@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 
-from . import clima, erbs, ingest, eventos, lixoes, mudanca, publicar, precalcular
+from . import ar, clima, erbs, goes, ingest, eventos, lixoes, mudanca, publicar, precalcular, territorio
 
 
 def ciclo(rapido=False):
@@ -35,6 +35,20 @@ def ciclo(rapido=False):
     except Exception:
         traceback.print_exc()
     eventos.aplicar_clima(evs + alertas)
+    try:   # hora da 1ª detecção geoestacionária (GOES), já presente nos focos do INPE
+        print("eventos com detecção GOES:", goes.marcar(evs + alertas, df))
+    except Exception:
+        traceback.print_exc()
+    try:   # uso da terra, histórico de fogo (MapBiomas) e relevo (Copernicus DEM)
+        print("território:", territorio.enriquecer(alertas + evs))
+        territorio.aplicar(evs + alertas)
+    except Exception:
+        traceback.print_exc()
+    eventos.atipicidade(evs, alertas)   # depois do território, que entra no modelo
+    try:   # fumaça (CAMS): PM2,5 no local e em Manaus
+        print("qualidade do ar:", ar.enriquecer(alertas + evs))
+    except Exception:
+        traceback.print_exc()
     try:
         print("eventos perto de lixão:", lixoes.marcar(evs + alertas, lixoes.atualizar()))
     except Exception:

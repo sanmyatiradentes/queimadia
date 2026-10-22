@@ -17,7 +17,7 @@ const IND_TXT = {
   desmatamento_previo: "Desmatamento prévio (DETER)", area_protegida: "TI ou UC de proteção integral",
   uso_sustentavel: "UC de uso sustentável", reincidencia: "Reincidência", multiplos_focos_dia: "≥3 focos no mesmo dia",
   periodo_proibitivo: "Período proibitivo", cicatriz_deter: "Cicatriz DETER",
-  ignicao_desfavoravel: "Ignição em tempo desfavorável",
+  ignicao_desfavoravel: "Ignição em tempo desfavorável", conversao_florestal: "Conversão de floresta (MapBiomas)",
 };
 // hora de Manaus (UTC−4)
 const manaus = utc => { const d = new Date(utc.replace(" ", "T") + "Z"); d.setUTCHours(d.getUTCHours() - 4);
@@ -210,6 +210,7 @@ function selecionar(id, voar) {
     </div>
     ${blocoConfronto(e)}
     ${blocoClima(e)}
+    ${blocoTerritorio(e)}
     ${blocoCronologia(e)}
     ${blocoMudanca(e)}
     ${blocoErbs(e)}
@@ -235,7 +236,7 @@ function selecionar(id, voar) {
   if ($("#fAnalisar")) $("#fAnalisar").onclick = () => window.abrirAnalise?.(e);
   if ($("#fPronta")) $("#fPronta").onclick = () => window.mostrarAnalisePronta?.(e.id);
   $("#fRelatorio").onclick = () => {
-    try { localStorage.setItem("ff_rel_" + e.id, JSON.stringify({porque, confronto: blocoConfronto(e), clima: blocoClima(e), cronologia: blocoCronologia(e),
+    try { localStorage.setItem("ff_rel_" + e.id, JSON.stringify({porque, confronto: blocoConfronto(e), clima: blocoClima(e), territorio: blocoTerritorio(e), cronologia: blocoCronologia(e),
       mudanca: blocoMudanca(e), erbs: blocoErbs(e), brmais: blocoBrmais(e), restrito: !!Q.usuario, t: Date.now()})); } catch (x) {}
     window.open("relatorio.html?id=" + encodeURIComponent(e.id), "_blank");
   };
@@ -261,6 +262,15 @@ function blocoConfronto(e) {
   if (haRad >= 1 && radPoucas) inconc.push(`Radar indica possível abertura de dossel em ${br(haRad, 1)} ha, mas com só 1 imagem antes ou depois: confirmar com novas passagens`);
   if (mu && mu.area_total_ha >= 1 && haRad < 1) inconc.push(`Óptico mostra ${br(mu.area_total_ha, 1)} ha alterados (queima/perda de verde), sem confirmação do radar`);
   if (ctx.includes("biomassa_alta")) intenc.push("Fogo intenso e persistente: compatível com queima de muita biomassa (conversão)");
+  const tr = d.territorio, c1 = tr?.cobertura?.fracao || {}, fh = tr?.fogo_historico || {};
+  if (tr?.conversao) intenc.push(`MapBiomas: ${br(tr.conversao.ha_convertidos, 1)} ha de floresta convertidos em ${(GRUPO_TXT[tr.conversao.para] || tr.conversao.para).toLowerCase()} entre ${tr.conversao.de} e ${tr.conversao.ate}: padrão de desmatamento seguido de queima (não é independente do DETER, quando os dois existem)`);
+  if (fh.anos_p90 >= 3) intenc.push(`MapBiomas Fogo: parte da área queimou em ${fh.anos_max} anos desde 1985 (última em ${fh.ultimo_ano}): uso recorrente do fogo no local`);
+  if (tr && (c1.pastagem || 0) + (c1.agricultura || 0) + (c1.mosaico || 0) >= 0.5 && !tr.conversao)
+    acid.push(`Uso agropecuário consolidado (MapBiomas ${tr.cobertura.ano}: ${tr.cobertura.classe_dominante.toLowerCase()}): compatível com queima de manejo de pasto ou roça; verificar autorização de queima`);
+  if (tr && (c1.floresta || 0) >= 0.8 && !fh.anos_max)
+    inconc.push(`Floresta natural sem queima registrada desde 1985 (MapBiomas): floresta úmida raramente queima sem fonte humana; falta discriminar ignição no local de escape de queima vizinha`);
+  if (tr?.relevo?.declividade_p90_graus >= 12) inconc.push(`Relevo inclinado (declividade de até ${br(tr.relevo.declividade_p90_graus, 0)}°): o fogo tende a subir a encosta; na perícia, procurar a região de início na parte baixa`);
+  if (d.goes?.antecede_h > 0) inconc.push(`GOES: fogo já detectável ${br(d.goes.antecede_h, 1)} h antes do satélite de referência (${manaus(d.goes.primeira)}, Manaus): estreita o horário, mas não é a hora da ignição`);
   if (ctx.includes("escape_plausivel")) acid.push("Seca forte e vento acima de 10 km/h: uma queima pode ter escapado do controle");
   if (d.ti) acid.push("Em terra indígena, a roça tradicional dos próprios indígenas com fogo é permitida");
   else if (d.uc && d.uc_grupo !== "PI") acid.push("Reserva de uso sustentável: a roça tradicional das comunidades com fogo é permitida");
@@ -334,9 +344,31 @@ function blocoErbs(e) {
     <p class="nota">Uso investigativo: a posição da antena não é a posição de um aparelho, e o alcance varia com relevo, vegetação e potência. Registros de conexão às ERBs dependem de ordem judicial e de vínculo individualizado com o fato; a proximidade, por si só, não fundamenta pedido coletivo (guia do NIPED).</p></div>`;
 }
 
+const GRUPO_TXT = {floresta: "Floresta natural", natural_nao_florestal: "Vegetação natural não florestal", pastagem: "Pastagem", agricultura: "Agricultura",
+  mosaico: "Mosaico de usos", urbano: "Área urbana", mineracao: "Mineração", agua: "Água", nao_vegetado: "Não vegetado", outros: "Outros"};
+function blocoTerritorio(e) {
+  const t = e.det.territorio; if (!t) return "";
+  const c1 = t.cobertura || {}, c0 = t.cobertura_antes || {}, fh = t.fogo_historico || {}, rv = t.relevo, cv = t.conversao;
+  const grupos = [...new Set([...Object.keys(c0.fracao || {}), ...Object.keys(c1.fracao || {})])];
+  const pct = v => v == null ? "–" : br(v * 100, 0) + "%";
+  return `<div class="clima-bloco"><h3>Território: uso da terra, fogo histórico e relevo</h3>
+    ${cv ? `<p class="clima-leitura"><b>Conversão de floresta</b>: a floresta natural a até ${t.raio_m} m caiu de ${pct(cv.floresta_antes)} (${cv.de}) para ${pct(cv.floresta_depois)} (${cv.ate}), cerca de <b>${br(cv.ha_convertidos, 1)} ha</b> que viraram ${esc(GRUPO_TXT[cv.para] || cv.para).toLowerCase()}. Compatível com desmatamento seguido de queima para formar ${cv.para === "pastagem" ? "pasto" : "área de uso"}.</p>` : ""}
+    <div class="rolagem"><table class="tabela"><thead><tr><th>Uso e cobertura (MapBiomas)</th><th>${c0.ano || "–"}</th><th>${c1.ano || "–"}</th></tr></thead><tbody>
+      ${grupos.map(g => `<tr><td>${esc(GRUPO_TXT[g] || g)}</td><td class="n">${pct((c0.fracao || {})[g])}</td><td class="n">${pct((c1.fracao || {})[g])}</td></tr>`).join("")}</tbody></table></div>
+    <div class="fatos">
+      <div><span>Classe dominante (${c1.ano || "–"})</span><b>${esc(c1.classe_dominante || "–")}</b></div>
+      <div><span>Anos com fogo desde 1985 (máx.)</span><b>${fh.anos_max ?? "–"}</b></div>
+      <div><span>Área que já queimou</span><b>${pct(fh.fracao_ja_queimada)}</b></div>
+      <div><span>Última queima registrada</span><b>${fh.ultimo_ano || "nenhuma"}</b></div>
+      ${rv ? `<div><span>Altitude</span><b>${br(rv.altitude_m, 0)} m</b></div><div><span>Declividade média</span><b>${br(rv.declividade_media_graus, 1)}°</b></div>` : ""}
+    </div>
+    <p class="nota">Círculo de ${t.raio_m} m no centro do evento. Uso da terra no ano anterior ao fogo e 5 anos antes: MapBiomas Coleção 10 (Souza et al., 2020), 30 m. Fogo histórico até ${fh.ate}: MapBiomas Fogo Coleção 5. Relevo: Copernicus DEM GLO-30. Classificações de satélite têm erro e não substituem a verificação de campo.</p></div>`;
+}
 function blocoCronologia(e) {
   const p = e.det.passagens; if (!p?.length) return "";
+  const go = e.det.goes;
   return `<div class="clima-bloco"><h3>Cronologia das detecções por passagem</h3>
+    ${go ? `<p class="clima-leitura">Satélite geoestacionário (${esc(go.satelite)}, imagem a cada 10 min): ${go.deteccoes} detecção(ões) a até 4 km; a primeira em <b>${manaus(go.primeira)}</b> (Manaus)${go.antecede_h > 0 ? `, <b>${br(go.antecede_h, 1)} h antes</b> do 1º foco do satélite de referência` : ", depois do 1º foco de referência"}. Estreita o horário em que o fogo já era detectável; pixel de ~2 km, não marca o ponto nem a hora da ignição.</p>` : ""}
     <div class="rolagem"><table class="tabela"><thead><tr><th>Hora (Manaus)</th><th>Satélite</th><th>Focos na passagem</th><th>FRP máx.</th></tr></thead><tbody>
     ${p.map(([t, sat, n, frp]) => `<tr><td class="mono">${manaus(t)}</td><td>${esc(sat)}</td><td class="n">${n}</td><td class="n">${frp != null ? br(frp, 1) + " MW" : "–"}</td></tr>`).join("")}
     </tbody></table></div>
@@ -356,6 +388,8 @@ function blocoClima(e) {
   if (ctx.includes("escape_plausivel")) leitura.push("Havia seca forte e vento acima de 10 km/h: <b>é plausível que uma queima tenha escapado</b> do controle (acidente), o que deve ser considerado na investigação.");
   if (ctx.includes("biomassa_alta")) leitura.push("Fogo intenso (FRP alto) e persistente, por mais de um dia ou à noite: indica <b>queima de muita biomassa</b>, típica de mata derrubada sendo queimada.");
   if (cl?.fumaca_rumo_manaus) leitura.push(`O vento levava a fumaça <b>em direção a Manaus</b>, com chegada estimada em cerca de ${br(cl.horas_ate_manaus, 0)} h.`);
+  const ar = e.det.ar;
+  if (ar?.dias_acima_oms) leitura.push(`Fumaça (CAMS): o PM2,5 médio diário no local chegou a <b>${br(ar.pm25_media_dia_max, 0)} µg/m³</b> em ${dBR(ar.dia_pior)}, ${ar.dias_acima_oms} dia(s) acima do limite da OMS (15 µg/m³)${ar.manaus?.dias_acima_oms ? `; em Manaus, ${br(ar.manaus.pm25_media_dia_max, 0)} µg/m³ no pior dia do período (a fumaça na capital tem várias origens)` : ""}.`);
   return `<div class="clima-bloco"><h3>Clima e comportamento do fogo</h3>
     <div class="fatos">
       ${cl ? item("Vento no 1º foco", `${br(cl.vento_kmh, 0)} km/h, de ${rosa(cl.vento_de_graus)}`) : ""}
@@ -369,9 +403,11 @@ function blocoClima(e) {
       ${item("Focos à noite", f.focos_noite)}
       ${item("Dias com fogo", f.dias_com_fogo)}
       ${cl ? item("Fumaça rumo a Manaus", cl.fumaca_rumo_manaus ? `sim, ~${br(cl.horas_ate_manaus, 0)} h` : "não") : ""}
+      ${ar ? item("PM2,5 no local (CAMS)", `${br(ar.pm25_media_dia_max, 0)} µg/m³ (pico ${br(ar.pm25_max, 0)})`) : ""}
+      ${ar?.manaus ? item("PM2,5 em Manaus", `${br(ar.manaus.pm25_media_dia_max, 0)} µg/m³`) : ""}
     </div>
     ${leitura.length ? `<p class="clima-leitura">${leitura.join(" ")}</p>` : `<p class="nota">Sem sinal climático forte para acidente ou para ignição deliberada.</p>`}
-    <p class="nota">Clima: ${cl ? esc(cl.fonte) + ", na hora do 1º foco" : "indisponível para este evento"}. Risco de fogo, dias sem chuva e FRP: INPE, por foco (disponíveis a partir de ${new Date().getFullYear()}).</p>
+    <p class="nota">Clima: ${cl ? esc(cl.fonte) + ", na hora do 1º foco" : "indisponível para este evento"}.${ar ? " Fumaça: Copernicus CAMS (Open-Meteo), média diária de PM2,5." : ""} Risco de fogo, dias sem chuva e FRP: INPE, por foco (disponíveis a partir de ${new Date().getFullYear()}).</p>
   </div>`;
 }
 
@@ -402,7 +438,8 @@ const CAMADAS = [
   ["mun", "Municípios", "#5b6675", true],
   ["vento", "Vento (previsão, setas)", "#1e88e5", true],
   ["chuva", "Radar de chuva (RainViewer, agora) <span class=\"nota\" id=\"chuvaHora\"></span>", "#2979ff", false],
-  ["nuvens", "Nuvens (satélite GOES-16, a cada 10 min)", "#90a4ae", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
+  ["nuvens", "Nuvens (satélite GOES-16, a cada 10 min)", "#90a4ae", false],
+  ["imerg", "Chuva por satélite (NASA GPM IMERG, 30 min)", "#5c6bc0", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
   ["lixoes", "Lixões e vazadouros (fumaça tóxica)", "#8e24aa", true],
   ["mudancas", "Alertas de mudança (Sentinel-2 + radar)", "#00b8d4", true],
   ["erbs", "ERBs de telefonia (Anatel)", "#5e35b1", true],
@@ -435,6 +472,9 @@ async function iniciarMapa() {
   m.addSource("nuvens", {type: "raster", tileSize: 256, maxzoom: 7, attribution: "NASA GIBS · GOES-16",
     tiles: ["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png"]});
   m.addLayer({id: "nuvens", type: "raster", source: "nuvens", layout: {visibility: "none"}, paint: {"raster-opacity": .6}});
+  m.addSource("imerg", {type: "raster", tileSize: 256, maxzoom: 6, attribution: "NASA GPM IMERG · GIBS",
+    tiles: ["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/IMERG_Precipitation_Rate/default/default/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png"]});
+  m.addLayer({id: "imerg", type: "raster", source: "imerg", layout: {visibility: "none"}, paint: {"raster-opacity": .75}});
   atualizarChuva(); setInterval(atualizarChuva, 10 * 60e3);
   m.addLayer({id: "mun", type: "line", source: "mun", paint: {"line-color": "#ffffff", "line-opacity": .55, "line-width": .7}});
   m.addLayer({id: "desmat", type: "fill", source: "deter", filter: ["!=", ["get", "c"], "CICATRIZ_DE_QUEIMADA"], paint: {"fill-color": "#8e44ad", "fill-opacity": .55}, layout: {visibility: "none"}});
@@ -839,7 +879,7 @@ function metodologia() {
       <p>O limiar de três desvios-padrão e a confirmação por 6 observações consecutivas seguem o CCDC — <i>Continuous Change Detection and Classification</i> (Zhu &amp; Woodcock, 2014a; Arévalo et al., 2020): uma queda só é tratada como mudança quando persiste, o que evita confundir quedas passageiras da estação chuvosa com perda de vegetação. A queda mínima de 0,15 no NDVI evita alarmes por pequenas oscilações em floresta densa. É uma versão descritiva do critério, não o CCDC completo com modelo harmônico. A cena de cada mês precisa ter ao menos 80% da área analisada limpa e, entre essas, fica a de menor nuvem na cena. Na linha de base, o teste Tmask (Zhu &amp; Woodcock, 2014b) remove observações com névoa ou sombra que escaparam da máscara (verde acima da mediana + 0,04 ou SWIR1 abaixo da mediana − 0,04). O offset do Sentinel-2 vai pela versão de processamento da cena, e o Landsat entra só como Tier 1.</p>
       <p class="nota"><b>Referências.</b> Rouse, J. W. et al. (1974) <i>Monitoring vegetation systems in the Great Plains with ERTS</i>. NASA SP-351. · Tucker, C. J. (1979) Red and photographic infrared linear combinations for monitoring vegetation. <i>Remote Sensing of Environment</i> 8:127–150. · Key, C. H. &amp; Benson, N. C. (2006) Landscape Assessment: ground measure of severity, the Composite Burn Index; and remote sensing of severity, the Normalized Burn Ratio. FIREMON, USDA Forest Service RMRS-GTR-164-CD. · Zhu, Z. &amp; Woodcock, C. E. (2014a) Continuous change detection and classification of land cover using all available Landsat data. <i>Remote Sensing of Environment</i> 144:152–171. · Zhu, Z. &amp; Woodcock, C. E. (2014b) Automated cloud, cloud shadow, and snow detection in multitemporal Landsat data. <i>Remote Sensing of Environment</i> 152:217–234. · Arévalo, P. et al. (2020) A suite of tools for continuous land change monitoring in Google Earth Engine. <i>Frontiers in Climate</i> 2:576740.</p></div>
     <div class="cartao"><h2>5. Inteligência artificial</h2>
-      <p><b>Onde há IA.</b> <b>Isolation Forest</b> (aprendizado de máquina não supervisionado) aprende o padrão dos eventos do Amazonas (focos, duração, simultaneidade, desmatamento, reincidência, área protegida, distância) e dá a cada evento uma nota de <b>atipicidade</b> de 0 a 100, mostrada ao lado da prioridade sem alterá-la. O <b>parecer técnico preliminar</b> é redigido por um modelo de linguagem (Google Gemini) a partir dos números já calculados: não acrescenta fatos, não atribui autoria, apresenta as hipóteses sem pesos, cita a literatura e declara as limitações; exige revisão de perito. O <b>foco de queimada por IA</b> é um produto do Brasil MAIS (Polícia Federal), tratado aqui como hipótese espacial do local de início.</p>
+      <p><b>Onde há IA.</b> <b>Isolation Forest</b> (aprendizado de máquina não supervisionado) aprende o padrão dos eventos do Amazonas (focos, duração, simultaneidade, desmatamento, reincidência, área protegida, distância e, do MapBiomas, floresta, conversão e fogo histórico) e dá a cada evento uma nota de <b>atipicidade</b> de 0 a 100, mostrada ao lado da prioridade sem alterá-la. O <b>parecer técnico preliminar</b> é redigido por um modelo de linguagem (Google Gemini) a partir dos números já calculados: não acrescenta fatos, não atribui autoria, apresenta as hipóteses sem pesos, cita a literatura e declara as limitações; exige revisão de perito. O <b>foco de queimada por IA</b> é um produto do Brasil MAIS (Polícia Federal), tratado aqui como hipótese espacial do local de início.</p>
       <p><b>Onde não há IA.</b> O agrupamento dos focos em eventos (<b>DBSCAN</b>, algoritmo de densidade), a prioridade de verificação (indicadores explícitos), o NDVI, a quebra e o dNBR (métodos publicados), a matriz de hipóteses e a consulta às bases seguem regras fixas e reproduzíveis. Os alertas do Brasil MAIS e os dados de usuários não são enviados ao modelo de linguagem.</p>
       <p class="nota">Próximo passo: com casos confirmados pela DEMA e laudos do DPTC, treinar um classificador supervisionado que estime a probabilidade de origem criminosa.</p></div>
     <div class="cartao"><h2>6. Clima e comportamento do fogo</h2>
@@ -874,6 +914,12 @@ function fontes() {
     ["Clima: vento, umidade, chuva", "Open-Meteo (ECMWF, GFS, ICON, ERA5)", "https://open-meteo.com/", Q.vento ? manaus(Q.vento.gerado_em.replace("T", " ").slice(0, 19)) : "–", "a cada 3 h (grade) · por evento", "vento no mapa e na ficha"],
     ["Sentinel-2 L2A (10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-2-l2a", "sob demanda", "~5 dias", "NDVI, NBR, NDMI, imagens"],
     ["Alertas de mudança (óptico + radar)", "Fogo Forense, a partir de Sentinel-2 e Sentinel-1", "#", Q.mudancas ? Object.keys(Q.mudancas.eventos || {}).length + " incêndios analisados" : "–", "6 incêndios por ciclo", "automático, não validado"],
+    ["Uso e cobertura da terra", "MapBiomas Coleção 10 (Souza et al., 2020)", "https://brasil.mapbiomas.org/", "30 m, 1985–2024", "anual", "500 m em volta de cada evento: conversão de floresta"],
+    ["Fogo histórico", "MapBiomas Fogo Coleção 5", "https://brasil.mapbiomas.org/monitor-do-fogo/", "30 m, 1985–2025", "anual", "frequência e último ano de queima"],
+    ["Relevo", "Copernicus DEM GLO-30 (ESA)", "https://registry.opendata.aws/copernicus-dem/", "30 m", "estático", "altitude e declividade"],
+    ["Fogo geoestacionário", "GOES-16/19 (NOAA), via INPE", "https://terrabrasilis.dpi.inpe.br/queimadas/", "2 km", "10 min", "hora da 1ª detecção"],
+    ["Fumaça e PM2,5", "Copernicus CAMS, via Open-Meteo", "https://open-meteo.com/en/docs/air-quality-api", "~40 km", "horária", "no local e em Manaus, desde ago/2022"],
+    ["Chuva por satélite", "NASA GPM IMERG, via GIBS", "https://gpm.nasa.gov/data/imerg", "~10 km", "30 min", "camada do mapa"],
     ["ERBs de telefonia móvel", "Anatel — Estações do SMP licenciadas", "https://www.anatel.gov.br/dadosabertos/paineis_de_dados/outorga_e_licenciamento/estacoes_smp.zip", Q.erbs ? fmt(Q.erbs.n) + " estações no AM" : "–", "semanal", "localização das antenas, não de aparelhos"],
     ["Sentinel-1 RTC (radar, 10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-1-rtc", "a cada 6 h (mosaico)", "~6 a 12 dias", "vê através de nuvem e fumaça"],
     ["Landsat 8/9 C2 L2 (30 m)", "NASA/USGS · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/landsat-c2-l2", "sob demanda", "~8 dias", "série longa"],

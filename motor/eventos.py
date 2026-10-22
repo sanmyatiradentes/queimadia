@@ -187,8 +187,6 @@ def calcular(df=None, anos=None):
             e["trilha"] = "tempo_real"
             alertas.append(e)
 
-    atipicidade(eventos, alertas)
-
     def ordenar(lst, prefixo):
         # identificador estável: data do 1º foco + hash do 1º foco (não muda entre ciclos)
         usados = {}
@@ -216,6 +214,10 @@ def _vetor(e):
         1.0 if d.get("ti") else 0.0, 1.0 if d.get("uc") else 0.0, 1.0 if "cicatriz_deter" in e["indicadores"] else 0.0,
         math.log1p(e["dist_manaus_km"]),
         math.sin(2 * math.pi * ini.month / 12), math.cos(2 * math.pi * ini.month / 12),
+        # território (MapBiomas); sem dado ainda, valores neutros
+        ((d.get("territorio") or {}).get("cobertura") or {}).get("fracao", {}).get("floresta", 0.5),
+        1.0 if (d.get("territorio") or {}).get("conversao") else 0.0,
+        math.log1p(((d.get("territorio") or {}).get("fogo_historico") or {}).get("anos_max", 0)),
     ]
 
 
