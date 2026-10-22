@@ -893,6 +893,15 @@ function metodologia() {
       Radar: ΔVH (dB) local = ΔVH − mediana do recorte (desconta a seca); mudança = ΔVH local ≤ −3 dB<br>
       polígonos com pelo menos 1 ha · fonte = óptico, radar ou ambos</div>
       <p class="nota">Inspirado nos alertas do Brasil MAIS e do DETER, mas com satélites públicos (10 m, a cada 5 a 12 dias) e sem validação por analista. É alerta para verificar, não laudo. O radar enxerga através de nuvem e fumaça; a queda do sinal VH indica abertura de dossel.</p></div>
+    <div class="cartao"><h2>8. Território, horário e fumaça</h2>
+      <p>Para cada evento, o motor lê só o recorte em volta do centro, direto dos arquivos públicos:</p>
+      <div class="formula">MapBiomas Coleção 10 (30 m), círculo de 500 m: fração de cada uso no ano anterior ao fogo e 5 anos antes<br>
+      conversão florestal (+15) = floresta antes ≥ 50% e queda ≥ 20 pontos e uso antrópico depois ≥ 20%<br>
+      MapBiomas Fogo Coleção 5: anos com queima desde 1985; reincidência se ≥ 10% da área queimou em 3+ anos<br>
+      Copernicus DEM (30 m), círculo de 300 m: altitude e declividade (média e percentil 90)<br>
+      GOES-16/19 (10 min, pixel ~2 km): 1ª detecção a até 4 km, de 48 h antes do 1º foco ao último foco<br>
+      Copernicus CAMS: PM2,5 médio diário no local e em Manaus nos dias do evento, comparado à OMS (15 µg/m³)</div>
+      <p class="nota">Na matriz: conversão e fogo recorrente apoiam a ignição intencional; uso agropecuário consolidado é compatível com queima de manejo; floresta sem queima desde 1985 e declividade alta orientam a perícia; o GOES estreita o horário, sem marcar a ignição. A fumaça mede o impacto e não entra na hipótese. Os eventos novos recebem o território aos poucos, a cada ciclo.</p></div>
     <div class="cartao"><h2>Limitações</h2><ul>
       <li>O satélite detecta calor, não autoria. A prioridade orienta diligências, nunca é prova nem grau de certeza.</li>
       <li>Em TIs e RDS/RESEX há uso tradicional do fogo, permitido. A prioridade nessas áreas exige leitura cuidadosa.</li>

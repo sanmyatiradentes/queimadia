@@ -70,6 +70,7 @@ body{background:#fff}
     <span class="nome">Fogo Forense<small>NIPED · PCAM/DPTC</small></span></a>
   <span class="espaco"></span>
   <a class="botao claro pequeno txt-longo" href="#campo">Em campo</a>
+  <a class="botao claro pequeno txt-longo" href="#bases">Bases</a>
   <a class="botao claro pequeno txt-longo" href="#ia">Uso de IA</a>
   <a class="botao claro pequeno" href="#acesso">Solicitar acesso</a>
   <a class="botao claro pequeno" href="entrar.html">Entrar</a>
@@ -105,9 +106,9 @@ body{background:#fff}
     <h2>Como funciona</h2>
     <p class="lead">Um motor automático roda a cada 10 minutos, sem intervenção, e publica o resultado no painel.</p>
     <div class="grade4">
-      <div class="bloco"><span class="passo">1</span><h3>Coleta</h3><p>Baixa os focos de calor do INPE e da NASA (VIIRS/MODIS), os alertas DETER, o clima e o vento.</p></div>
+      <div class="bloco"><span class="passo">1</span><h3>Coleta</h3><p>Baixa os focos de calor do INPE e da NASA (VIIRS/MODIS e GOES a cada 10 min), os alertas DETER, o clima, o vento e a fumaça (CAMS).</p></div>
       <div class="bloco"><span class="passo">2</span><h3>Agrupa</h3><p>Junta focos próximos no espaço e no tempo em <b>eventos</b> de fogo, cada um com sua cronologia.</p></div>
-      <div class="bloco"><span class="passo">3</span><h3>Cruza</h3><p>Compara cada evento com desmatamento prévio, terras indígenas, unidades de conservação, reincidência, período proibitivo e condição do tempo, e calcula a <b>prioridade de verificação</b>. Uma IA aponta os eventos atípicos.</p></div>
+      <div class="bloco"><span class="passo">3</span><h3>Cruza</h3><p>Compara cada evento com desmatamento prévio, uso da terra e conversão de floresta (MapBiomas), fogo histórico, terras indígenas, unidades de conservação, reincidência, período proibitivo e condição do tempo, e calcula a <b>prioridade de verificação</b>. Uma IA aponta os eventos atípicos.</p></div>
       <div class="bloco"><span class="passo">4</span><h3>Confere no satélite</h3><p>Para os eventos prioritários, analisa a série de imagens Sentinel-2 e Landsat (NDVI e dNBR) e o radar Sentinel-1, que vê através de nuvem e fumaça.</p></div>
     </div>
     <p class="lead" style="margin:22px 0 0">A prioridade só ordena o trabalho: não é grau de certeza nem prova. A matriz de hipóteses apresenta, lado a lado e sem pesos, os elementos favoráveis à ignição intencional, os compatíveis com acidente ou queima tradicional e as lacunas, seguindo os guias de metodologia do NIPED.</p>
@@ -177,6 +178,24 @@ body{background:#fff}
       <div><h3>Números</h3><p>Focos por mês e por ano, municípios mais afetados e satélites, para acompanhar a temporada e comparar com anos anteriores.</p></div></div>
     <div class="tela"><figure><img src="img/telas/telao.jpg" alt="Modo telão"></figure>
       <div><h3>Modo telão</h3><p>Tela para projetor ou TV de sala de situação: mapa em tela cheia, eventos em destaque em rotação e os indicadores das últimas 24 horas e 7 dias.</p></div></div>
+  </div>
+</section>
+
+<section class="faixa" id="bases">
+  <div class="dentro">
+    <h2>Bases integradas: o que cada uma acrescenta</h2>
+    <p class="lead">Além dos focos de calor, cada evento é cruzado automaticamente com bases que respondem perguntas da investigação.</p>
+    <div class="grade3">
+      <div class="bloco"><h3>MapBiomas — uso da terra</h3><p>O que existia no local antes do fogo, ano a ano desde 1985: floresta, pasto, agricultura. Mostra quando a floresta foi convertida em pasto nos 5 anos anteriores, o padrão de desmatamento seguido de queima.</p></div>
+      <div class="bloco"><h3>MapBiomas Fogo — histórico</h3><p>Em quantos anos a área já queimou desde 1985 e quando foi a última vez. Fogo recorrente indica uso habitual do fogo; floresta que nunca queimou indica fonte humana a esclarecer.</p></div>
+      <div class="bloco"><h3>GOES-16/19 — fogo a cada 10 min</h3><p>Satélite geoestacionário que olha a Amazônia o tempo todo. A primeira detecção estreita o horário em que o fogo já existia, em média algumas horas antes dos satélites de órbita.</p></div>
+      <div class="bloco"><h3>Copernicus CAMS — fumaça</h3><p>Partículas finas (PM2,5) no local e em Manaus nos dias do fogo, comparadas ao limite da OMS. Mede o impacto à saúde da população.</p></div>
+      <div class="bloco"><h3>NASA GPM IMERG — chuva</h3><p>Chuva estimada por satélite a cada 30 minutos, em camada do mapa. Complementa o clima de modelos e o radar para avaliar se o tempo favorecia o fogo.</p></div>
+      <div class="bloco"><h3>Copernicus DEM — relevo</h3><p>Altitude e declividade no ponto. Em encosta, o fogo sobe: a região de início provável fica na parte baixa, o que orienta o exame de local.</p></div>
+      <div class="bloco"><h3>INPE e DETER</h3><p>Focos de calor do país, risco de fogo, dias sem chuva, intensidade e alertas de desmatamento e cicatriz de queimada.</p></div>
+      <div class="bloco"><h3>Sentinel-1/2 e Landsat</h3><p>Imagens antes e depois do fogo, perda de vegetação (NDVI), severidade da queima (dNBR) e radar que enxerga através da fumaça.</p></div>
+      <div class="bloco"><h3>Bases fundiárias e de proteção</h3><p>Terras indígenas, unidades de conservação, quilombolas, CAR, embargos do IBAMA, mineração (ANM) e antenas de telefonia (Anatel). Para quem tem acesso: Brasil MAIS.</p></div>
+    </div>
   </div>
 </section>
 
