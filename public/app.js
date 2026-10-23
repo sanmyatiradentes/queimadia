@@ -211,6 +211,7 @@ function selecionar(id, voar) {
     ${blocoConfronto(e)}
     ${blocoClima(e)}
     ${blocoTerritorio(e)}
+    ${blocoEntorno(e)}
     ${blocoCronologia(e)}
     ${blocoMudanca(e)}
     ${blocoErbs(e)}
@@ -236,7 +237,7 @@ function selecionar(id, voar) {
   if ($("#fAnalisar")) $("#fAnalisar").onclick = () => window.abrirAnalise?.(e);
   if ($("#fPronta")) $("#fPronta").onclick = () => window.mostrarAnalisePronta?.(e.id);
   $("#fRelatorio").onclick = () => {
-    try { localStorage.setItem("ff_rel_" + e.id, JSON.stringify({porque, confronto: blocoConfronto(e), clima: blocoClima(e), territorio: blocoTerritorio(e), cronologia: blocoCronologia(e),
+    try { localStorage.setItem("ff_rel_" + e.id, JSON.stringify({porque, confronto: blocoConfronto(e), clima: blocoClima(e), territorio: blocoTerritorio(e), entorno: blocoEntorno(e), cronologia: blocoCronologia(e),
       mudanca: blocoMudanca(e), erbs: blocoErbs(e), brmais: blocoBrmais(e), restrito: !!Q.usuario, t: Date.now()})); } catch (x) {}
     window.open("relatorio.html?id=" + encodeURIComponent(e.id), "_blank");
   };
@@ -270,6 +271,9 @@ function blocoConfronto(e) {
   if (tr && (c1.floresta || 0) >= 0.8 && !fh.anos_max)
     inconc.push(`Floresta natural sem queima registrada desde 1985 (MapBiomas): floresta úmida raramente queima sem fonte humana; falta discriminar ignição no local de escape de queima vizinha`);
   if (tr?.relevo?.declividade_p90_graus >= 12) inconc.push(`Relevo inclinado (declividade de até ${br(tr.relevo.declividade_p90_graus, 0)}°): o fogo tende a subir a encosta; na perícia, procurar a região de início na parte baixa`);
+  if (d.estrada?.km != null && d.estrada.km <= 1) inconc.push(`Via a ${br(d.estrada.km * 1000, 0)} m (${d.estrada.tipo}${d.estrada.nome ? " " + d.estrada.nome : ""}; OpenStreetMap): acesso humano fácil, compatível tanto com ignição deliberada quanto com escape de queima à beira da via`);
+  else if (d.estrada && (d.estrada.km == null || d.estrada.km > 10)) inconc.push(`Sem estrada ou ramal mapeado a até ${d.estrada.km == null ? d.estrada.busca_km : br(d.estrada.km, 0)} km (OpenStreetMap incompleto): acesso provável por rio ou trilha`);
+  if (d.assentamento) acid.push(`Dentro do assentamento ${d.assentamento.nome} (INCRA, ${d.assentamento.familias ?? "?"} famílias): o fogo na agricultura familiar é comum; verificar o lote e a autorização de queima`);
   if (d.goes?.antecede_h > 0) inconc.push(`GOES: fogo já detectável ${br(d.goes.antecede_h, 1)} h antes do satélite de referência (${manaus(d.goes.primeira)}, Manaus): estreita o horário, mas não é a hora da ignição`);
   if (ctx.includes("escape_plausivel")) acid.push("Seca forte e vento acima de 10 km/h: uma queima pode ter escapado do controle");
   if (d.ti) acid.push("Em terra indígena, a roça tradicional dos próprios indígenas com fogo é permitida");
@@ -364,6 +368,21 @@ function blocoTerritorio(e) {
     </div>
     <p class="nota">Círculo de ${t.raio_m} m no centro do evento. Uso da terra no ano anterior ao fogo e 5 anos antes: MapBiomas Coleção 10 (Souza et al., 2020), 30 m. Fogo histórico até ${fh.ate}: MapBiomas Fogo Coleção 5. Relevo: Copernicus DEM GLO-30. Classificações de satélite têm erro e não substituem a verificação de campo.</p></div>`;
 }
+const IUCN_TXT = {CR: "Criticamente em perigo", EN: "Em perigo", VU: "Vulnerável"};
+function blocoEntorno(e) {
+  const es = e.det.estrada, as = e.det.assentamento, ba = e.det.bacia, bio = e.det.biodiversidade;
+  if (!es && !as && !ba && !bio) return "";
+  const am = bio?.ameacadas || [];
+  return `<div class="clima-bloco"><h3>Entorno: acesso, fundiário, água e biodiversidade</h3>
+    <div class="fatos">
+      ${es ? `<div><span>Via mais próxima (OSM)</span><b>${es.km == null ? `nenhuma a até ${es.busca_km} km` : `${br(es.km, es.km < 1 ? 2 : 1)} km · ${esc(es.tipo)}${es.nome ? " · " + esc(es.nome) : ""}`}</b></div>` : ""}
+      <div><span>Assentamento (INCRA)</span><b>${as ? `${esc(as.nome)} · ${as.familias ?? "–"} famílias` : "fora de assentamento"}</b></div>
+      ${ba ? `<div><span>Sub-bacia (ANA)</span><b>${esc(ba.nome)}</b></div>` : ""}
+      ${bio ? `<div><span>Espécies registradas a até ${bio.raio_km} km (GBIF)</span><b>${fmt(bio.especies)} · ${am.length} ameaçada(s)</b></div>` : ""}
+    </div>
+    ${am.length ? `<p class="clima-leitura"><b>Espécies ameaçadas registradas no entorno</b> (Lista Vermelha da IUCN): ${am.slice(0, 12).map(a => `<i>${esc(a.nome)}</i> (${IUCN_TXT[a.categoria] || a.categoria}${a.classe ? ", " + esc(a.classe) : ""})`).join("; ")}${am.length > 12 ? `; e mais ${am.length - 12}` : ""}.</p>` : ""}
+    <p class="nota">Vias: OpenStreetMap, base colaborativa e incompleta (falta de ramal no mapa não prova falta de acesso). Assentamentos: INCRA. Sub-bacias: ANA (DNAEE). Biodiversidade: registros de ocorrência do GBIF, esparsos na Amazônia — ausência de registro não é ausência de espécie; serve para dimensionar o dano potencial.</p></div>`;
+}
 function blocoCronologia(e) {
   const p = e.det.passagens; if (!p?.length) return "";
   const go = e.det.goes;
@@ -439,7 +458,14 @@ const CAMADAS = [
   ["vento", "Vento (previsão, setas)", "#1e88e5", true],
   ["chuva", "Radar de chuva (RainViewer, agora) <span class=\"nota\" id=\"chuvaHora\"></span>", "#2979ff", false],
   ["nuvens", "Nuvens (satélite GOES-16, a cada 10 min)", "#90a4ae", false],
-  ["imerg", "Chuva por satélite (NASA GPM IMERG, 30 min)", "#5c6bc0", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
+  ["imerg", "Chuva por satélite (NASA GPM IMERG, 30 min)", "#5c6bc0", false],
+  ["riscoprev", "Risco de fogo previsto (INPE, até 3 dias)", "#f57c00", false],
+  ["fauna", "Fauna: registros de ocorrência (GBIF)", "#e65100", false],
+  ["flora", "Flora: registros de ocorrência (GBIF)", "#2e7d32", false],
+  ["bacias", "Sub-bacias hidrográficas (ANA)", "#0277bd", false],
+  ["rios", "Rios (ANA)", "#29b6f6", false],
+  ["assentamentos", "Assentamentos (INCRA)", "#a1887f", false],
+  ["estradas", "Estradas e ramais (OpenStreetMap)", "#ff7043", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
   ["lixoes", "Lixões e vazadouros (fumaça tóxica)", "#8e24aa", true],
   ["mudancas", "Alertas de mudança (Sentinel-2 + radar)", "#00b8d4", true],
   ["erbs", "ERBs de telefonia (Anatel)", "#5e35b1", true],
@@ -476,7 +502,16 @@ async function iniciarMapa() {
     tiles: ["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/IMERG_Precipitation_Rate/default/default/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png"]});
   m.addLayer({id: "imerg", type: "raster", source: "imerg", layout: {visibility: "none"}, paint: {"raster-opacity": .75}});
   atualizarChuva(); setInterval(atualizarChuva, 10 * 60e3);
+  // biodiversidade (GBIF), bacias e rios (ANA, via /camadas para contornar CORS)
+  const gbif = (k, estilo) => ({type: "raster", tileSize: 512, attribution: "GBIF.org",
+    tiles: [`https://api.gbif.org/v2/map/occurrence/density/{z}/{x}/{y}@2x.png?style=${estilo}&taxonKey=${k}`]});
+  m.addSource("fauna", gbif(1, "orangeHeat.point")); m.addSource("flora", gbif(6, "green.point"));
+  const ana = s => ({type: "raster", tileSize: 256, attribution: "ANA/SNIRH",
+    tiles: [`${location.origin}/camadas/ana/${s}?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&f=image`]});
+  m.addSource("bacias", ana("DNAEE_Sub_Bacias")); m.addSource("rios", ana("Hidrografia"));
+
   m.addLayer({id: "mun", type: "line", source: "mun", paint: {"line-color": "#ffffff", "line-opacity": .55, "line-width": .7}});
+  for (const k of ["bacias", "rios", "fauna", "flora"]) m.addLayer({id: k, type: "raster", source: k, layout: {visibility: "none"}, paint: {"raster-opacity": k === "bacias" ? .6 : .85}}, "mun");
   m.addLayer({id: "desmat", type: "fill", source: "deter", filter: ["!=", ["get", "c"], "CICATRIZ_DE_QUEIMADA"], paint: {"fill-color": "#8e44ad", "fill-opacity": .55}, layout: {visibility: "none"}});
   m.addLayer({id: "cicat", type: "fill", source: "deter", filter: ["==", ["get", "c"], "CICATRIZ_DE_QUEIMADA"], paint: {"fill-color": "#5d4037", "fill-opacity": .6}, layout: {visibility: "none"}});
   m.addLayer({id: "calor", type: "heatmap", source: "eventos", layout: {visibility: "none"}, paint: {"heatmap-weight": ["/", ["get", "score"], 100], "heatmap-radius": 18, "heatmap-intensity": 1.2,
@@ -495,6 +530,17 @@ async function iniciarMapa() {
   const corOp = ["match", ["get", "op"], "VIVO", "#7b1fa2", "TIM", "#1565c0", "CLARO", "#c62828", "#455a64"];
   m.addLayer({id: "erbs", type: "circle", source: "erbs", minzoom: 7, paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 2.5, 12, 6], "circle-color": "#fff", "circle-stroke-color": corOp, "circle-stroke-width": 2.2}});
+  // assentamentos (INCRA) e estradas (OSM): carregados só quando ligados
+  m.addSource("assentamentos", {type: "geojson", data: vazio}); m.addSource("estradas", {type: "geojson", data: vazio});
+  m.addLayer({id: "assentamentos", type: "fill", source: "assentamentos", layout: {visibility: "none"}, paint: {"fill-color": "#a1887f", "fill-opacity": .18}}, "eventos");
+  m.addLayer({id: "assentamentos-l", type: "line", source: "assentamentos", layout: {visibility: "none"}, paint: {"line-color": "#d7ccc8", "line-width": 1.4, "line-dasharray": [2, 1]}}, "eventos");
+  m.addLayer({id: "estradas", type: "line", source: "estradas", layout: {visibility: "none", "line-cap": "round"}, paint: {
+    "line-color": ["match", ["get", "t"], "rodovia federal", "#ff3d00", "rodovia", "#ff3d00", "rodovia estadual", "#ff7043", "ramal", "#ffcc80", "#ffab91"],
+    "line-width": ["interpolate", ["linear"], ["zoom"], 6, ["match", ["get", "t"], "ramal", .5, 1.2], 13, ["match", ["get", "t"], "ramal", 1.5, 3]]}}, "eventos");
+  m.on("click", "assentamentos", ev => { if (Q.modoPonto) return; const p = ev.features[0].properties;
+    new maplibregl.Popup().setLngLat(ev.lngLat).setHTML(`<b>${esc(p.nome_proje)}</b><br>Assentamento do INCRA · ${esc(p.municipio)}<br>${p.num_famili ?? "–"} famílias · ${br(+p.area_calc_, 0)} ha · fase ${esc(p.fase)}<br>Criado em ${esc(p.data_de_cr)} · código ${esc(p.cd_sipra)}`).addTo(m); });
+  m.on("click", "estradas", ev => { if (Q.modoPonto) return; const p = ev.features[0].properties;
+    new maplibregl.Popup().setLngLat(ev.lngLat).setHTML(`<b>${esc(p.n || "Via sem nome")}</b><br>${esc(p.t)} · OpenStreetMap (base colaborativa, incompleta)`).addTo(m); });
   m.addLayer({id: "lixoes", type: "circle", source: "lixoes", paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 5, 12, 9],
     "circle-color": "#8e24aa", "circle-stroke-color": "#fff", "circle-stroke-width": 1.5}});
   m.addLayer({id: "lixoes-anel", type: "circle", source: "perto-lixao", paint: {"circle-radius": 16, "circle-color": "rgba(0,0,0,0)",
@@ -667,13 +713,17 @@ function montarControles() {
     <h4>Mapa de fundo</h4>${Object.entries(BASES).filter(([, b]) => !b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}" ${k === "satelite" ? "checked" : ""}> ${b.nome}</label>`).join("")}
     <h4>Imagens de satélite recentes</h4>${Object.entries(BASES).filter(([, b]) => b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}"> ${b.nome}</label>`).join("")}
     <h4>Camadas</h4>${CAMADAS.map(([k, t, c, on]) => `<label><input type="checkbox" data-c="${k}" ${on ? "checked" : ""}><span class="sw" style="background:${c}"></span>${t}</label>`).join("")}
+    <div id="riscoCtl" hidden><h4>Risco previsto (INPE)</h4><select id="riscoDia" style="width:100%"></select><div class="nota" id="riscoInfo"></div>
+      <div class="nota" style="font-size:11px"><i style="display:inline-block;width:10px;height:10px;background:#66bb6a"></i> baixo · <i style="display:inline-block;width:10px;height:10px;background:#ffd54f"></i> médio · <i style="display:inline-block;width:10px;height:10px;background:#f57c00"></i> alto · <i style="display:inline-block;width:10px;height:10px;background:#b71c1c"></i> crítico</div></div>
     <div id="ventoCtl"><h4>Hora do vento</h4><input type="range" id="ventoSl" min="0" max="47" value="0" style="width:100%"><div class="nota" id="ventoHora"></div></div></div>`;
   el.addEventListener("change", e => {
     if (e.target.name === "base") return trocarBase(e.target.value);
     if (e.target.dataset.b) { BRM.vis[e.target.dataset.b] = e.target.checked; return filtrarBrmais(); }
     if (e.target.id === "brmAno") { BRM.ano = e.target.value; return filtrarBrmais(); }
     const k = e.target.dataset.c; if (!k) return;
-    const ids = {tis: ["tis", "tis-l"], ucs: ["ucs", "ucs-l"], sel: ["sel", "area"]}[k] || [k];
+    const ids = {tis: ["tis", "tis-l"], ucs: ["ucs", "ucs-l"], sel: ["sel", "area"], assentamentos: ["assentamentos", "assentamentos-l"]}[k] || [k];
+    if (e.target.checked) sobDemanda(k);
+    if (k === "riscoprev") $("#riscoCtl").hidden = !e.target.checked;
     ids.forEach(id => Q.mapa.getLayer(id) && Q.mapa.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none"));
     if (k === "mudancas") Q.mapa.setLayoutProperty("mudancas-l", "visibility", e.target.checked ? "visible" : "none");
     if (k === "lixoes") Q.mapa.setLayoutProperty("lixoes-anel", "visibility", e.target.checked ? "visible" : "none");
@@ -900,7 +950,9 @@ function metodologia() {
       MapBiomas Fogo Coleção 5: anos com queima desde 1985; reincidência se ≥ 10% da área queimou em 3+ anos<br>
       Copernicus DEM (30 m), círculo de 300 m: altitude e declividade (média e percentil 90)<br>
       GOES-16/19 (10 min, pixel ~2 km): 1ª detecção a até 4 km, de 48 h antes do 1º foco ao último foco<br>
-      Copernicus CAMS: PM2,5 médio diário no local e em Manaus nos dias do evento, comparado à OMS (15 µg/m³)</div>
+      Copernicus CAMS: PM2,5 médio diário no local e em Manaus nos dias do evento, comparado à OMS (15 µg/m³)<br>
+      OpenStreetMap: distância até a via mais próxima (rodovia, vicinal ou ramal), busca até 30 km<br>
+      INCRA: dentro de assentamento · ANA: sub-bacia hidrográfica · GBIF: espécies a até 10 km e as ameaçadas (IUCN CR, EN, VU)</div>
       <p class="nota">Na matriz: conversão e fogo recorrente apoiam a ignição intencional; uso agropecuário consolidado é compatível com queima de manejo; floresta sem queima desde 1985 e declividade alta orientam a perícia; o GOES estreita o horário, sem marcar a ignição. A fumaça mede o impacto e não entra na hipótese. Os eventos novos recebem o território aos poucos, a cada ciclo.</p></div>
     <div class="cartao"><h2>Limitações</h2><ul>
       <li>O satélite detecta calor, não autoria. A prioridade orienta diligências, nunca é prova nem grau de certeza.</li>
@@ -923,6 +975,11 @@ function fontes() {
     ["Clima: vento, umidade, chuva", "Open-Meteo (ECMWF, GFS, ICON, ERA5)", "https://open-meteo.com/", Q.vento ? manaus(Q.vento.gerado_em.replace("T", " ").slice(0, 19)) : "–", "a cada 3 h (grade) · por evento", "vento no mapa e na ficha"],
     ["Sentinel-2 L2A (10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-2-l2a", "sob demanda", "~5 dias", "NDVI, NBR, NDMI, imagens"],
     ["Alertas de mudança (óptico + radar)", "Fogo Forense, a partir de Sentinel-2 e Sentinel-1", "#", Q.mudancas ? Object.keys(Q.mudancas.eventos || {}).length + " incêndios analisados" : "–", "6 incêndios por ciclo", "automático, não validado"],
+    ["Fauna e flora", "GBIF — ocorrências de espécies", "https://www.gbif.org/", "registros", "contínua", "mapa e espécies (e ameaçadas IUCN) a até 10 km"],
+    ["Bacias e rios", "ANA/SNIRH — sub-bacias DNAEE e hidrografia", "https://www.snirh.gov.br/", "1:1.000.000", "estático", "camadas do mapa e sub-bacia do evento"],
+    ["Assentamentos", "INCRA — Acervo Fundiário", "https://certificacao.incra.gov.br/", "132 no AM", "mensal", "mapa, ficha e relatório"],
+    ["Estradas e ramais", "OpenStreetMap (colaborativo)", "https://www.openstreetmap.org/", "14 mil trechos", "semanal", "distância do fogo à via mais próxima"],
+    ["Risco de fogo previsto", "INPE — Programa Queimadas", "https://terrabrasilis.dpi.inpe.br/queimadas/", "1 km", "6 h", "hoje e até 3 dias à frente"],
     ["Uso e cobertura da terra", "MapBiomas Coleção 10 (Souza et al., 2020)", "https://brasil.mapbiomas.org/", "30 m, 1985–2024", "anual", "500 m em volta de cada evento: conversão de floresta"],
     ["Fogo histórico", "MapBiomas Fogo Coleção 5", "https://brasil.mapbiomas.org/monitor-do-fogo/", "30 m, 1985–2025", "anual", "frequência e último ano de queima"],
     ["Relevo", "Copernicus DEM GLO-30 (ESA)", "https://registry.opendata.aws/copernicus-dem/", "30 m", "estático", "altitude e declividade"],
@@ -1197,3 +1254,31 @@ $("#dlgTroca form").addEventListener("submit", async ev => {
   } catch (x) { m.textContent = "Sem conexão. Tente de novo."; }
   finally { $("#trSalvar").disabled = false; }
 });
+
+// ------------------------------------------------------------ camadas carregadas só quando ligadas
+const carregadas = new Set();
+async function sobDemanda(k) {
+  if (carregadas.has(k)) return;
+  try {
+    if (k === "assentamentos") { Q.mapa.getSource("assentamentos").setData(await (await fetch("bases/assentamentos_am.json")).json()); }
+    else if (k === "estradas") { toast("Carregando estradas e ramais…", 3000); Q.mapa.getSource("estradas").setData(await json("dados/estradas.json")); }
+    else if (k === "riscoprev") await riscoPrevisto();
+    else return;
+    carregadas.add(k);
+  } catch (e) { toast("Camada indisponível no momento."); console.warn(k, e); }
+}
+async function riscoPrevisto() {
+  const r = await json("dados/risco_previsto.json"), [w, s, e, n] = r.limites, m = Q.mapa;
+  const rot = ["hoje", "amanhã", "em 2 dias", "em 3 dias"];
+  $("#riscoDia").innerHTML = r.dias.map(d => `<option value="${d.t}">${rot[d.t]} (${dBR(d.data)}) · ${br(d.alto_ou_critico_pct, 1)}% alto/crítico</option>`).join("");
+  const url = t => window.QD(r.dias.find(d => d.t === t).arquivo, Math.round(r.t));
+  const coord = [[w, n], [e, n], [e, s], [w, s]];
+  const t0 = r.dias.some(d => d.t === 1) ? 1 : r.dias[0].t;
+  $("#riscoDia").value = t0;
+  if (!m.getSource("riscoprev")) {
+    m.addSource("riscoprev", {type: "image", url: url(t0), coordinates: coord});
+    m.addLayer({id: "riscoprev", type: "raster", source: "riscoprev", paint: {"raster-opacity": .8, "raster-resampling": "nearest"}}, "mun");
+  }
+  $("#riscoDia").onchange = ev => m.getSource("riscoprev").updateImage({url: url(+ev.target.value), coordinates: coord});
+  $("#riscoInfo").textContent = `${r.fonte}. Grade de 1 km; atualizado a cada 6 h.`;
+}

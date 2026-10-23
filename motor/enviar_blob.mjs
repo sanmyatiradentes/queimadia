@@ -20,6 +20,7 @@ const tipos = { ".json": "application/json", ".png": "image/png" };
 
 const lista = [];
 for (const f of fs.readdirSync(dados)) if (f.endsWith(".json")) lista.push([f, 60]);
+for (const f of fs.readdirSync(dados)) if (f.endsWith(".png")) lista.push([f, 600]);   // risco previsto (INPE)
 const dirA = path.join(dados, "analises");
 if (fs.existsSync(path.join(dirA, "indice.json"))) lista.push(["analises/indice.json", 60]);
 (function varre(dir) {

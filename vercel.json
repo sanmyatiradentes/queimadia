@@ -1,6 +1,20 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "outputDirectory": "public",
-  "rewrites": [{ "source": "/api/:rota((?!conta|restrito|bases|dados).*)", "destination": "/api/index?__rota=:rota" }],
-  "functions": { "api/index.py": { "maxDuration": 60, "memory": 1024 } }
+  "rewrites": [
+    {
+      "source": "/camadas/ana/:serv",
+      "destination": "https://portal1.snirh.gov.br/server/rest/services/dados_abertos/:serv/MapServer/export"
+    },
+    {
+      "source": "/api/:rota((?!conta|restrito|bases|dados).*)",
+      "destination": "/api/index?__rota=:rota"
+    }
+  ],
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  }
 }

@@ -7,7 +7,8 @@ import sys
 import time
 import traceback
 
-from . import ar, clima, erbs, goes, ingest, eventos, lixoes, mudanca, publicar, precalcular, territorio
+from . import (ar, biodiversidade, clima, contexto, erbs, estradas, goes, ingest, eventos, lixoes, mudanca, publicar,
+               precalcular, riscoprev, territorio)
 
 
 def ciclo(rapido=False):
@@ -44,6 +45,14 @@ def ciclo(rapido=False):
         territorio.aplicar(evs + alertas)
     except Exception:
         traceback.print_exc()
+    for nome, f in (("estradas (OSM)", lambda: estradas.marcar(evs + alertas, estradas.atualizar())),
+                    ("assentamento e sub-bacia", lambda: contexto.marcar(evs + alertas)),
+                    ("biodiversidade (GBIF)", lambda: biodiversidade.enriquecer(alertas + evs)),
+                    ("risco previsto (INPE)", lambda: len(riscoprev.atualizar().get("dias", [])))):
+        try:
+            print(nome + ":", f())
+        except Exception:
+            traceback.print_exc()
     eventos.atipicidade(evs, alertas)   # depois do território, que entra no modelo
     try:   # fumaça (CAMS): PM2,5 no local e em Manaus
         print("qualidade do ar:", ar.enriquecer(alertas + evs))
