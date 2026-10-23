@@ -18,7 +18,10 @@ const IND_TXT = {
   uso_sustentavel: "UC de uso sustentável", reincidencia: "Reincidência", multiplos_focos_dia: "≥3 focos no mesmo dia",
   periodo_proibitivo: "Período proibitivo", cicatriz_deter: "Cicatriz DETER",
   ignicao_desfavoravel: "Ignição em tempo desfavorável", conversao_florestal: "Conversão de floresta (MapBiomas)",
+  floresta_publica_nd: "Floresta pública não destinada",
 };
+// nome curto de um indicador; tolera indicadores novos vindos do motor (nunca quebra a tela)
+const indTxt = k => IND_TXT[k] || window.Q?.est?.descricao_indicadores?.[k]?.[0] || String(k).replace(/_/g, " ");
 // hora de Manaus (UTC−4)
 const manaus = utc => { const d = new Date(utc.replace(" ", "T") + "Z"); d.setUTCHours(d.getUTCHours() - 4);
   return d.toISOString().slice(0, 16).replace("T", " "); };
@@ -87,7 +90,7 @@ function periodo(v) {
 function montarFiltros() {
   const muns = [...new Set(Q.eventos.map(e => e.mun).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt"));
   $("#fMun").insertAdjacentHTML("beforeend", muns.map(m => `<option>${esc(m)}</option>`).join(""));
-  $("#fInd").innerHTML = Q.ind.map(k => `<span class="chip" role="button" tabindex="0" aria-pressed="false" data-k="${k}">${IND_TXT[k] || k}</span>`).join("");
+  $("#fInd").innerHTML = Q.ind.map(k => `<span class="chip" role="button" tabindex="0" aria-pressed="false" data-k="${k}">${indTxt(k) || k}</span>`).join("");
   [F.ini, F.fim] = periodo("ano0"); $("#fIni").value = F.ini; $("#fFim").value = F.fim;
   $("#fPreset").onchange = e => { if (e.target.value !== "custom") { [F.ini, F.fim] = periodo(e.target.value); $("#fIni").value = F.ini; $("#fFim").value = F.fim; aplicar(); } };
   $("#fIni").onchange = e => { F.ini = e.target.value; $("#fPreset").value = "custom"; aplicar(); };
@@ -173,8 +176,8 @@ function selecionar(id, voar) {
     if (k === "reincidencia" && d.anos_anteriores?.length) extra = ` · anos: ${d.anos_anteriores.join(", ")}`;
     if (k === "multiplos_focos_dia") extra = ` · máx. ${e.maxDia}/dia`;
     if (k === "cicatriz_deter" && d.cicatriz_km2 != null) extra = ` · ${br(d.cicatriz_km2)} km² em ${dBR(d.cicatriz_data)}`;
-    return `<div class="ind-linha ${on ? "" : "off"}"><span class="mk">${on ? "✓" : "–"}</span><span>${D[k][0]}<small>${D[k][1]}${on ? extra : ""}</small></span><span class="w">${on ? "+" : ""}${P[k]}</span></div>`; }).join("");
-  const calc = e.ind.map(k => `${P[k]} (${IND_TXT[k]})`).join(" + ") || "0";
+    return `<div class="ind-linha ${on ? "" : "off"}"><span class="mk">${on ? "✓" : "–"}</span><span>${(D[k] || [indTxt(k)])[0]}<small>${(D[k] || ["", ""])[1]}${on ? extra : ""}</small></span><span class="w">${on ? "+" : ""}${P[k]}</span></div>`; }).join("");
+  const calc = e.ind.map(k => `${P[k]} (${indTxt(k)})`).join(" + ") || "0";
   const motivos = [];
   if (d.desmatamento) motivos.push(`houve desmatamento detectado pelo DETER ${d.desmatamento.dias_antes <= 0 ? "no mesmo período do fogo" : d.desmatamento.dias_antes + " dias antes do fogo"} (${br(d.desmatamento.area_km2 * 100, 1)} ha)`);
   if (d.ti) motivos.push(`fica dentro da ${d.ti}`);
@@ -242,7 +245,7 @@ function selecionar(id, voar) {
       mudanca: blocoMudanca(e), erbs: blocoErbs(e), brmais: blocoBrmais(e), restrito: !!Q.usuario, t: Date.now()})); } catch (x) {}
     window.open("relatorio.html?id=" + encodeURIComponent(e.id), "_blank");
   };
-  $("#fCopiar").onclick = () => { const t = `Fogo Forense ${e.id} — ${e.mun}, ${dBR(e.ini)}. Prioridade ${e.score} (${e.ind.map(k => IND_TXT[k]).join("; ") || "sem indicadores"}). ${e.n} focos, ${lat}, ${lon}. ${d.ti || d.uc || ""}`;
+  $("#fCopiar").onclick = () => { const t = `Fogo Forense ${e.id} — ${e.mun}, ${dBR(e.ini)}. Prioridade ${e.score} (${e.ind.map(k => indTxt(k)).join("; ") || "sem indicadores"}). ${e.n} focos, ${lat}, ${lon}. ${d.ti || d.uc || ""}`;
     navigator.clipboard?.writeText(t).then(() => toast("Resumo copiado."), () => toast(t, 10000)); };
 }
 
@@ -827,7 +830,7 @@ function ocorrencias() {
   $("#tabOcor").innerHTML = `<thead><tr>${COLS_OC.map(([k, t]) => `<th data-ordem="${k}" class="${OC.ord === k ? (OC.dir > 0 ? "asc" : "desc") : ""}">${t}</th>`).join("")}</tr></thead><tbody>`
     + f.slice(OC.pag * por, OC.pag * por + por).map(e => `<tr class="clicavel" data-id="${e.id}"><td><span class="pontos" style="background:${corScore(e.score)}">${e.score}</span></td>
       <td class="n">${e.ia ?? "–"}</td><td class="mono">${e.id}</td><td>${esc(e.mun)}</td><td class="mono">${e.ini}</td><td class="n">${e.n}</td><td class="n">${e.maxDia}</td>
-      <td class="n">${fmt(e.dist)}</td><td>${esc(e.det.ti || e.det.uc || "")}</td><td>${e.ind.map(k => `<span class="selo" title="${IND_TXT[k]}">${IND_TXT[k].split(" ")[0]}</span>`).join(" ")}</td>
+      <td class="n">${fmt(e.dist)}</td><td>${esc(e.det.ti || e.det.uc || "")}</td><td>${e.ind.map(k => `<span class="selo" title="${indTxt(k)}">${indTxt(k).split(" ")[0]}</span>`).join(" ")}</td>
       <td class="n">${e.lat.toFixed(4)}</td><td class="n">${e.lon.toFixed(4)}</td></tr>`).join("") + "</tbody>";
   $("#pagOcor").innerHTML = `<button type="button" class="botao secundario pequeno" ${OC.pag ? "" : "disabled"} data-p="-1">Anterior</button><span>Página ${OC.pag + 1} de ${pags}</span><button type="button" class="botao secundario pequeno" ${OC.pag < pags - 1 ? "" : "disabled"} data-p="1">Próxima</button>`;
 }
@@ -859,7 +862,7 @@ function tempoReal() {
     + al.slice(0, 400).map(e => `<tr class="clicavel" data-id="${e.id}"><td><span class="pontos" style="background:${corScore(e.score)}">${e.score}</span></td><td>${esc(e.mun)}</td><td>${esc(e.det.ti || e.det.uc || "")}</td>
       <td class="mono">${manaus(e.ini)}</td><td class="mono">${manaus(e.fim)}</td><td class="n">${e.n}</td><td>${e.det.clima ? `${br(e.det.clima.vento_kmh, 0)} km/h de ${rosa(e.det.clima.vento_de_graus)}` : "–"}</td>
       <td>${e.det.clima?.fumaca_rumo_manaus ? `<span class="selo erro">sim, ~${br(e.det.clima.horas_ate_manaus, 0)} h</span>` : "–"}</td>
-      <td>${e.ind.map(k => `<span class="selo">${IND_TXT[k].split(" ")[0]}</span>`).join(" ")}</td><td class="n">${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}</td></tr>`).join("") + "</tbody>";
+      <td>${e.ind.map(k => `<span class="selo">${indTxt(k).split(" ")[0]}</span>`).join(" ")}</td><td class="n">${e.lat.toFixed(4)}, ${e.lon.toFixed(4)}</td></tr>`).join("") + "</tbody>";
   const rec = Q.focos.slice().sort((a, b) => b[2].localeCompare(a[2]));
   $("#nFocosRec").textContent = `${fmt(rec.length)} focos; mostrando os 300 mais recentes`;
   $("#tabFocos").innerHTML = `<thead><tr><th>Hora (Manaus)</th><th>Satélite</th><th>Município</th><th>Lat</th><th>Lon</th></tr></thead><tbody>`
@@ -912,7 +915,7 @@ function estatisticas() {
   barras("#gMun", porMun, css("--dptc-vermelho"), true);
   const hist = d3.range(0, 101, 5).map(s => [String(s), f.filter(e => e.score === s).length]).filter(d => +d[0] >= F.score);
   barras("#gHist", hist, css("--s2"));
-  barras("#gInd", Q.ind.map(k => [IND_TXT[k], f.filter(e => e.ind.includes(k)).length]).sort((a, b) => b[1] - a[1]), css("--azul"), true);
+  barras("#gInd", Q.ind.map(k => [indTxt(k), f.filter(e => e.ind.includes(k)).length]).sort((a, b) => b[1] - a[1]), css("--azul"), true);
   const faixas = [[0, 100, "até 100 km"], [100, 250, "100–250 km"], [250, 500, "250–500 km"], [500, 800, "500–800 km"], [800, 9e9, "mais de 800 km"]];
   barras("#gDist", faixas.map(([a, b, t]) => [t, f.filter(e => e.dist >= a && e.dist < b).length]), css("--pcam-ouro"), true);
   barras("#gArea", [["Terra indígena", f.filter(e => e.det.ti).length], ["UC proteção integral", f.filter(e => e.det.uc && e.det.uc_grupo === "PI").length],
@@ -972,7 +975,7 @@ function metodologia() {
       <div class="formula">x = lon·111,32·cos(φ̄) km · y = lat·111,32 km · t = dias·(${p.eps_km}/${p.eps_dias}) km<br>vizinhos se ‖(x,y,t)‖ ≤ ${p.eps_km} km  →  ${p.eps_km} km no espaço ou ${p.eps_dias} dias no tempo</div></div>
     <div class="cartao"><h2>2. Prioridade de verificação (0–100)</h2>
       <table class="tabela"><thead><tr><th>Indicador</th><th>Critério</th><th>Peso</th></tr></thead><tbody>
-      ${Object.keys(P).map(k => `<tr><td>${D[k][0]}</td><td class="nota">${D[k][1]}</td><td class="n">${P[k]}</td></tr>`).join("")}</tbody></table>
+      ${Object.keys(P).map(k => `<tr><td>${(D[k] || [indTxt(k)])[0]}</td><td class="nota">${(D[k] || ["", ""])[1]}</td><td class="n">${P[k]}</td></tr>`).join("")}</tbody></table>
       <div class="formula">prioridade = Σ peso(indicador presente) · máximo = 100 · serve para ordenar a fila, não é probabilidade</div>
       <p class="nota">Raio de associação ao DETER: ${p.buffer_desmat_km} km. Meses do período proibitivo: ${p.meses_proibicao.join(", ")} (ajustar ao decreto vigente).</p></div>
     <div class="cartao"><h2>3. Índices espectrais</h2>
@@ -1100,8 +1103,12 @@ async function detectarModo() {
 }
 (async function () {
   await detectarModo();
-  try { await carregar(true); } catch (e) { $("#aoVivoTxt").textContent = "Sem dados: rode o atualizador"; $("#aoVivo").classList.add("atrasado"); console.error(e); return; }
-  await iniciarMapa();
+  try { await carregar(true); } catch (e) {   // mesmo com falha nos dados, o topo mostra a conta (sair, administração)
+    $("#aoVivoTxt").textContent = "Falha ao carregar os dados"; $("#aoVivo").classList.add("atrasado"); console.error(e);
+    toast("Não foi possível carregar os dados do painel. Recarregue a página; se persistir, avise a administração.", 10000);
+    iniciarConta(); return;
+  }
+  try { await iniciarMapa(); } catch (e) { console.error(e); toast("O mapa não carregou. Recarregue a página.", 8000); }
   iniciarConta();
   const h = location.hash.slice(1); if (h && document.querySelector(`[data-aba="${h}"]`)) trocarAba(h);
   if (Q.filtrados[0]) selecionar(Q.filtrados[0].id, false);
