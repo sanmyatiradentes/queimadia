@@ -45,6 +45,17 @@ body{background:#fff}
 .grade-campo p{margin:4px 0 0;color:var(--cinza-texto);font-size:14.5px}
 .passo{min-width:32px;width:auto;padding:0 8px;border-radius:99px}
 @media (max-width:560px){.grade-campo{grid-template-columns:1fr}}
+.grupos-bases{display:grid;gap:10px}
+.grupo-base{background:#fff;border:1px solid var(--cinza-borda);border-radius:10px;padding:12px 16px}
+.grupo-base summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.grupo-base summary::-webkit-details-marker{display:none}
+.grupo-base summary b{font-size:16px;color:var(--azul-escuro)}
+.grupo-base summary span{color:var(--cinza-texto);font-size:13.5px;flex:1}
+.grupo-base summary::after{content:"ver ▾";color:var(--azul);font-weight:600;font-size:13px;margin-left:auto}
+.grupo-base[open] summary::after{content:"ocultar ▴"}
+.grupo-base ul{margin:10px 0 2px;padding-left:20px;color:var(--cinza-texto);font-size:14.5px}
+.grupo-base li{margin:0 0 6px}
+.grupo-base .fontes{margin-top:12px}
 .fontes{display:flex;flex-wrap:wrap;gap:8px}
 .fontes span{background:#fff;border:1px solid var(--cinza-borda);border-radius:99px;padding:6px 12px;font-size:13.5px}
 .acesso{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start}
@@ -183,29 +194,40 @@ body{background:#fff}
 
 <section class="faixa" id="bases">
   <div class="dentro">
-    <h2>Bases integradas: o que cada uma acrescenta</h2>
-    <p class="lead">Além dos focos de calor, cada evento é cruzado automaticamente com bases que respondem perguntas da investigação.</p>
-    <div class="grade3">
-      <div class="bloco"><h3>MapBiomas — uso da terra</h3><p>O que existia no local antes do fogo, ano a ano desde 1985: floresta, pasto, agricultura. Mostra quando a floresta foi convertida em pasto nos 5 anos anteriores, o padrão de desmatamento seguido de queima.</p></div>
-      <div class="bloco"><h3>MapBiomas Fogo — histórico</h3><p>Em quantos anos a área já queimou desde 1985 e quando foi a última vez. Fogo recorrente indica uso habitual do fogo; floresta que nunca queimou indica fonte humana a esclarecer.</p></div>
-      <div class="bloco"><h3>GOES-16/19 — fogo a cada 10 min</h3><p>Satélite geoestacionário que olha a Amazônia o tempo todo. A primeira detecção estreita o horário em que o fogo já existia, em média algumas horas antes dos satélites de órbita.</p></div>
-      <div class="bloco"><h3>Copernicus CAMS — fumaça</h3><p>Partículas finas (PM2,5) no local e em Manaus nos dias do fogo, comparadas ao limite da OMS. Mede o impacto à saúde da população.</p></div>
-      <div class="bloco"><h3>NASA GPM IMERG — chuva</h3><p>Chuva estimada por satélite a cada 30 minutos, em camada do mapa. Complementa o clima de modelos e o radar para avaliar se o tempo favorecia o fogo.</p></div>
-      <div class="bloco"><h3>Copernicus DEM — relevo</h3><p>Altitude e declividade no ponto. Em encosta, o fogo sobe: a região de início provável fica na parte baixa, o que orienta o exame de local.</p></div>
-      <div class="bloco"><h3>GBIF — fauna e flora</h3><p>Registros de espécies no mapa e, para cada fogo, as espécies registradas a até 10 km, com destaque para as ameaçadas de extinção. Dimensiona o dano ambiental.</p></div>
-      <div class="bloco"><h3>Estradas, ramais e assentamentos</h3><p>Distância do fogo até a via mais próxima (OpenStreetMap), que indica acesso humano, e se o local está em assentamento do INCRA.</p></div>
-      <div class="bloco"><h3>Bacias, rios e risco previsto</h3><p>Sub-bacias e rios da ANA e o risco de fogo previsto pelo INPE para hoje e os próximos 3 dias.</p></div>
-      <div class="bloco"><h3>INPE e DETER</h3><p>Focos de calor do país, risco de fogo, dias sem chuva, intensidade e alertas de desmatamento e cicatriz de queimada.</p></div>
-      <div class="bloco"><h3>Sentinel-1/2 e Landsat</h3><p>Imagens antes e depois do fogo, perda de vegetação (NDVI), severidade da queima (dNBR) e radar que enxerga através da fumaça.</p></div>
-      <div class="bloco"><h3>Bases fundiárias e de proteção</h3><p>Terras indígenas, unidades de conservação, quilombolas, CAR, embargos do IBAMA, mineração (ANM) e antenas de telefonia (Anatel). Para quem tem acesso: Brasil MAIS.</p></div>
+    <h2>Bases integradas</h2>
+    <p class="lead">Mais de 30 bases oficiais e abertas, cruzadas automaticamente com cada fogo. Toque num grupo para ver o que cada base acrescenta.</p>
+    <div class="grupos-bases">
+      <details class="grupo-base" open><summary><b>🔥 Fogo e desmatamento</b><span>INPE, NASA, GOES, DETER, PRODES, MapBiomas Fogo, Sentinel, Landsat</span></summary><ul>
+        <li><b>INPE e NASA FIRMS</b>: focos de calor, risco de fogo (inclusive previsto para 3 dias), dias sem chuva e intensidade.</li>
+        <li><b>GOES-16/19</b>: fogo a cada 10 minutos, para estreitar o horário em que já era detectável.</li>
+        <li><b>DETER e PRODES (INPE)</b>: alertas de desmatamento e cicatriz e o desmatamento anual oficial no entorno.</li>
+        <li><b>MapBiomas uso da terra e Fogo</b>: o que havia no local desde 1985, conversão de floresta em pasto e quantas vezes a área já queimou.</li>
+        <li><b>Sentinel-1/2 e Landsat</b>: imagens antes e depois, perda de vegetação (NDVI), severidade da queima (dNBR) e radar que atravessa a fumaça.</li></ul></details>
+      <details class="grupo-base"><summary><b>🗺️ Fundiário e áreas protegidas</b><span>FUNAI, ICMBio, INCRA, SFB, SICAR, IBAMA</span></summary><ul>
+        <li><b>Florestas públicas não destinadas (Serviço Florestal)</b>: glebas públicas sem destinação, onde o fogo é associado à grilagem. Entra na prioridade.</li>
+        <li><b>Terras indígenas e aldeias (FUNAI)</b>, <b>unidades de conservação</b>, <b>quilombolas e assentamentos (INCRA)</b>.</li>
+        <li><b>SIGEF (INCRA) e CAR (SICAR)</b>: imóveis no local, pista para identificar o detentor.</li>
+        <li><b>Embargos do IBAMA</b> e <b>processos minerários (ANM)</b> no relatório.</li></ul></details>
+      <details class="grupo-base"><summary><b>🌿 Meio ambiente</b><span>GBIF, ANA, Copernicus DEM</span></summary><ul>
+        <li><b>GBIF — fauna e flora</b>: espécies registradas a até 10 km, com destaque para as ameaçadas (IUCN). Dimensiona o dano.</li>
+        <li><b>ANA</b>: sub-bacias hidrográficas e rios.</li>
+        <li><b>Relevo (Copernicus DEM)</b>: declividade, para orientar o exame de local.</li></ul></details>
+      <details class="grupo-base"><summary><b>☁️ Tempo e fumaça</b><span>Open-Meteo, CAMS, GPM, RainViewer, GOES</span></summary><ul>
+        <li><b>Clima e vento</b> no início do fogo (Open-Meteo) e direção da fumaça rumo a Manaus.</li>
+        <li><b>Copernicus CAMS</b>: PM2,5 no local e em Manaus, comparado ao limite da OMS.</li>
+        <li><b>Chuva e nuvens</b>: NASA GPM, radar RainViewer e imagens do GOES.</li></ul></details>
+      <details class="grupo-base"><summary><b>🚧 Pressão e infraestrutura</b><span>OpenStreetMap, MapBiomas, Anatel, Brasil MAIS</span></summary><ul>
+        <li><b>Estradas e ramais</b>: distância do fogo à via mais próxima, que indica acesso humano.</li>
+        <li><b>Garimpo e mineração (MapBiomas)</b> e <b>pistas de pouso</b> no entorno.</li>
+        <li><b>Antenas de telefonia (Anatel)</b>, <b>lixões</b> e <b>bombeiros</b>.</li>
+        <li><b>Brasil MAIS (convênio, acesso restrito)</b>: alertas de queimada, desmatamento e garimpo com imagens Planet de 3 m.</li></ul></details>
     </div>
   </div>
 </section>
 
 <section class="faixa cinza">
   <div class="dentro">
-    <h2>Fontes de dados</h2>
-    <p class="lead">Bases oficiais e abertas, combinadas automaticamente.</p>
+    <details class="grupo-base"><summary><b>Lista completa de fontes</b><span>todas as bases oficiais e abertas usadas</span></summary>
     <div class="fontes">
       <span>INPE — focos de calor e risco de fogo</span><span>INPE — DETER</span><span>NASA FIRMS (VIIRS/MODIS)</span>
       <span>ESA Copernicus Sentinel-1 e Sentinel-2</span><span>USGS Landsat 8/9</span><span>Open-Meteo — clima e vento</span>
@@ -213,9 +235,9 @@ body{background:#fff}
       <span>SICAR — CAR</span><span>IBAMA — embargos</span><span>ANM — SIGMINE</span><span>Anatel — estações rádio base</span>
       <span>RainViewer e NASA GIBS — chuva e nuvens</span><span>Brasil MAIS (convênio) — alertas de queimada, desmatamento e garimpo, imagens Planet 3 m</span>
       <span>MapBiomas — uso da terra (1985–2024) e fogo histórico</span><span>GOES-16/19 — fogo a cada 10 min</span>
-      <span>Copernicus CAMS — fumaça e PM2,5</span><span>NASA GPM IMERG — chuva por satélite</span><span>Copernicus DEM — relevo</span><span>GBIF — fauna e flora</span><span>ANA — bacias e rios</span><span>INCRA — assentamentos</span><span>OpenStreetMap — estradas e ramais</span><span>INPE — risco de fogo previsto</span>
+      <span>Copernicus CAMS — fumaça e PM2,5</span><span>NASA GPM IMERG — chuva por satélite</span><span>Copernicus DEM — relevo</span><span>GBIF — fauna e flora</span><span>ANA — bacias e rios</span><span>INCRA — assentamentos</span><span>OpenStreetMap — estradas e ramais</span><span>INPE — risco de fogo previsto</span><span>INPE — PRODES</span><span>Serviço Florestal — florestas públicas</span><span>INCRA — SIGEF</span><span>FUNAI — aldeias</span><span>MapBiomas — mineração e garimpo</span><span>OpenStreetMap — pistas de pouso e bombeiros</span>
       <span>Google Gemini — redação do parecer</span>
-    </div>
+    </details>
   </div>
 </section>
 

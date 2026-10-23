@@ -234,6 +234,7 @@ function selecionar(id, voar) {
         </div>
         <p class="nota" style="margin-top:10px">A prioridade soma indicadores objetivos de fontes públicas para ordenar a verificação; não é grau de certeza. Não substitui a perícia de local nem os procedimentos legais.</p></div>
     </div>`;
+  recolherBlocos($("#ficha"));
   if ($("#fAnalisar")) $("#fAnalisar").onclick = () => window.abrirAnalise?.(e);
   if ($("#fPronta")) $("#fPronta").onclick = () => window.mostrarAnalisePronta?.(e.id);
   $("#fRelatorio").onclick = () => {
@@ -273,6 +274,11 @@ function blocoConfronto(e) {
   if (tr?.relevo?.declividade_p90_graus >= 12) inconc.push(`Relevo inclinado (declividade de até ${br(tr.relevo.declividade_p90_graus, 0)}°): o fogo tende a subir a encosta; na perícia, procurar a região de início na parte baixa`);
   if (d.estrada?.km != null && d.estrada.km <= 1) inconc.push(`Via a ${br(d.estrada.km * 1000, 0)} m (${d.estrada.tipo}${d.estrada.nome ? " " + d.estrada.nome : ""}; OpenStreetMap): acesso humano fácil, compatível tanto com ignição deliberada quanto com escape de queima à beira da via`);
   else if (d.estrada && (d.estrada.km == null || d.estrada.km > 10)) inconc.push(`Sem estrada ou ramal mapeado a até ${d.estrada.km == null ? d.estrada.busca_km : br(d.estrada.km, 0)} km (OpenStreetMap incompleto): acesso provável por rio ou trilha`);
+  if (d.fpnd) intenc.push(`Em floresta pública não destinada (${d.fpnd.nome}, ${(d.fpnd.governo || "").toLowerCase()}; Serviço Florestal Brasileiro): desmatamento e fogo nessas glebas são associados à grilagem de terras públicas`);
+  if (d.prodes?.total_ha) intenc.push(`PRODES: ${br(d.prodes.total_ha, 1)} ha desmatados a até 1 km em ${Object.keys(d.prodes.anos_ha).join(", ")}: histórico de conversão (não independente do DETER e do MapBiomas)`);
+  if (d.sigef?.no_ponto?.length) inconc.push(`Imóvel certificado no SIGEF no ponto: ${d.sigef.no_ponto[0].nome_area} (código ${d.sigef.no_ponto[0].codigo_imo}): pista para identificar o detentor, não prova autoria`);
+  if (d.mineracao?.garimpo_ha_3km) inconc.push(`Garimpo mapeado a ${br(d.mineracao.mais_perto_km, 1)} km (${br(d.mineracao.garimpo_ha_3km, 1)} ha a até 3 km; MapBiomas 2023): contexto de atividade ilícita a esclarecer`);
+  if (d.pista?.km <= 5) inconc.push(`Pista de pouso a ${br(d.pista.km, 1)} km (${d.pista.nome}; OpenStreetMap): acesso aéreo ao local`);
   if (d.assentamento) acid.push(`Dentro do assentamento ${d.assentamento.nome} (INCRA, ${d.assentamento.familias ?? "?"} famílias): o fogo na agricultura familiar é comum; verificar o lote e a autorização de queima`);
   if (d.goes?.antecede_h > 0) inconc.push(`GOES: fogo já detectável ${br(d.goes.antecede_h, 1)} h antes do satélite de referência (${manaus(d.goes.primeira)}, Manaus): estreita o horário, mas não é a hora da ignição`);
   if (ctx.includes("escape_plausivel")) acid.push("Seca forte e vento acima de 10 km/h: uma queima pode ter escapado do controle");
@@ -371,17 +377,25 @@ function blocoTerritorio(e) {
 const IUCN_TXT = {CR: "Criticamente em perigo", EN: "Em perigo", VU: "Vulnerável"};
 function blocoEntorno(e) {
   const es = e.det.estrada, as = e.det.assentamento, ba = e.det.bacia, bio = e.det.biodiversidade;
-  if (!es && !as && !ba && !bio) return "";
+  const fp = e.det.fpnd, sg = e.det.sigef, al = e.det.aldeias, mi = e.det.mineracao, pi = e.det.pista, bo = e.det.bombeiros, pr = e.det.prodes;
+  if (!es && !as && !ba && !bio && !fp && !sg) return "";
   const am = bio?.ameacadas || [];
   return `<div class="clima-bloco"><h3>Entorno: acesso, fundiário, água e biodiversidade</h3>
     <div class="fatos">
       ${es ? `<div><span>Via mais próxima (OSM)</span><b>${es.km == null ? `nenhuma a até ${es.busca_km} km` : `${br(es.km, es.km < 1 ? 2 : 1)} km · ${esc(es.tipo)}${es.nome ? " · " + esc(es.nome) : ""}`}</b></div>` : ""}
       <div><span>Assentamento (INCRA)</span><b>${as ? `${esc(as.nome)} · ${as.familias ?? "–"} famílias` : "fora de assentamento"}</b></div>
       ${ba ? `<div><span>Sub-bacia (ANA)</span><b>${esc(ba.nome)}</b></div>` : ""}
+      <div><span>Floresta pública não destinada</span><b>${fp ? `${esc(fp.nome)} (${esc(fp.governo || "").toLowerCase()})` : "não"}</b></div>
+      ${sg ? `<div><span>Imóveis SIGEF a até 500 m</span><b>${sg.a_500m}${sg.no_ponto?.length ? ` · no ponto: ${esc(sg.no_ponto[0].nome_area)}` : ""}</b></div>` : ""}
+      ${pr ? `<div><span>PRODES a até 1 km, antes do fogo</span><b>${pr.total_ha ? `${br(pr.total_ha, 1)} ha (${Object.keys(pr.anos_ha).length} ano(s))` : "nenhum"}</b></div>` : ""}
+      ${al ? `<div><span>Aldeias a até 10 km (FUNAI)</span><b>${al.n_10km} · mais perto: ${esc(al.nome)}, ${br(al.mais_perto_km, 1)} km</b></div>` : ""}
+      ${mi ? `<div><span>Mineração a até 3 km (MapBiomas)</span><b>${mi.garimpo_ha_3km ? br(mi.garimpo_ha_3km, 1) + " ha de garimpo" : ""}${mi.garimpo_ha_3km && mi.industrial_ha_3km ? " · " : ""}${mi.industrial_ha_3km ? br(mi.industrial_ha_3km, 1) + " ha industrial" : ""}</b></div>` : ""}
+      ${pi ? `<div><span>Pista de pouso mais próxima (OSM)</span><b>${br(pi.km, 1)} km · ${esc(pi.nome)}</b></div>` : ""}
+      ${bo ? `<div><span>Bombeiros mais próximos (OSM)</span><b>${fmt(bo.km)} km · ${esc(bo.nome)}</b></div>` : ""}
       ${bio ? `<div><span>Espécies registradas a até ${bio.raio_km} km (GBIF)</span><b>${fmt(bio.especies)} · ${am.length} ameaçada(s)</b></div>` : ""}
     </div>
     ${am.length ? `<p class="clima-leitura"><b>Espécies ameaçadas registradas no entorno</b> (Lista Vermelha da IUCN): ${am.slice(0, 12).map(a => `<i>${esc(a.nome)}</i> (${IUCN_TXT[a.categoria] || a.categoria}${a.classe ? ", " + esc(a.classe) : ""})`).join("; ")}${am.length > 12 ? `; e mais ${am.length - 12}` : ""}.</p>` : ""}
-    <p class="nota">Vias: OpenStreetMap, base colaborativa e incompleta (falta de ramal no mapa não prova falta de acesso). Assentamentos: INCRA. Sub-bacias: ANA (DNAEE). Biodiversidade: registros de ocorrência do GBIF, esparsos na Amazônia — ausência de registro não é ausência de espécie; serve para dimensionar o dano potencial.</p></div>`;
+    <p class="nota">Florestas públicas: Serviço Florestal Brasileiro (CNFP 2025). SIGEF e assentamentos: INCRA (imóvel é pista para identificar o detentor, não prova autoria). PRODES: INPE. Aldeias: FUNAI. Mineração: MapBiomas (2023). Vias, pistas e bombeiros: OpenStreetMap, base colaborativa e incompleta (falta de ramal no mapa não prova falta de acesso). Sub-bacias: ANA (DNAEE). Biodiversidade: registros de ocorrência do GBIF, esparsos na Amazônia — ausência de registro não é ausência de espécie; serve para dimensionar o dano potencial.</p></div>`;
 }
 function blocoCronologia(e) {
   const p = e.det.passagens; if (!p?.length) return "";
@@ -465,11 +479,27 @@ const CAMADAS = [
   ["bacias", "Sub-bacias hidrográficas (ANA)", "#0277bd", false],
   ["rios", "Rios (ANA)", "#29b6f6", false],
   ["assentamentos", "Assentamentos (INCRA)", "#a1887f", false],
-  ["estradas", "Estradas e ramais (OpenStreetMap)", "#ff7043", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
+  ["estradas", "Estradas e ramais (OpenStreetMap)", "#ff7043", false],
+  ["prodes", "PRODES: desmatamento anual (INPE)", "#c2185b", false],
+  ["fpnd", "Florestas públicas não destinadas (SFB)", "#7cb342", false],
+  ["sigef", "Imóveis certificados SIGEF (INCRA, zoom 9+)", "#ffb300", false],
+  ["aldeias", "Aldeias indígenas (FUNAI)", "#6d4c41", false],
+  ["mineracao", "Garimpo e mineração (MapBiomas 2023)", "#d50000", false],
+  ["pistas", "Pistas de pouso (OpenStreetMap)", "#37474f", false],
+  ["bombeiros", "Bombeiros (OpenStreetMap)", "#e53935", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
   ["lixoes", "Lixões e vazadouros (fumaça tóxica)", "#8e24aa", true],
   ["mudancas", "Alertas de mudança (Sentinel-2 + radar)", "#00b8d4", true],
   ["erbs", "ERBs de telefonia (Anatel)", "#5e35b1", true],
   ["sel", "Evento selecionado (anel amarelo)", "#ffdf00", true],
+];
+// grupos do menu de camadas (abrem e fecham; o primeiro começa aberto)
+const GRUPOS_CAMADAS = [
+  ["Fogo e desmatamento", ["eventos", "alertas", "focos", "calor", "mudancas", "riscoprev", "desmat", "cicat", "prodes"]],
+  ["Áreas protegidas e fundiário", ["tis", "ucs", "aldeias", "assentamentos", "fpnd", "sigef"]],
+  ["Meio ambiente", ["fauna", "flora", "bacias", "rios"]],
+  ["Tempo e fumaça", ["vento", "fumaca", "chuva", "nuvens", "imerg"]],
+  ["Pressão e infraestrutura", ["estradas", "mineracao", "pistas", "lixoes", "erbs", "bombeiros"]],
+  ["Referência", ["mun", "sel"]],
 ];
 async function iniciarMapa() {
   const m = Q.mapa = new maplibregl.Map({container: "mapa", center: [-62.5, -4.3], zoom: 5, maxZoom: 18, attributionControl: {compact: true},
@@ -530,6 +560,27 @@ async function iniciarMapa() {
   const corOp = ["match", ["get", "op"], "VIVO", "#7b1fa2", "TIM", "#1565c0", "CLARO", "#c62828", "#455a64"];
   m.addLayer({id: "erbs", type: "circle", source: "erbs", minzoom: 7, paint: {
     "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 2.5, 12, 6], "circle-color": "#fff", "circle-stroke-color": corOp, "circle-stroke-width": 2.2}});
+  // PRODES (WMS do TerraBrasilis, com CORS)
+  m.addSource("prodes", {type: "raster", tileSize: 256, attribution: "INPE PRODES · TerraBrasilis",
+    tiles: ["https://terrabrasilis.dpi.inpe.br/geoserver/ows?service=WMS&version=1.1.1&request=GetMap&layers=prodes-legal-amz:yearly_deforestation&styles=&bbox={bbox-epsg-3857}&srs=EPSG:3857&width=256&height=256&format=image/png&transparent=true"]});
+  m.addLayer({id: "prodes", type: "raster", source: "prodes", minzoom: 7, layout: {visibility: "none"}, paint: {"raster-opacity": .75}}, "eventos");
+  // bases estáticas carregadas só quando ligadas
+  for (const k of ["fpnd", "sigef", "aldeias", "mineracao", "pistas", "bombeiros"]) m.addSource(k, {type: "geojson", data: vazio});
+  m.addLayer({id: "fpnd", type: "fill", source: "fpnd", layout: {visibility: "none"}, paint: {"fill-color": "#7cb342", "fill-opacity": .14}}, "eventos");
+  m.addLayer({id: "fpnd-l", type: "line", source: "fpnd", layout: {visibility: "none"}, paint: {"line-color": "#9ccc65", "line-width": 1.2}}, "eventos");
+  m.addLayer({id: "sigef", type: "line", source: "sigef", minzoom: 9, layout: {visibility: "none"}, paint: {"line-color": "#ffb300", "line-width": 1}}, "eventos");
+  m.addLayer({id: "aldeias", type: "circle", source: "aldeias", layout: {visibility: "none"}, paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 2.5, 12, 6], "circle-color": "#6d4c41", "circle-stroke-color": "#fff", "circle-stroke-width": 1}});
+  m.addLayer({id: "mineracao", type: "circle", source: "mineracao", layout: {visibility: "none"}, paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 1.5, 12, 6],
+    "circle-color": ["match", ["get", "t"], "garimpo", "#d50000", "#78909c"], "circle-opacity": .8}});
+  m.addLayer({id: "pistas", type: "circle", source: "pistas", layout: {visibility: "none"}, paint: {"circle-radius": 5, "circle-color": "#37474f", "circle-stroke-color": "#ffeb3b", "circle-stroke-width": 2}});
+  m.addLayer({id: "bombeiros", type: "circle", source: "bombeiros", layout: {visibility: "none"}, paint: {"circle-radius": 6, "circle-color": "#e53935", "circle-stroke-color": "#fff", "circle-stroke-width": 2}});
+  const popCamada = (id, f) => m.on("click", id, ev => { if (Q.modoPonto) return; new maplibregl.Popup({maxWidth: "300px"}).setLngLat(ev.lngLat).setHTML(f(ev.features[0].properties)).addTo(m); });
+  popCamada("fpnd", p => `<b>${esc(p.nome)}</b><br>Floresta pública não destinada · ${esc(p.categoria)} (${esc(p.governo)})<br>${br(+p.area_ha, 0)} ha · ${esc(p.municipio)}<br><span class="nota">Serviço Florestal Brasileiro, CNFP 2025</span>`);
+  popCamada("sigef", p => `<b>${esc(p.nome_area)}</b><br>SIGEF/INCRA · ${esc(p.status)} · ${esc(p.situacao_i)}<br>Código do imóvel ${esc(p.codigo_imo)} · aprovado em ${esc(p.data_aprov)}`);
+  popCamada("aldeias", p => `<b>Aldeia ${esc(p.nome)}</b><br>${esc(p.municipio)} · ${esc(p.cr)}<br><span class="nota">FUNAI</span>`);
+  popCamada("mineracao", p => `<b>${p.t === "garimpo" ? "Garimpo" : "Mineração industrial"}</b><br>${br(+p.ha, 1)} ha na célula de ~500 m (2023)<br><span class="nota">MapBiomas Coleção 9, código ${esc(p.cod)}</span>`);
+  popCamada("pistas", p => `<b>${esc(p.nome)}</b><br>${p.tipo === "airstrip" ? "Pista de pouso" : "Aeródromo"}${p.icao ? " · " + esc(p.icao) : ""}${p.superficie ? " · " + esc(p.superficie) : ""}<br><span class="nota">OpenStreetMap (incompleto)</span>`);
+  popCamada("bombeiros", p => `<b>${esc(p.nome)}</b><br>${esc(p.operador || "")}<br><span class="nota">OpenStreetMap (incompleto)</span>`);
   // assentamentos (INCRA) e estradas (OSM): carregados só quando ligados
   m.addSource("assentamentos", {type: "geojson", data: vazio}); m.addSource("estradas", {type: "geojson", data: vazio});
   m.addLayer({id: "assentamentos", type: "fill", source: "assentamentos", layout: {visibility: "none"}, paint: {"fill-color": "#a1887f", "fill-opacity": .18}}, "eventos");
@@ -715,7 +766,8 @@ function montarControles() {
     <div class="ctl-acoes"><button type="button" class="botao secundario pequeno" id="ctlNenhuma">Desmarcar todas</button><button type="button" class="botao secundario pequeno" id="ctlPadrao">Voltar ao padrão</button></div>
     <h4>Mapa de fundo</h4>${Object.entries(BASES).filter(([, b]) => !b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}" ${k === "satelite" ? "checked" : ""}> ${b.nome}</label>`).join("")}
     <h4>Imagens de satélite recentes</h4>${Object.entries(BASES).filter(([, b]) => b.grupo).map(([k, b]) => `<label><input type="radio" name="base" value="${k}"> ${b.nome}</label>`).join("")}
-    <h4>Camadas</h4>${CAMADAS.map(([k, t, c, on]) => `<label><input type="checkbox" data-c="${k}" ${on ? "checked" : ""}><span class="sw" style="background:${c}"></span>${t}</label>`).join("")}
+    ${GRUPOS_CAMADAS.map(([titulo, ks], i) => `<details class="ctl-grupo"${i === 0 ? " open" : ""}><summary>${titulo}</summary>${CAMADAS.filter(c => ks.includes(c[0])).map(([k, t, c, on]) =>
+      `<label><input type="checkbox" data-c="${k}" ${on ? "checked" : ""}><span class="sw" style="background:${c}"></span>${t}</label>`).join("")}</details>`).join("")}
     <div id="riscoCtl" hidden><h4>Risco previsto (INPE)</h4><select id="riscoDia" style="width:100%"></select><div class="nota" id="riscoInfo"></div>
       <div class="nota" style="font-size:11px"><i style="display:inline-block;width:10px;height:10px;background:#66bb6a"></i> baixo · <i style="display:inline-block;width:10px;height:10px;background:#ffd54f"></i> médio · <i style="display:inline-block;width:10px;height:10px;background:#f57c00"></i> alto · <i style="display:inline-block;width:10px;height:10px;background:#b71c1c"></i> crítico</div></div>
     <div id="ventoCtl"><h4>Hora do vento</h4><input type="range" id="ventoSl" min="0" max="47" value="0" style="width:100%"><div class="nota" id="ventoHora"></div></div></div>`;
@@ -724,7 +776,7 @@ function montarControles() {
     if (e.target.dataset.b) { BRM.vis[e.target.dataset.b] = e.target.checked; return filtrarBrmais(); }
     if (e.target.id === "brmAno") { BRM.ano = e.target.value; return filtrarBrmais(); }
     const k = e.target.dataset.c; if (!k) return;
-    const ids = {tis: ["tis", "tis-l"], ucs: ["ucs", "ucs-l"], sel: ["sel", "area"], assentamentos: ["assentamentos", "assentamentos-l"]}[k] || [k];
+    const ids = {tis: ["tis", "tis-l"], ucs: ["ucs", "ucs-l"], sel: ["sel", "area"], assentamentos: ["assentamentos", "assentamentos-l"], fpnd: ["fpnd", "fpnd-l"]}[k] || [k];
     if (e.target.checked) sobDemanda(k);
     if (k === "riscoprev") $("#riscoCtl").hidden = !e.target.checked;
     ids.forEach(id => Q.mapa.getLayer(id) && Q.mapa.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none"));
@@ -982,6 +1034,12 @@ function fontes() {
     ["Clima: vento, umidade, chuva", "Open-Meteo (ECMWF, GFS, ICON, ERA5)", "https://open-meteo.com/", Q.vento ? manaus(Q.vento.gerado_em.replace("T", " ").slice(0, 19)) : "–", "a cada 3 h (grade) · por evento", "vento no mapa e na ficha"],
     ["Sentinel-2 L2A (10 m)", "ESA Copernicus · Microsoft Planetary Computer", "https://planetarycomputer.microsoft.com/dataset/sentinel-2-l2a", "sob demanda", "~5 dias", "NDVI, NBR, NDMI, imagens"],
     ["Alertas de mudança (óptico + radar)", "Fogo Forense, a partir de Sentinel-2 e Sentinel-1", "#", Q.mudancas ? Object.keys(Q.mudancas.eventos || {}).length + " incêndios analisados" : "–", "6 incêndios por ciclo", "automático, não validado"],
+    ["Desmatamento anual", "INPE — PRODES (TerraBrasilis)", "https://terrabrasilis.dpi.inpe.br/", "anual", "anual", "camada e histórico a até 1 km"],
+    ["Florestas públicas não destinadas", "Serviço Florestal Brasileiro — CNFP 2025", "https://www.gov.br/florestal/pt-br/assuntos/cadastro-nacional-de-florestas-publicas", "326 glebas no AM", "anual", "indicador de prioridade (+15)"],
+    ["Imóveis certificados", "INCRA — SIGEF", "https://sigef.incra.gov.br/", "9.212 no AM", "mensal", "mapa, ficha e relatório"],
+    ["Aldeias", "FUNAI — aldeias", "https://www.gov.br/funai/", "1.137 no AM", "anual", "comunidades a até 10 km"],
+    ["Garimpo e mineração", "MapBiomas Coleção 9 — mineração (2023)", "https://brasil.mapbiomas.org/", "células de ~500 m", "anual", "garimpo a até 3 km"],
+    ["Pistas de pouso e bombeiros", "OpenStreetMap (colaborativo)", "https://www.openstreetmap.org/", "70 e 11 no AM", "manual", "base incompleta"],
     ["Fauna e flora", "GBIF — ocorrências de espécies", "https://www.gbif.org/", "registros", "contínua", "mapa e espécies (e ameaçadas IUCN) a até 10 km"],
     ["Bacias e rios", "ANA/SNIRH — sub-bacias DNAEE e hidrografia", "https://www.snirh.gov.br/", "1:1.000.000", "estático", "camadas do mapa e sub-bacia do evento"],
     ["Assentamentos", "INCRA — Acervo Fundiário", "https://certificacao.incra.gov.br/", "132 no AM", "mensal", "mapa, ficha e relatório"],
@@ -1267,7 +1325,8 @@ const carregadas = new Set();
 async function sobDemanda(k) {
   if (carregadas.has(k)) return;
   try {
-    if (k === "assentamentos") { Q.mapa.getSource("assentamentos").setData(await (await fetch("bases/assentamentos_am.json")).json()); }
+    const BASE = {assentamentos: "assentamentos_am", fpnd: "fpnd_am", sigef: "sigef_am", aldeias: "aldeias_am", mineracao: "mineracao_am", pistas: "pistas_am", bombeiros: "bombeiros_am"};
+    if (BASE[k]) { if (["sigef", "fpnd", "mineracao"].includes(k)) toast("Carregando a camada…", 2500); Q.mapa.getSource(k).setData(await (await fetch(`bases/${BASE[k]}.json`)).json()); }
     else if (k === "estradas") { toast("Carregando estradas e ramais…", 3000); Q.mapa.getSource("estradas").setData(await json("dados/estradas.json")); }
     else if (k === "riscoprev") await riscoPrevisto();
     else return;
@@ -1357,3 +1416,18 @@ function desenhoFim() {
     m.on("mouseup", desenhoFim); m.on("touchend", desenhoFim);
   }, 300);
 })();
+
+// ficha enxuta: cada quadro mostra título e resumo; "ver detalhes" abre e fecha
+function recolherBlocos(raiz) {
+  raiz.querySelectorAll(".clima-bloco, .painel-grade").forEach(b => {
+    if (b.tagName === "DETAILS" || b.closest("details")) return;
+    const h = b.querySelector("h3"); if (!h) return;
+    const resumo = (b.querySelector(".clima-leitura")?.textContent || [...b.querySelectorAll(".fatos b")].slice(0, 3).map(x => x.textContent).join(" · ")
+      || b.querySelector("p")?.textContent || "").replace(/\s+/g, " ").trim();
+    const d = document.createElement("details"); d.className = b.className + " recolhivel";
+    const sm = document.createElement("summary");
+    sm.innerHTML = `<span class="tit">${b.classList.contains("painel-grade") ? "Sinais verificados um a um e fontes públicas" : h.innerHTML}</span><span class="res">${esc(resumo.slice(0, 150))}${resumo.length > 150 ? "…" : ""}</span><span class="ver">ver detalhes</span>`;
+    if (b.classList.contains("painel-grade")) { d.className = "clima-bloco recolhivel"; b.replaceWith(d); d.append(sm, b); return; }
+    h.remove(); d.append(sm, ...b.childNodes); b.replaceWith(d);
+  });
+}

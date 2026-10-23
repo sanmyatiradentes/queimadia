@@ -46,7 +46,9 @@ def ciclo(rapido=False):
     except Exception:
         traceback.print_exc()
     for nome, f in (("estradas (OSM)", lambda: estradas.marcar(evs + alertas, estradas.atualizar())),
-                    ("assentamento e sub-bacia", lambda: contexto.marcar(evs + alertas)),
+                    ("fundiário, água e infraestrutura", lambda: contexto.marcar(evs + alertas)),
+                    ("floresta pública (prioridade)", lambda: len(contexto.aplicar(evs + alertas))),
+                    ("PRODES", lambda: contexto.prodes(alertas + evs)),
                     ("biodiversidade (GBIF)", lambda: biodiversidade.enriquecer(alertas + evs)),
                     ("risco previsto (INPE)", lambda: len(riscoprev.atualizar().get("dias", [])))):
         try:

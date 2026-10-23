@@ -267,3 +267,18 @@ body:not(.estatico) .so-estatico{display:none!important}
 .mapa-legenda .recolher span{color:var(--azul);font-size:12px}
 .raio-ponto{display:flex;align-items:center;gap:6px;font-size:12.5px;margin:0 0 6px}
 .raio-ponto select{padding:3px 6px}
+.ctl-grupo{border-top:1px solid var(--cinza-borda);padding:4px 0}
+.ctl-grupo summary{cursor:pointer;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--cinza-texto);padding:4px 0;list-style:none}
+.ctl-grupo summary::before{content:"▸ ";color:var(--azul)}
+.ctl-grupo[open] summary::before{content:"▾ "}
+.ctl-grupo summary::-webkit-details-marker{display:none}
+details.recolhivel>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center}
+details.recolhivel>summary::-webkit-details-marker{display:none}
+details.recolhivel>summary .tit{font-weight:700;color:var(--azul-escuro);font-size:15px}
+details.recolhivel>summary .res{grid-column:1;font-size:13px;color:var(--cinza-texto);line-height:1.4}
+details.recolhivel>summary .ver{grid-column:2;grid-row:1 / span 2;font-size:12.5px;font-weight:600;color:var(--azul);white-space:nowrap}
+details.recolhivel>summary .ver::after{content:" ▾"}
+details.recolhivel[open]>summary .ver{font-size:0}
+details.recolhivel[open]>summary .ver::after{content:"ocultar ▴";font-size:12.5px}
+details.recolhivel[open]>summary .res{display:none}
+details.recolhivel[open]>summary{margin-bottom:8px}

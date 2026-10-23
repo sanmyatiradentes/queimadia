@@ -48,6 +48,7 @@ PESOS = {
     "cicatriz_deter": 15,
     "ignicao_desfavoravel": 10,
     "conversao_florestal": 15,
+    "floresta_publica_nd": 15,
 }
 INDICADORES = list(PESOS)
 DESCRICAO_INDICADORES = {
@@ -70,6 +71,9 @@ DESCRICAO_INDICADORES = {
     "conversao_florestal": ("Conversão recente de floresta (MapBiomas)",
                             "a até 500 m do evento, a floresta natural caiu ≥ 20 pontos percentuais nos 5 anos anteriores ao fogo "
                             "(partindo de ≥ 50%) e o uso antrópico chegou a ≥ 20% (pastagem, agricultura, mosaico, mineração ou área não vegetada)"),
+    "floresta_publica_nd": ("Floresta pública não destinada",
+                            "centro do evento em gleba pública sem destinação (Cadastro Nacional de Florestas Públicas 2025, tipo B): "
+                            "desmatamento e fogo nessas áreas são associados à grilagem de terras públicas"),
 }
 
 CREDITO = "Desenvolvido pelo NIPED/PCAM"

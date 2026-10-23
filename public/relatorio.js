@@ -68,8 +68,9 @@ async function montar() {
   if (RAIO_INICIAL && !montar.feito) $("#raio").value = RAIO_INICIAL;
   montar.feito = true;
   let raioM = Math.min(5000, Math.max(100, +$("#raio").value || 1000));
-  const [est, ev, al, mun, tis, ucs, quil, assent] = await Promise.all([dj("estatisticas.json"), dj("eventos.json"), dj("alertas.json"),
-    dj("municipios.json"), dj("tis.json"), dj("ucs.json"), fetch("bases/quilombolas_am.json").then(r => r.json()).catch(() => null), fetch("bases/assentamentos_am.json").then(r => r.json()).catch(() => null)]);
+  const [est, ev, al, mun, tis, ucs, quil, assent, fpnd, sigef] = await Promise.all([dj("estatisticas.json"), dj("eventos.json"), dj("alertas.json"),
+    dj("municipios.json"), dj("tis.json"), dj("ucs.json"), fetch("bases/quilombolas_am.json").then(r => r.json()).catch(() => null), fetch("bases/assentamentos_am.json").then(r => r.json()).catch(() => null),
+    fetch("bases/fpnd_am.json").then(r => r.json()).catch(() => null), fetch("bases/sigef_am.json").then(r => r.json()).catch(() => null)]);
   const e = PONTO ? eventoDoPonto(PONTO, mun) : [...descompactar(ev), ...descompactar(al)].find(x => x.id === ID);
   if (!e) { $("#folha").innerHTML = `<div class="cartao"><p>Evento ${esc(ID)} não encontrado nos dados atuais.</p></div>`; estado("Evento não encontrado", false); return; }
   let usuario = null; try { usuario = (await api("api/conta?acao=eu")).usuario; } catch (x) {}
@@ -87,7 +88,8 @@ async function montar() {
   const remota = n => api(`api/bases?base=${n}&bbox=${bbStr}`).then(d => d.features).catch(() => null);
   const [car, emb, anm] = await Promise.all([remota("car"), remota("embargos"), remota("anm")]);
 
-  const tisP = noRetangulo(tis, bb), ucsP = noRetangulo(ucs, bb), quilP = quil ? noRetangulo(quil, bb) : null, assentP = assent ? noRetangulo(assent, bb) : null;
+  const tisP = noRetangulo(tis, bb), ucsP = noRetangulo(ucs, bb), quilP = quil ? noRetangulo(quil, bb) : null, assentP = assent ? noRetangulo(assent, bb) : null,
+    fpndP = fpnd ? noRetangulo(fpnd, bb) : null, sigefP = sigef ? noRetangulo(sigef, bb) : null;
   const camadas = [
     {k: "car", nome: "CAR — imóveis declarados (SICAR)", l: car, cor: COR.car, prox: false, alerta: "atencao",
       desc: p => `CAR ${esc(p.cod_imovel)} · ${br(p.area, 2)} ha declarados · ${esc(p.tipo_imovel || "")} · ${esc(p.condicao || "")} · situação ${esc(p.status_imovel || "")}`},
@@ -99,6 +101,10 @@ async function montar() {
       desc: p => `TI ${esc(p.terrai_nom)} · povo ${esc(p.etnia_nome)} · ${esc(p.fase_ti)}`},
     {k: "quil", nome: "Comunidades quilombolas (INCRA)", l: quilP, cor: COR.quil, prox: true, alerta: "sim",
       desc: p => `${esc(p.nm_comunid)} · ${esc(p.nm_municip)} · processo ${esc(p.nr_process)} · ${esc(p.esfera || "")}`},
+    {k: "fpnd", nome: "Florestas públicas não destinadas (SFB)", l: fpndP, cor: "#7cb342", prox: true, alerta: "sim",
+      desc: p => `${esc(p.nome)} · ${esc(p.categoria)} · ${esc(p.governo)} · ${br(+p.area_ha, 0)} ha · ${esc(p.municipio)}`},
+    {k: "sigef", nome: "Imóveis certificados SIGEF (INCRA)", l: sigefP, cor: "#ffb300", prox: false, alerta: "atencao",
+      desc: p => `${esc(p.nome_area)} · código do imóvel ${esc(p.codigo_imo)} · ${esc(p.status)} · ${esc(p.situacao_i)} · aprovado em ${esc(p.data_aprov)}`},
     {k: "assent", nome: "Assentamentos (INCRA)", l: assentP, cor: "#a1887f", prox: true, alerta: "atencao",
       desc: p => `${esc(p.nome_proje)} · ${esc(p.municipio)} · ${p.num_famili ?? "–"} famílias · ${br(+p.area_calc_, 0)} ha · fase ${esc(p.fase)} · código ${esc(p.cd_sipra)}`},
     {k: "emb", nome: "Embargos IBAMA", l: emb, cor: COR.emb, prox: true, alerta: "sim",
