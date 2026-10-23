@@ -154,7 +154,8 @@ const cor = s => s >= 85 ? "#7a1420" : s >= 70 ? "#c8302f" : s >= 50 ? "#e07b2a"
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const IND = {desmatamento_previo: "Desmatamento DETER antes do fogo", area_protegida: "Terra indígena / UC de proteção integral",
   uso_sustentavel: "Reserva de uso sustentável", reincidencia: "Reincidência no local", multiplos_focos_dia: "3+ focos no mesmo dia",
-  periodo_proibitivo: "Período proibitivo", cicatriz_deter: "Cicatriz de queimada no DETER", ignicao_desfavoravel: "Ignição em tempo desfavorável"};
+  periodo_proibitivo: "Período proibitivo", cicatriz_deter: "Cicatriz de queimada no DETER", ignicao_desfavoravel: "Ignição em tempo desfavorável",
+  conversao_florestal: "Floresta convertida em pasto (MapBiomas)", floresta_publica_nd: "Floresta pública não destinada"};
 const T = {versao: null, eventos: [], alertas: [], top: [], i: 0, pausa: false, mud: null};
 const ROT_MS = 12000;
 
@@ -261,7 +262,7 @@ function mostrar(i) {
   $("#destaque").innerHTML = `<div class="rot">Em destaque · ${T.i + 1} de ${T.top.length}</div>
     <div class="linha1"><span class="pontos" style="background:${cor(e.score)}">${e.score}</span>
       <div><h2>${esc(e.mun)}</h2><div class="sub">${esc(d.ti || d.uc || "Fora de terra indígena/UC")} · ${dBR(e.ini)}${e.fim.slice(0, 10) !== e.ini.slice(0, 10) ? " a " + dBR(e.fim) : ""}</div></div></div>
-    <ul>${e.ind.slice(0, 5).map(k => `<li>${IND[k] || k}</li>`).join("") || "<li>Sem indicadores fortes</li>"}</ul>
+    <ul>${e.ind.slice(0, 5).map(k => `<li>${IND[k] || String(k).replace(/_/g, " ")}</li>`).join("") || "<li>Sem indicadores fortes</li>"}</ul>
     <div class="extra">
       <div><span>Focos</span><b>${e.n}</b></div><div><span>Distância de Manaus</span><b>${fmt(e.dist)} km</b></div>
       <div><span>Vento no início</span><b>${cl.vento_kmh != null ? br(cl.vento_kmh, 0) + " km/h" : "–"}</b></div>
