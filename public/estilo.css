@@ -263,3 +263,7 @@ body:not(.estatico) .so-estatico{display:none!important}
 .brm-grupo .brm-ano{display:flex;gap:6px;align-items:center;margin-top:4px}
 .ir-coord{display:flex;gap:6px;margin:0}
 .ir-coord input{flex:1;min-width:0;font-size:14px;padding:6px 8px}
+.mapa-legenda .recolher{display:flex;width:100%;justify-content:space-between;align-items:center;gap:12px;background:none;border:0;color:var(--azul-escuro);padding:0 0 4px;margin:-2px 0 2px;cursor:pointer;font:inherit;font-size:12.5px}
+.mapa-legenda .recolher span{color:var(--azul);font-size:12px}
+.raio-ponto{display:flex;align-items:center;gap:6px;font-size:12.5px;margin:0 0 6px}
+.raio-ponto select{padding:3px 6px}

@@ -31,9 +31,13 @@
       pts.push([lon + (r / 111320 / Math.cos(lat * Math.PI / 180)) * Math.cos(a), lat + (r / 111320) * Math.sin(a)]); }
     return {type: "Feature", geometry: {type: "Polygon", coordinates: [pts]}};
   }
+  // área desenhada no mapa principal (mão livre): lista de [lon, lat]; null = círculo
+  const poliTxt = () => A.poli ? A.poli.map(p => p[0].toFixed(5) + "," + p[1].toFixed(5)).join(";") : "";
+  const poliQ = () => A.poli ? "&poli=" + encodeURIComponent(poliTxt()) : "";
+  const formaArea = (lat, lon, r) => A.poli ? {type: "Feature", geometry: {type: "Polygon", coordinates: [[...A.poli, A.poli[0]]]}} : circulo(lat, lon, r);
   window.miniMapa = function () {
     const lat = +$("#aLat").value, lon = +$("#aLon").value, r = +$("#aRaio").value, lado = +$("#aLado").value * 1000;
-    const dados = {type: "FeatureCollection", features: [circulo(lat, lon, r)]};
+    const dados = {type: "FeatureCollection", features: [formaArea(lat, lon, r)]};
     const g = lado / 2 / 111320, c = Math.cos(lat * Math.PI / 180);
     const caixa = {type: "Feature", geometry: {type: "Polygon", coordinates: [[[lon - g / c, lat - g], [lon + g / c, lat - g], [lon + g / c, lat + g], [lon - g / c, lat + g], [lon - g / c, lat - g]]]}};
     if (!mini) {
@@ -49,12 +53,16 @@
     } else if (mini.getSource("c")) {
       mini.getSource("c").setData(dados); mini.getSource("b").setData(caixa); mini.resize(); mini.easeTo({center: [lon, lat]});
     }
-    window.Q?.mapa?.getSource("area")?.setData({type: "FeatureCollection", features: [circulo(lat, lon, r)]});
+    window.Q?.mapa?.getSource("area")?.setData({type: "FeatureCollection", features: [formaArea(lat, lon, r)]});
   };
 
   // ------------------------------------------------------------ abrir a partir do mapa/evento
+  const hashTxt = t => { let h = 0; for (const c of t) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
   window.abrirAnalise = function (e) {
     $("#aLat").value = (+e.lat).toFixed(5); $("#aLon").value = (+e.lon).toFixed(5);
+    A.poli = e.poli || null;
+    if (e.raio) $("#aRaio").value = Math.round(e.raio);
+    if (A.poli) $("#aLado").value = Math.max(+$("#aLado").value, Math.ceil(e.raio * 2.6 / 1000));
     const hoje = iso(new Date());
     if (e.ini) {
       const ini = e.ini.slice(0, 10), fim = e.fim.slice(0, 10);
@@ -86,7 +94,7 @@
     const cols = $$('[data-col][aria-pressed="true"]').map(c => c.dataset.col);
     $("#aStatus").hidden = false; ["#aSerieC", "#aQuebraC", "#aGalC", "#aDnbrC", "#aTabC", "#aParecerC"].forEach(s => $(s).hidden = true);
     $("#aKpis").innerHTML = ""; A.med = []; A.quebra = null;
-    $("#aTitulo").textContent = `Análise em ${lat.toFixed(4)}, ${lon.toFixed(4)} · raio ${raio} m`;
+    $("#aTitulo").textContent = `Análise em ${lat.toFixed(4)}, ${lon.toFixed(4)} · ${A.poli ? "área desenhada à mão livre" : "raio " + raio + " m"}`;
     window.rolarPara($("#aStatus"), true);
     try {
       prog(0, 1, "Buscando cenas no catálogo STAC…");
@@ -96,7 +104,7 @@
       $("#aSerieC").hidden = false;
       let feitos = 0;
       await pool(A.cenas, 6, async c => {
-        const r = await fetch(`api/medir?colecao=${c.colecao}&id=${encodeURIComponent(c.id)}&lat=${lat}&lon=${lon}&raio_m=${raio}`).then(r => r.json()).catch(e => ({erro: String(e)}));
+        const r = await fetch(`api/medir?colecao=${c.colecao}&id=${encodeURIComponent(c.id)}&lat=${lat}&lon=${lon}&raio_m=${raio}${poliQ()}`).then(r => r.json()).catch(e => ({erro: String(e)}));
         A.med.push({...c, ...r}); feitos++;
         prog(feitos, A.cenas.length, `Medindo cenas: ${feitos} de ${A.cenas.length}`);
         if (feitos % 3 === 0 || feitos === A.cenas.length) serie();
@@ -279,7 +287,7 @@
     const nomes = {rgb: "Cor real", falsacor: "Falsa-cor", ndvi: "NDVI", nbr: "NBR", ndmi: "NDMI"};
     $("#aGalC").hidden = false;
     $("#aGal").innerHTML = per.flatMap(p => prods.map(pr => {
-      const u = `api/imagem?colecao=${p.colecao}&id=${encodeURIComponent(p.id)}&lat=${lat}&lon=${lon}&lado_m=${lado}&produto=${pr}&raio_m=${raio}`;
+      const u = `api/imagem?colecao=${p.colecao}&id=${encodeURIComponent(p.id)}&lat=${lat}&lon=${lon}&lado_m=${lado}&produto=${pr}&raio_m=${raio}${poliQ()}`;
       return `<figure data-prod="${pr}" data-data="${p.data}"><a href="${u}" target="_blank" rel="noopener"><img loading="lazy" src="${u}" alt="${nomes[pr]} em ${dBR(p.data)}"></a>
         <figcaption><b>${nomes[pr]}</b> · ${dBR(p.data)}${p.rotulo ? " · " + p.rotulo : ""}<br>${p.colecao.startsWith("sentinel") ? "Sentinel-2" : "Landsat"} · NDVI ${br(p.ndvi)}</figcaption></figure>`;
     })).join("") || `<p class="nota">Nenhum período com imagem válida.</p>`;
@@ -336,7 +344,7 @@
     if (!a || !b) return;
     $("#dRes").innerHTML = `<p class="nota">Calculando dNBR entre ${dBR(a.data)} e ${dBR(b.data)}…</p>`;
     const q = new URLSearchParams({col_a: a.colecao, id_a: a.id, col_b: b.colecao, id_b: b.id, lat: $("#aLat").value, lon: $("#aLon").value,
-      lado_m: +$("#aLado").value * 1000, raio_m: $("#aRaio").value});
+      lado_m: +$("#aLado").value * 1000, raio_m: $("#aRaio").value, ...(A.poli ? {poli: poliTxt()} : {})});
     try {
       const r = await (await fetch("api/dnbr?" + q)).json();
       if (!r.png) throw new Error(r.detail || "falha");
@@ -362,7 +370,7 @@
   }
   function proveniencia() {
     return {sistema: "Fogo Forense (NIPED/PCAM/DPTC)", gerado_em: new Date().toISOString(),
-      area: {lat: +$("#aLat").value, lon: +$("#aLon").value, raio_m: +$("#aRaio").value}, periodo: [$("#aIni").value, $("#aFim").value],
+      area: {lat: +$("#aLat").value, lon: +$("#aLon").value, raio_m: +$("#aRaio").value, ...(A.poli ? {poligono: A.poli, forma: "desenho à mão livre"} : {})}, periodo: [$("#aIni").value, $("#aFim").value],
       linha_base: [$("#aRefIni").value, $("#aRefFim").value], modo: $("#aModo").value, min_fracao_valida: MIN_VALIDO,
       metodo: "NDVI = mediana dos pixels válidos no círculo; cena do mês: >= 80% da área limpa e menor nuvem na cena; triagem Tmask na linha de base; quebra: limiar = base − max(3σ; 0,15), confirmada por 6 observações consecutivas (CCDC).",
       fonte: "Microsoft Planetary Computer (STAC): sentinel-2-l2a, landsat-c2-l2 (Landsat 8/9, Tier 1)",
@@ -461,11 +469,12 @@
       ev = [...(window.Q?.eventos || []), ...(window.Q?.alertas || [])].filter(x => x.ini.slice(0, 10) >= ini && x.ini.slice(0, 10) <= fim && km(x) <= 3)
         .sort((a, b) => km(a) - km(b))[0] || null;
     }
+    if (A.poli) ev = null;   // área desenhada: relatório da área, não do evento
     const data = ev ? null : addDias($("#aRefFim").value, 60);
-    const chave = ev ? ev.id : `P${lat.toFixed(4)}_${lon.toFixed(4)}_${data}`;
+    const chave = ev ? ev.id : `P${lat.toFixed(4)}_${lon.toFixed(4)}_${data}${A.poli ? "_" + hashTxt(poliTxt()) : ""}`;
     // análise feita agora no painel: o relatório reaproveita as cenas já medidas, sem medir de novo
     if (!A.pronta && A.med?.length) try { localStorage.setItem("ff_cenas_" + chave, JSON.stringify({t: Date.now(), cenas: A.med})); } catch (x) {}
-    window.open(ev ? "relatorio.html?id=" + encodeURIComponent(ev.id) : `relatorio.html?lat=${lat}&lon=${lon}&data=${data}`, "_blank");
+    window.open(ev ? "relatorio.html?id=" + encodeURIComponent(ev.id) : `relatorio.html?lat=${lat}&lon=${lon}&data=${data}&raio=${$("#aRaio").value}` + (A.poli ? "&poli=" + encodeURIComponent(poliTxt()) : ""), "_blank");
   };
   // coordenadas digitadas: vírgula decimal, sinal esquecido ou graus/minutos/segundos viram decimal
   for (const [id, eixo] of [["#aLat", "lat"], ["#aLon", "lon"]]) $(id).addEventListener("change", e => {
@@ -474,6 +483,7 @@
     if (par) e.target.value = (eixo === "lat" ? par.lat : par.lon).toFixed(5);
     window.miniMapa?.();
   });
+  for (const id of ["#aLat", "#aLon", "#aRaio"]) $(id).addEventListener("input", () => { if (A.poli) { A.poli = null; window.miniMapa?.(); } });
   // exame de local: preenche as coordenadas com a posição do aparelho
   $("#aAqui").onclick = () => {
     if (!navigator.geolocation) return alert("Este aparelho não informa a localização.");

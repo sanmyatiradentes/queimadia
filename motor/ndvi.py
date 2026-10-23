@@ -98,6 +98,36 @@ def forma_janela(bounds, res):
     return max(8, int(round(h))), max(8, int(round(w)))
 
 
+def ler_poligono(txt):
+    """'lon,lat;lon,lat;...' → lista de (lon, lat). Até 300 vértices; None se vazio ou inválido."""
+    if not txt:
+        return None
+    try:
+        pts = [tuple(float(v) for v in par.split(",")) for par in str(txt).split(";") if par.strip()]
+    except ValueError:
+        return None
+    if len(pts) < 3 or len(pts) > 300 or any(len(p) != 2 or not (-80 < p[0] < -40 and -20 < p[1] < 10) for p in pts):
+        return None
+    return pts
+
+
+def caixa_poligono(poli, folga=0.15, minimo_m=300):
+    xs, ys = [p[0] for p in poli], [p[1] for p in poli]
+    lat = (min(ys) + max(ys)) / 2
+    dx, dy = max(xs) - min(xs), max(ys) - min(ys)
+    m = minimo_m / 111320.0
+    dx, dy = max(dx, m / max(0.1, math.cos(math.radians(lat)))), max(dy, m)
+    return (min(xs) - dx * folga, min(ys) - dy * folga, max(xs) + dx * folga, max(ys) + dy * folga)
+
+
+def mascara_poligono(bounds, shape, poli):
+    from rasterio.features import geometry_mask
+    from rasterio.transform import from_bounds
+    t = from_bounds(*bounds, shape[1], shape[0])
+    anel = list(poli) + [poli[0]]
+    return geometry_mask([{"type": "Polygon", "coordinates": [anel]}], out_shape=shape, transform=t, invert=True, all_touched=True)
+
+
 def mascara_circulo(shape, frac_raio):
     h, w = shape
     yy, xx = np.ogrid[:h, :w]
@@ -231,16 +261,16 @@ def indices(d, col):
 
 
 # ------------------------------------------------------------------ medições
-def medir_cena(colecao, item_id, lat, lon, raio_m=600):
-    """NDVI/NBR/NDMI (mediana) dos pixels válidos num círculo de raio_m."""
+def medir_cena(colecao, item_id, lat, lon, raio_m=600, poli=None):
+    """NDVI/NBR/NDMI (mediana) dos pixels válidos num círculo de raio_m ou num polígono desenhado."""
     t0 = time.time()
     item = obter_item(colecao, item_id)
     res = COLECOES[colecao]["res"] if raio_m > 1500 else 10
-    b = caixa(lat, lon, 2 * raio_m)
+    b = caixa_poligono(poli, folga=0.02) if poli else caixa(lat, lon, 2 * raio_m)
     sh = forma_janela(b, res)
     d = ler(item, colecao, b, ["green", "red", "nir", "swir1", "swir2", "mascara"], sh)
     idx, bom = indices(d, colecao)
-    circ = mascara_circulo(sh, 1.0)
+    circ = mascara_poligono(b, sh, poli) if poli else mascara_circulo(sh, 1.0)
     validos = circ & bom & np.isfinite(idx["ndvi"])
     frac = float(validos.sum() / circ.sum())
     saida = {"id": item_id, "colecao": colecao, "data": str(_data(item)),
@@ -409,9 +439,12 @@ def colorir(arr, nome, vmin, vmax):
     return rgb
 
 
-def _png(rgb, marcar_centro=None):
+def _png(rgb, marcar_centro=None, contorno=None):
     im = Image.fromarray(rgb)
-    if marcar_centro:
+    if contorno:   # polígono desenhado: [(x_px, y_px), ...]
+        from PIL import ImageDraw
+        ImageDraw.Draw(im).line(list(contorno) + [contorno[0]], fill=(255, 255, 255), width=2)
+    elif marcar_centro:
         from PIL import ImageDraw
         dr = ImageDraw.Draw(im)
         h, w = rgb.shape[:2]
@@ -422,7 +455,11 @@ def _png(rgb, marcar_centro=None):
     return buf.getvalue()
 
 
-def imagem(colecao, item_id, lat, lon, lado_m=4000, produto="rgb", raio_m=None):
+def _contorno_px(b, sh, poli):
+    return [((x - b[0]) / (b[2] - b[0]) * sh[1], (b[3] - y) / (b[3] - b[1]) * sh[0]) for x, y in poli] if poli else None
+
+
+def imagem(colecao, item_id, lat, lon, lado_m=4000, produto="rgb", raio_m=None, poli=None):
     """PNG do recorte: produto ∈ rgb, falsacor (SWIR-NIR-Red), ndvi, nbr, ndmi."""
     item = obter_item(colecao, item_id)
     b = caixa(lat, lon, lado_m)
@@ -430,20 +467,21 @@ def imagem(colecao, item_id, lat, lon, lado_m=4000, produto="rgb", raio_m=None):
     if max(sh) > 800:
         f = 800 / max(sh)
         sh = (int(sh[0] * f), int(sh[1] * f))
-    centro = raio_m * 2 / lado_m if raio_m else None
+    centro = raio_m * 2 / lado_m if raio_m and not poli else None
+    cont = _contorno_px(b, sh, poli)
     if produto in ("rgb", "falsacor"):
         ch = ["red", "green", "blue"] if produto == "rgb" else ["swir2", "nir", "red"]
         d = ler(item, colecao, b, ch, sh)
         rgb = np.dstack([d[c] for c in ch])
         rgb = np.clip(np.nan_to_num(rgb) / (0.18 if produto == "rgb" else 0.45), 0, 1) ** (1 / 1.4)
-        return _png((rgb * 255).astype("uint8"), centro)
+        return _png((rgb * 255).astype("uint8"), centro, cont)
     d = ler(item, colecao, b, ["red", "nir", "swir1", "swir2", "mascara"], sh)
     idx, _ = indices(d, colecao)
     faixas = {"ndvi": (0, 0.9), "nbr": (-0.3, 0.8), "ndmi": (-0.3, 0.6)}
-    return _png(colorir(idx[produto], produto, *faixas[produto]), centro)
+    return _png(colorir(idx[produto], produto, *faixas[produto]), centro, cont)
 
 
-def dnbr(col_a, id_a, col_b, id_b, lat, lon, lado_m=4000, raio_m=None):
+def dnbr(col_a, id_a, col_b, id_b, lat, lon, lado_m=4000, raio_m=None, poli=None):
     """dNBR entre duas cenas (a = antes, b = depois): PNG classificado + áreas."""
     b = caixa(lat, lon, lado_m)
     sh = forma_janela(b, 10)
@@ -464,12 +502,15 @@ def dnbr(col_a, id_a, col_b, id_b, lat, lon, lado_m=4000, raio_m=None):
         sel = (dn >= lo) & (dn < hi)
         rgb[sel] = tuple(int(cor[i:i + 2], 16) for i in (1, 3, 5))
         areas[nome] = round(float(sel.sum()) * pix_ha, 1)
-    circ = mascara_circulo(sh, raio_m * 2 / lado_m) if raio_m else np.ones(sh, bool)
+    circ = mascara_poligono(b, sh, poli) if poli else mascara_circulo(sh, raio_m * 2 / lado_m) if raio_m else np.ones(sh, bool)
     v = dn[circ & np.isfinite(dn)]
     stats = {"areas_ha": areas, "queimado_ha": round(float((dn >= 0.27).sum()) * pix_ha, 1),
              "dnbr_mediana_nucleo": round(float(np.median(v)), 3) if v.size else None,
              "cobertura_valida": round(float(np.isfinite(dn).mean()), 3), "pixel_ha": round(pix_ha, 4)}
-    return _png(rgb, raio_m * 2 / lado_m if raio_m else None), stats
+    if poli:   # área queimada dentro do polígono desenhado
+        stats["queimado_ha_area"] = round(float(((dn >= 0.27) & circ).sum()) * pix_ha, 1)
+        stats["area_ha"] = round(float(circ.sum()) * pix_ha, 1)
+    return _png(rgb, raio_m * 2 / lado_m if raio_m and not poli else None, _contorno_px(b, sh, poli)), stats
 
 
 # ------------------------------------------------------------------ mosaicos

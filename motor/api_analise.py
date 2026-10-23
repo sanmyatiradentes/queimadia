@@ -23,20 +23,20 @@ def cenas(lat: float, lon: float, inicio: str, fim: str, colecoes: str = "sentin
 
 
 @router.get("/medir")
-def medir(colecao: str, id: str, lat: float, lon: float, raio_m: float = Query(600, ge=50, le=10000)):
+def medir(colecao: str, id: str, lat: float, lon: float, raio_m: float = Query(600, ge=50, le=10000), poli: str | None = None):
     try:
-        return JSONResponse(ndvi.medir_cena(colecao, id, lat, lon, raio_m), headers=CACHE_IMG)
+        return JSONResponse(ndvi.medir_cena(colecao, id, lat, lon, raio_m, ndvi.ler_poligono(poli)), headers=CACHE_IMG)
     except Exception as e:
         return {"id": id, "colecao": colecao, "erro": f"{type(e).__name__}: {str(e)[:200]}"}
 
 
 @router.get("/imagem")
 def imagem(colecao: str, id: str, lat: float, lon: float, lado_m: float = Query(4000, ge=500, le=20000),
-           produto: str = "rgb", raio_m: float | None = None):
+           produto: str = "rgb", raio_m: float | None = None, poli: str | None = None):
     if produto not in ("rgb", "falsacor", "ndvi", "nbr", "ndmi"):
         raise HTTPException(400, "produto inválido")
     try:
-        png = ndvi.imagem(colecao, id, lat, lon, lado_m, produto, raio_m)
+        png = ndvi.imagem(colecao, id, lat, lon, lado_m, produto, raio_m, ndvi.ler_poligono(poli))
     except Exception as e:
         raise HTTPException(502, f"falha ao ler a cena: {type(e).__name__}")
     return Response(png, media_type="image/png", headers=CACHE_IMG)
@@ -44,9 +44,9 @@ def imagem(colecao: str, id: str, lat: float, lon: float, lado_m: float = Query(
 
 @router.get("/dnbr")
 def dnbr(col_a: str, id_a: str, col_b: str, id_b: str, lat: float, lon: float,
-         lado_m: float = Query(4000, ge=500, le=20000), raio_m: float | None = None):
+         lado_m: float = Query(4000, ge=500, le=20000), raio_m: float | None = None, poli: str | None = None):
     try:
-        png, stats = ndvi.dnbr(col_a, id_a, col_b, id_b, lat, lon, lado_m, raio_m)
+        png, stats = ndvi.dnbr(col_a, id_a, col_b, id_b, lat, lon, lado_m, raio_m, ndvi.ler_poligono(poli))
     except Exception as e:
         raise HTTPException(502, f"falha ao calcular dNBR: {type(e).__name__}")
     return JSONResponse({"png": base64.b64encode(png).decode(), **stats}, headers=CACHE_IMG)

@@ -11,7 +11,12 @@ const DADOS = window.QUEIMADIA_DADOS;
 const PQ = new URLSearchParams(location.search);
 // por evento (?id=) ou por ponto de interesse (?lat=&lon=&data=), quando a análise foi feita numa coordenada
 const PONTO = !PQ.get("id") && PQ.get("lat") && PQ.get("lon") ? {lat: +PQ.get("lat"), lon: +PQ.get("lon"), data: (PQ.get("data") || new Date().toISOString()).slice(0, 10)} : null;
-const ID = PQ.get("id") || (PONTO && Number.isFinite(PONTO.lat + PONTO.lon) ? `P${PONTO.lat.toFixed(4)}_${PONTO.lon.toFixed(4)}_${PONTO.data}` : null);
+// área desenhada no mapa (mão livre): 'lon,lat;lon,lat;...'
+const POLI = (() => { const t = PQ.get("poli"); if (!t) return null;
+  const p = t.split(";").map(x => x.split(",").map(Number)).filter(x => x.length === 2 && x.every(Number.isFinite)); return p.length >= 3 ? p : null; })();
+const hashTxt = t => { let h = 0; for (const c of t) h = (h * 31 + c.charCodeAt(0)) | 0; return (h >>> 0).toString(36); };
+const ID = PQ.get("id") || (PONTO && Number.isFinite(PONTO.lat + PONTO.lon) ? `P${PONTO.lat.toFixed(4)}_${PONTO.lon.toFixed(4)}_${PONTO.data}${POLI ? "_" + hashTxt(PQ.get("poli")) : ""}` : null);
+const RAIO_INICIAL = +PQ.get("raio") || null;
 const RAIO_ALERTAS_KM = 5, PROX_KM = 10;
 const COR = {ai: "#ffdf00", car: "#ffffff", emb: "#ff1744", ti: "#d4a017", ucpi: "#00c853", ucus: "#69f0ae", quil: "#ff9100", anm: "#40c4ff",
   brC: "#ff8a65", brF: "#ff1744", brI: "#ffea00", brD: "#76ff03", brG: "#e040fb"};
@@ -60,7 +65,9 @@ function eventoDoPonto(p, mun) {
 async function montar() {
   if (!ID) { $("#folha").innerHTML = `<div class="cartao"><p>Abra o relatório pelo botão <b>Gerar relatório</b> na ficha de um evento.</p></div>`; return; }
   estado("Carregando dados…");
-  const raioM = Math.min(5000, Math.max(100, +$("#raio").value || 1000));
+  if (RAIO_INICIAL && !montar.feito) $("#raio").value = RAIO_INICIAL;
+  montar.feito = true;
+  let raioM = Math.min(5000, Math.max(100, +$("#raio").value || 1000));
   const [est, ev, al, mun, tis, ucs, quil, assent] = await Promise.all([dj("estatisticas.json"), dj("eventos.json"), dj("alertas.json"),
     dj("municipios.json"), dj("tis.json"), dj("ucs.json"), fetch("bases/quilombolas_am.json").then(r => r.json()).catch(() => null), fetch("bases/assentamentos_am.json").then(r => r.json()).catch(() => null)]);
   const e = PONTO ? eventoDoPonto(PONTO, mun) : [...descompactar(ev), ...descompactar(al)].find(x => x.id === ID);
@@ -69,7 +76,8 @@ async function montar() {
   let guardado = null; try { guardado = JSON.parse(localStorage.getItem("ff_rel_" + ID) || "null"); } catch (x) {}
 
   const centro = turf.point([e.lon, e.lat]);
-  const ai = turf.circle(centro, raioM / 1000, {steps: 96, units: "kilometers"});
+  const ai = POLI ? turf.polygon([[...POLI, POLI[0]]]) : turf.circle(centro, raioM / 1000, {steps: 96, units: "kilometers"});
+  if (POLI) { raioM = Math.round(Math.sqrt(turf.area(ai) / Math.PI)); $("#raio").closest("label").hidden = true; }
   const aiHa = turf.area(ai) / 1e4;
   const dla = (PROX_KM + raioM / 1000) / 111, dlo = dla / Math.cos(e.lat * Math.PI / 180);
   const bb = [e.lon - dlo, e.lat - dla, e.lon + dlo, e.lat + dla];
@@ -168,7 +176,8 @@ async function postar(u, corpo) {
   const d = await r.json(); if (!r.ok) throw new Error(d.detail || d.erro || r.status); return d;
 }
 async function analisarAgora(e, cenasProntas) {
-  const RAIO = 600, LADO = 4000, ini = e.ini.slice(0, 10), fim = e.fim.slice(0, 10), hoje = iso(new Date());
+  const RAIO = e.ponto ? R.raioM || 600 : 600, LADO = Math.max(4000, Math.ceil(RAIO * 2.6 / 500) * 500), ini = e.ini.slice(0, 10), fim = e.fim.slice(0, 10), hoje = iso(new Date());
+  const pq = POLI ? "&poli=" + encodeURIComponent(PQ.get("poli")) : "";
   const aIni = somaDias(ini, -730), refFim = somaDias(ini, -60), f = somaDias(fim, 120), aFim = e.ponto || f > hoje ? hoje : f;
   const loc = `lat=${e.lat}&lon=${e.lon}`;
   let med = cenasProntas;
@@ -180,25 +189,25 @@ async function analisarAgora(e, cenasProntas) {
     if (!cenas.length) throw new Error("nenhuma imagem encontrada para o local e o período");
     med = []; let k = 0, feitos = 0;
     await Promise.all(Array.from({length: 6}, async () => { while (k < cenas.length) { const c = cenas[k++];
-      const r = await api(`api/medir?colecao=${c.colecao}&id=${encodeURIComponent(c.id)}&${loc}&raio_m=${RAIO}`).catch(x => ({erro: x.message}));
+      const r = await api(`api/medir?colecao=${c.colecao}&id=${encodeURIComponent(c.id)}&${loc}&raio_m=${RAIO}${pq}`).catch(x => ({erro: x.message}));
       med.push({...c, ...r}); feitos++;
       progresso(`Análise de satélite · medindo a vegetação em ${feitos} de ${cenas.length} imagens…`, .05 + .7 * feitos / cenas.length); } }));
   }
   progresso("Análise de satélite · procurando quebra na série de NDVI…", .78);
   const s = await postar("api/serie", {cenas: med, ref_ini: aIni, ref_fim: refFim, inicio: e.ini, fim: e.fim});
   const imagens = s.periodos.flatMap(p => ["rgb", "ndvi"].map(prod => ({produto: prod, data: p.data, colecao: p.colecao, rotulo: p.rotulo, ndvi: p.ndvi,
-    src: `api/imagem?colecao=${p.colecao}&id=${encodeURIComponent(p.id)}&${loc}&lado_m=${LADO}&produto=${prod}&raio_m=${RAIO}`})));
+    src: `api/imagem?colecao=${p.colecao}&id=${encodeURIComponent(p.id)}&${loc}&lado_m=${LADO}&produto=${prod}&raio_m=${RAIO}${pq}`})));
   let dnbr = null;
   if (s.par_dnbr) {
     progresso("Análise de satélite · calculando a severidade da queima (dNBR)…", .88);
     const [a, b] = s.par_dnbr;
     try {
-      const d = await api(`api/dnbr?col_a=${a.colecao}&id_a=${encodeURIComponent(a.id)}&col_b=${b.colecao}&id_b=${encodeURIComponent(b.id)}&${loc}&lado_m=${LADO}&raio_m=${RAIO}`);
+      const d = await api(`api/dnbr?col_a=${a.colecao}&id_a=${encodeURIComponent(a.id)}&col_b=${b.colecao}&id_b=${encodeURIComponent(b.id)}&${loc}&lado_m=${LADO}&raio_m=${RAIO}${pq}`);
       dnbr = {...d, png: undefined, src: "data:image/png;base64," + d.png, antes: a.data, depois: b.data, cena_antes: a.id, cena_depois: b.id};
     } catch (x) { console.warn("dNBR", x); }
   }
   const ndvi = {evento: {id: e.id, municipio: e.mun, inicio: e.ini, fim: e.fim, score: e.score, lat: e.lat, lon: e.lon},
-    area: {lat: e.lat, lon: e.lon, raio_m: RAIO, lado_m: LADO}, periodo: [aIni, aFim], linha_base: [aIni, refFim],
+    area: {lat: e.lat, lon: e.lon, raio_m: RAIO, lado_m: LADO, ...(POLI ? {poligono: POLI} : {})}, periodo: [aIni, aFim], linha_base: [aIni, refFim],
     quebra: s.quebra, dnbr, imagens, cenas: med, n_validas: s.n_validas, gerado_em: new Date().toISOString(), origem: "relatório"};
   try { localStorage.setItem("ff_ndvi_" + e.id, JSON.stringify({t: Date.now(), ndvi})); } catch (x) {}
   progresso("Análise de satélite concluída", 1);
@@ -353,7 +362,7 @@ function render() {
   html.push(sec(N(), "Dados da área de interesse (AI)", `
     <table class="tabela kv"><tbody>
       <tr><td>Município</td><td>${esc(e.mun)} - AM</td></tr>
-      <tr><td>Área de interesse</td><td>Círculo de ${fmt(raioM)} m de raio no centro do evento · ${br(aiHa, 2)} ha</td></tr>
+      <tr><td>Área de interesse</td><td>${POLI ? `Polígono desenhado no mapa (${POLI.length} vértices)` : `Círculo de ${fmt(raioM)} m de raio no centro ${e.ponto ? "do ponto" : "do evento"}`} · ${br(aiHa, 2)} ha</td></tr>
       <tr><td>Centroide da AI</td><td class="mono">${centroide(e.lat, e.lon)} (${e.lat.toFixed(5)}, ${e.lon.toFixed(5)})</td></tr>
       <tr><td>Sistema de referência</td><td>WGS 84 (EPSG:4326), compatível com SIRGAS 2000 na escala do relatório</td></tr>
       ${e.ponto ? `

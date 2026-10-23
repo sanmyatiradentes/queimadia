@@ -686,8 +686,8 @@ function irPara(c) {
   Q.marcaPonto = new maplibregl.Marker({color: "#ffdf00"}).setLngLat([c.lon, c.lat]).setPopup(pop).addTo(m);
   m.flyTo({center: [c.lon, c.lat], zoom: Math.max(m.getZoom(), 14), speed: 1.6});
   pop.on("open", () => {
-    $("#pAnalisar").onclick = () => { window.abrirAnalise?.({lat: c.lat, lon: c.lon}); setTimeout(() => $("#aRodar")?.click(), 300); };
-    $("#pRelatorio").onclick = () => window.open(`relatorio.html?lat=${c.lat}&lon=${c.lon}&data=${hoje}`, "_blank");
+    $("#pAnalisar").onclick = () => { window.abrirAnalise?.({lat: c.lat, lon: c.lon, raio: +$("#raioPonto").value}); setTimeout(() => $("#aRodar")?.click(), 300); };
+    $("#pRelatorio").onclick = () => window.open(`relatorio.html?lat=${c.lat}&lon=${c.lon}&data=${hoje}&raio=${$("#raioPonto").value}`, "_blank");
   });
   Q.marcaPonto.togglePopup();
   maisPerto({latitude: c.lat, longitude: c.lon}, true);
@@ -707,6 +707,9 @@ function montarControles() {
     <p class="ctl-dica">Marque ou desmarque para <b>ligar ou desligar</b> cada camada.</p>
     <div class="ctl-acoes"><button type="button" class="botao pequeno" id="btnAqui" style="flex:1" title="Exame de local: centraliza o mapa na sua posição e acompanha enquanto você se desloca">📍 Onde estou</button>
       <button type="button" class="botao fogo pequeno" id="btnAnalisarAqui" style="flex:1" title="Pega a posição do GPS e já roda a análise de satélite do local">🛰️ Analisar onde estou</button></div>
+    <label class="raio-ponto">Raio da análise <select id="raioPonto"><option>300</option><option selected>600</option><option>1000</option><option>2000</option><option>3000</option></select> m</label>
+    <div class="ctl-acoes"><button type="button" class="botao secundario pequeno" id="desCirc" style="flex:1" title="Clique no centro e arraste até a borda">⭕ Desenhar círculo</button>
+      <button type="button" class="botao secundario pequeno" id="desLivre" style="flex:1" title="Pressione e contorne a área; solte para fechar">✏️ Mão livre</button></div>
     <form id="irCoord" class="ir-coord" autocomplete="off"><input id="irTxt" type="text" inputmode="text" placeholder="Coordenadas: -3.347, -59.446" aria-label="Ir para coordenadas (decimal ou graus, minutos e segundos)"><button type="submit" class="botao secundario pequeno">Ir</button></form>
     <p class="nota" style="margin:2px 0 8px;font-size:11px">Decimal ou graus/minutos/segundos, ex.: 3°20'49"S 59°26'44"W</p>
     <div class="ctl-acoes"><button type="button" class="botao secundario pequeno" id="ctlNenhuma">Desmarcar todas</button><button type="button" class="botao secundario pequeno" id="ctlPadrao">Voltar ao padrão</button></div>
@@ -740,11 +743,13 @@ function montarControles() {
     navigator.geolocation.getCurrentPosition(p => {
       bt.disabled = false; bt.textContent = "🛰️ Analisar onde estou";
       toast(`Analisando a sua posição (±${Math.round(p.coords.accuracy)} m). Ao terminar, use "Relatório completo (PDF)" no fim da página.`, 7000);
-      window.abrirAnalise?.({lat: p.coords.latitude, lon: p.coords.longitude}); setTimeout(() => $("#aRodar")?.click(), 300);
+      window.abrirAnalise?.({lat: p.coords.latitude, lon: p.coords.longitude, raio: +$("#raioPonto").value}); setTimeout(() => $("#aRodar")?.click(), 300);
     }, err => { bt.disabled = false; bt.textContent = "🛰️ Analisar onde estou";
       toast(err.code === 1 ? "Permita o acesso à localização no navegador para usar este botão." : "Não foi possível obter a localização."); },
     {enableHighAccuracy: true, timeout: 20000, maximumAge: 30000});
   };
+  $("#desCirc").onclick = () => iniciarDesenho("circulo");
+  $("#desLivre").onclick = () => iniciarDesenho("livre");
   $("#irCoord").onsubmit = ev => { ev.preventDefault(); const c = lerCoord($("#irTxt").value);
     if (!c) return toast("Não entendi as coordenadas. Exemplos: -3.347, -59.446  ou  3°20'49\"S 59°26'44\"W"); irPara(c); };
   $("#btnAqui").onclick = () => { $("#btnAqui").textContent = "📍 Localizando…"; Q.geo?.trigger(); };
@@ -752,8 +757,10 @@ function montarControles() {
   el.addEventListener("input", e => { if (e.target.id === "ventoSl") { Q.ventoHora = +e.target.value; desenharVento(); } });
   $("#ctlRec").onclick = () => { const c = $("#ctlCorpo"); c.hidden = !c.hidden; $("#ctlRec span").textContent = c.hidden ? "mostrar" : "ocultar"; $("#ctlRec").setAttribute("aria-expanded", !c.hidden); };
   if (matchMedia("(max-width:640px)").matches) $("#ctlRec").click();
-  $("#legenda").innerHTML = `<div class="nota" style="font-size:11px;margin-bottom:4px"><b>Pela forma:</b> ● evento · ○ alerta de agora · ▭ área de mudança${Q.usuario ? " · ◆ ■ Brasil MAIS" : ""}</div><b style="font-size:12px">Prioridade de verificação (círculos cheios)</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
-    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div><i style="background:#8e24aa"></i>Lixão/vazadouro</div><div><i style="background:#fff;border:2px solid #5e35b1"></i>ERB (zoom 7+): <span style="color:#7b1fa2">Vivo</span> · <span style="color:#1565c0">TIM</span> · <span style="color:#c62828">Claro</span></div><div><b style="font-size:11px">Alerta de mudança (áreas):</b></div><div><i style="background:#ffd600;border-radius:2px"></i>Óptico · <i style="background:#00b8d4;border-radius:2px;margin-left:4px"></i>Radar · <i style="background:#fff;border:1px solid #777;border-radius:2px;margin-left:4px"></i>Ambos</div><div><i style="background:transparent;border:2px solid #ba68c8"></i>Fogo a até 1 km de lixão</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>`;
+  $("#legenda").innerHTML = `<button type="button" class="recolher" id="legRec" aria-expanded="true"><b>Legenda</b><span>ocultar</span></button><div id="legCorpo">` + `<div class="nota" style="font-size:11px;margin-bottom:4px"><b>Pela forma:</b> ● evento · ○ alerta de agora · ▭ área de mudança${Q.usuario ? " · ◆ ■ Brasil MAIS" : ""}</div><b style="font-size:12px">Prioridade de verificação (círculos cheios)</b>` + [["--s4", "Muito alta (85+)"], ["--s3", "Alta (70–84)"], ["--s2", "Atenção (50–69)"], ["--s1", "Baixa (0–49)"]].map(([c, t]) => `<div><i style="background:var(${c})"></i>${t}</div>`).join("")
+    + `<div><i style="background:transparent;border:2px solid #ff7a00"></i>Alerta de agora (VIIRS)</div><div><i style="background:#8e24aa"></i>Lixão/vazadouro</div><div><i style="background:#fff;border:2px solid #5e35b1"></i>ERB (zoom 7+): <span style="color:#7b1fa2">Vivo</span> · <span style="color:#1565c0">TIM</span> · <span style="color:#c62828">Claro</span></div><div><b style="font-size:11px">Alerta de mudança (áreas):</b></div><div><i style="background:#ffd600;border-radius:2px"></i>Óptico · <i style="background:#00b8d4;border-radius:2px;margin-left:4px"></i>Radar · <i style="background:#fff;border:1px solid #777;border-radius:2px;margin-left:4px"></i>Ambos</div><div><i style="background:transparent;border:2px solid #ba68c8"></i>Fogo a até 1 km de lixão</div><div class="nota" style="font-size:11px">Tamanho = quantidade de focos</div>` + `</div>`;
+  $("#legRec").onclick = () => { const c = $("#legCorpo"); c.hidden = !c.hidden; $("#legRec span").textContent = c.hidden ? "mostrar" : "ocultar"; $("#legRec").setAttribute("aria-expanded", !c.hidden); };
+  if (matchMedia("(max-width:640px)").matches) $("#legRec").click();
 }
 
 // ------------------------------------------------------------ ocorrências (tabela)
@@ -1107,7 +1114,7 @@ async function carregarBrmais() {
       ${DESM.meta ? it("D", "Desmatamento (corte raso, degradação, ramal)") + it("G", "Garimpo / extração mineral") : ""}
       <label class="brm-ano">Ano da imagem <select id="brmAno">${anos.map(a => `<option${a === BRM.ano ? " selected" : ""}>${a}</option>`).join("")}<option value="">todos os anos</option></select></label>
       <p class="nota">Desligado por padrão. Marque o tipo que quiser ver; o ano começa no mais recente. Desmatamento: aproxime o mapa para ver cada alerta.</p></div>`);
-  $("#legenda")?.insertAdjacentHTML("beforeend", `<div><b style="font-size:11px">Brasil MAIS (restrito) · losango = fogo:</b></div>
+  $("#legCorpo")?.insertAdjacentHTML("beforeend", `<div><b style="font-size:11px">Brasil MAIS (restrito) · losango = fogo:</b></div>
     <div>${svgForma("F")}Foco · ${svgForma("I")}Foco por IA · ${svgForma("C")}Cicatriz</div>`
     + (DESM.meta ? `<div><b style="font-size:11px">quadrado = desmatamento:</b></div><div>${svgForma("D")}Desmatamento · ${svgForma("G")}Garimpo</div>` : ""));
   filtrarBrmais();
@@ -1282,3 +1289,71 @@ async function riscoPrevisto() {
   $("#riscoDia").onchange = ev => m.getSource("riscoprev").updateImage({url: url(+ev.target.value), coordinates: coord});
   $("#riscoInfo").textContent = `${r.fonte}. Grade de 1 km; atualizado a cada 6 h.`;
 }
+
+// ------------------------------------------------------------ selecionar uma área no mapa (círculo ou mão livre)
+const DES = {modo: null, ativo: false, pts: [], centro: null, pop: null};
+const mPorGrau = 111320;
+function areaHa(pts) {   // fórmula do laço em coordenadas locais (m)
+  const lat0 = pts.reduce((t, p) => t + p[1], 0) / pts.length, c = Math.cos(lat0 * Math.PI / 180);
+  let a = 0; for (let i = 0; i < pts.length; i++) { const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length]; a += (x1 * c * mPorGrau) * (y2 * mPorGrau) - (x2 * c * mPorGrau) * (y1 * mPorGrau); }
+  return Math.abs(a) / 2 / 1e4;
+}
+const circuloPts = (lon, lat, r, n = 64) => Array.from({length: n}, (_, i) => { const a = i / n * 2 * Math.PI;
+  return [lon + r / mPorGrau / Math.cos(lat * Math.PI / 180) * Math.cos(a), lat + r / mPorGrau * Math.sin(a)]; });
+const kmEntrePts = (a, b) => Math.hypot((a[1] - b[1]) * 111.32, (a[0] - b[0]) * 111.32 * Math.cos(a[1] * Math.PI / 180));
+function desenhar(pts, fechado = true) {
+  const m = Q.mapa;
+  if (!m.getSource("desenho")) {
+    m.addSource("desenho", {type: "geojson", data: {type: "FeatureCollection", features: []}});
+    m.addLayer({id: "desenho-f", type: "fill", source: "desenho", filter: ["==", ["geometry-type"], "Polygon"], paint: {"fill-color": "#ffdf00", "fill-opacity": .15}});
+    m.addLayer({id: "desenho-l", type: "line", source: "desenho", paint: {"line-color": "#ffdf00", "line-width": 2.5, "line-dasharray": [2, 1]}});
+  }
+  const g = fechado && pts.length > 2 ? {type: "Polygon", coordinates: [[...pts, pts[0]]]} : {type: "LineString", coordinates: pts};
+  m.getSource("desenho").setData({type: "Feature", geometry: g});
+}
+function iniciarDesenho(modo) {
+  const m = Q.mapa; DES.modo = modo; DES.pts = []; DES.pop?.remove();
+  m.dragPan.disable(); m.getCanvas().style.cursor = "crosshair";
+  toast(modo === "circulo" ? "Clique (ou toque) no centro e arraste até a borda do círculo." : "Pressione e contorne a área com o mouse ou o dedo; solte para fechar.", 7000);
+  rolarPara($("#mapa"), true);
+}
+function pontoEv(ev) { return [ev.lngLat.lng, ev.lngLat.lat]; }
+function desenhoInicio(ev) {
+  if (!DES.modo) return;
+  ev.preventDefault(); DES.ativo = true; DES.centro = pontoEv(ev); DES.pts = [DES.centro];
+}
+function desenhoMove(ev) {
+  if (!DES.ativo) return;
+  const p = pontoEv(ev);
+  if (DES.modo === "circulo") { DES.raio = kmEntrePts(DES.centro, p) * 1000; desenhar(circuloPts(DES.centro[0], DES.centro[1], DES.raio)); return; }
+  const ult = Q.mapa.project(DES.pts[DES.pts.length - 1]), atual = Q.mapa.project(p);
+  if (Math.hypot(ult.x - atual.x, ult.y - atual.y) > 4) { DES.pts.push(p); desenhar(DES.pts, false); }
+}
+function desenhoFim() {
+  if (!DES.ativo) return;
+  const m = Q.mapa; DES.ativo = false; const modo = DES.modo; DES.modo = null;
+  m.dragPan.enable(); m.getCanvas().style.cursor = "";
+  let pts, raio = null;
+  if (modo === "circulo") { raio = Math.round(DES.raio || 0); if (raio < 50) return toast("Círculo pequeno demais: arraste do centro até a borda."); pts = circuloPts(DES.centro[0], DES.centro[1], raio); }
+  else { pts = DES.pts; if (pts.length < 4) return toast("Contorno curto demais: pressione e desenhe a área."); const k = Math.ceil(pts.length / 150); pts = pts.filter((_, i) => i % k === 0); }
+  const ha = areaHa(pts), raioEq = Math.round(Math.sqrt(ha * 1e4 / Math.PI));
+  if (raioEq > 5000) { desenhar([]); return toast("Área grande demais para a análise de satélite (máximo ~7.800 ha, raio de 5 km). Desenhe uma área menor."); }
+  desenhar(pts);
+  const c = modo === "circulo" ? DES.centro : [pts.reduce((t, p) => t + p[0], 0) / pts.length, pts.reduce((t, p) => t + p[1], 0) / pts.length];
+  const poliTxt = pts.map(p => p[0].toFixed(5) + "," + p[1].toFixed(5)).join(";"), hoje = new Date().toISOString().slice(0, 10);
+  DES.pop = new maplibregl.Popup({maxWidth: "300px"}).setLngLat(c).setHTML(`<b>Área selecionada</b><br>${modo === "circulo" ? `Círculo de ${fmt(raio)} m de raio · ` : "Desenho à mão livre · "}${br(ha, 1)} ha
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button type="button" class="botao pequeno" id="dAnalisar">Analisar satélite desta área</button>
+    <button type="button" class="botao secundario pequeno" id="dRelatorio">Relatório desta área</button><button type="button" class="botao secundario pequeno" id="dApagar">Apagar</button></div>`).addTo(m);
+  $("#dAnalisar").onclick = () => { window.abrirAnalise?.(modo === "circulo" ? {lat: c[1], lon: c[0], raio} : {lat: c[1], lon: c[0], raio: raioEq, poli: pts}); setTimeout(() => $("#aRodar")?.click(), 300); };
+  $("#dRelatorio").onclick = () => window.open(`relatorio.html?lat=${c[1].toFixed(5)}&lon=${c[0].toFixed(5)}&data=${hoje}` + (modo === "circulo" ? `&raio=${raio}` : `&poli=${encodeURIComponent(poliTxt)}`), "_blank");
+  $("#dApagar").onclick = () => { desenhar([]); DES.pop.remove(); };
+  maisPerto({latitude: c[1], longitude: c[0]}, true);
+}
+(function ligarDesenho() {
+  const espera = setInterval(() => {
+    const m = Q.mapa; if (!m) return; clearInterval(espera);
+    m.on("mousedown", desenhoInicio); m.on("touchstart", desenhoInicio);
+    m.on("mousemove", desenhoMove); m.on("touchmove", desenhoMove);
+    m.on("mouseup", desenhoFim); m.on("touchend", desenhoFim);
+  }, 300);
+})();
