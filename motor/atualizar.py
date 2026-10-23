@@ -27,6 +27,11 @@ def ciclo(rapido=False):
     except Exception:
         traceback.print_exc()
     df, evs, alertas = eventos.calcular()
+    # consultas externas novas: orçamento cheio no ciclo completo, mínimo nos rápidos (o cache é sempre aplicado)
+    territorio.MAX_SEGUNDOS = 15 if rapido else 90
+    biodiversidade.TEMPO_S = 10 if rapido else 60
+    contexto.PRODES_TEMPO_S = 10 if rapido else 60
+    ar.MAX_NOVOS = 50 if rapido else 300
     try:   # alertas de tempo real primeiro: são os que importam agora
         print("clima de eventos:", clima.enriquecer(alertas + evs))
     except Exception:

@@ -16,6 +16,7 @@ from . import config
 
 BASES = config.PUBLICO.parent / "bases"
 PRODES_CACHE = config.ESTADO / "prodes_eventos.json"
+PRODES_TEMPO_S = 60   # orçamento por ciclo (o atualizador reduz nos ciclos rápidos)
 PRODES_WFS = ("https://terrabrasilis.dpi.inpe.br/geoserver/ows?service=WFS&version=1.0.0&request=GetFeature"
               "&typeName=prodes-legal-amz:yearly_deforestation&outputFormat=application/json&propertyName=year,area_km,main_class&bbox={b}")
 
@@ -91,7 +92,7 @@ def prodes(eventos, score_min=50, max_novos=150):
     faltam = [e for e in eventos if e["id"] not in cache and (e["score"] >= score_min or e.get("trilha") == "tempo_real")][:max_novos]
     t0 = time.time()
     for e in faltam:
-        if time.time() - t0 > 90:
+        if time.time() - t0 > PRODES_TEMPO_S:
             break
         d = 1.0 / 111.32
         b = f'{e["lon"] - d:.4f},{e["lat"] - d:.4f},{e["lon"] + d:.4f},{e["lat"] + d:.4f}'

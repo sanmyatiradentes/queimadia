@@ -16,6 +16,7 @@ CACHE = config.ESTADO / "biodiversidade_eventos.json"
 RAIO_KM = 10
 AMEACA = {"CR": "Criticamente em perigo", "EN": "Em perigo", "VU": "Vulnerável"}
 MAX_NOVOS = 80
+TEMPO_S = 60          # orçamento por ciclo (o atualizador reduz nos ciclos rápidos)
 
 
 def _carregar():
@@ -57,7 +58,7 @@ def enriquecer(eventos, score_min=70):
     feitos = 0
     t0 = time.time()
     for e in faltam:
-        if time.time() - t0 > 120:
+        if time.time() - t0 > TEMPO_S:
             break
         try:
             cache[e["id"]] = consultar(e["lat"], e["lon"])

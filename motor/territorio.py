@@ -34,7 +34,7 @@ ANO_MAX_COB, ANO_MAX_FOGO = 2024, 2025
 ANOS_CONVERSAO = 5
 RAIO_M = 500
 CACHE = config.ESTADO / "territorio_eventos.json"
-MAX_SEGUNDOS = 150          # orçamento por ciclo; o resto fica para os próximos
+MAX_SEGUNDOS = 90           # orçamento por ciclo; o resto fica para os próximos
 
 # legenda MapBiomas Coleção 10 → grupos usados nas hipóteses
 CLASSES = {3: "Formação florestal", 4: "Formação savânica", 5: "Mangue", 6: "Floresta alagável", 49: "Restinga arbórea",
