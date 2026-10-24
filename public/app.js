@@ -738,7 +738,7 @@ const gmsTxt = (v, p, n) => { const a = Math.abs(v), g = Math.floor(a), m = Math
 function irPara(c) {
   const m = Q.mapa, foraAM = c.lat > 2.5 || c.lat < -10.5 || c.lon < -74.5 || c.lon > -56;
   Q.marcaPonto?.remove();
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = new Date().toLocaleDateString("sv-SE", {timeZone: "America/Manaus"});
   const pop = new maplibregl.Popup({offset: 24, maxWidth: "300px"}).setHTML(`<b>Ponto informado</b><br><span class="mono">${c.lat.toFixed(5)}, ${c.lon.toFixed(5)}</span><br>
     <span class="mono">${gmsTxt(c.lat, "N", "S")} ${gmsTxt(c.lon, "E", "W")}</span>${foraAM ? `<br><b style="color:var(--vermelho)">Atenção: fora do Amazonas. Confira os sinais e a ordem (latitude, longitude).</b>` : ""}
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button type="button" class="botao pequeno" id="pAnalisar">Analisar satélite aqui</button>
@@ -1413,7 +1413,7 @@ function desenhoFim() {
   if (raioEq > 5000) { desenhar([]); return toast("Área grande demais para a análise de satélite (máximo ~7.800 ha, raio de 5 km). Desenhe uma área menor."); }
   desenhar(pts);
   const c = modo === "circulo" ? DES.centro : [pts.reduce((t, p) => t + p[0], 0) / pts.length, pts.reduce((t, p) => t + p[1], 0) / pts.length];
-  const poliTxt = pts.map(p => p[0].toFixed(5) + "," + p[1].toFixed(5)).join(";"), hoje = new Date().toISOString().slice(0, 10);
+  const poliTxt = pts.map(p => p[0].toFixed(5) + "," + p[1].toFixed(5)).join(";"), hoje = new Date().toLocaleDateString("sv-SE", {timeZone: "America/Manaus"});
   DES.pop = new maplibregl.Popup({maxWidth: "300px", closeOnClick: false}).setLngLat(c).setHTML(`<b>Área selecionada</b><br>${modo === "circulo" ? `Círculo de ${fmt(raio)} m de raio · ` : "Desenho à mão livre · "}${br(ha, 1)} ha
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button type="button" class="botao pequeno" id="dAnalisar">Analisar satélite desta área</button>
     <button type="button" class="botao secundario pequeno" id="dRelatorio">Relatório desta área</button><button type="button" class="botao secundario pequeno" id="dApagar">Apagar</button></div>`).addTo(m);

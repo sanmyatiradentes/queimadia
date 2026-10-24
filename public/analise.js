@@ -12,7 +12,7 @@
 
   // valores padrão: últimos 24 meses
   (function padrao() {
-    const hoje = iso(new Date());
+    const hoje = new Date().toLocaleDateString("sv-SE", {timeZone: "America/Manaus"});
     $("#aFim").value = hoje; $("#aIni").value = addDias(hoje, -730);
     $("#aRefIni").value = $("#aIni").value; $("#aRefFim").value = addDias(hoje, -240);
 })();
@@ -63,7 +63,7 @@
     A.poli = e.poli || null;
     if (e.raio) $("#aRaio").value = Math.round(e.raio);
     if (A.poli) $("#aLado").value = Math.max(+$("#aLado").value, Math.ceil(e.raio * 2.6 / 1000));
-    const hoje = iso(new Date());
+    const hoje = new Date().toLocaleDateString("sv-SE", {timeZone: "America/Manaus"});
     if (e.ini) {
       const ini = e.ini.slice(0, 10), fim = e.fim.slice(0, 10);
       $("#aIni").value = addDias(ini, -730);
