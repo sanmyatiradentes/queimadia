@@ -397,6 +397,7 @@ function blocoEntorno(e) {
       ${bo ? `<div><span>Bombeiros mais próximos (OSM)</span><b>${fmt(bo.km)} km · ${esc(bo.nome)}</b></div>` : ""}
       ${bio ? `<div><span>Espécies registradas a até ${bio.raio_km} km (GBIF)</span><b>${fmt(bio.especies)} · ${am.length} ameaçada(s)</b></div>` : ""}
     </div>
+    ${sg?.no_ponto?.length ? `<p class="clima-leitura"><b>Imóvel certificado no ponto (SIGEF/INCRA)</b>: ${sg.no_ponto.map(x => `${esc(x.nome_area)} · código ${esc(x.codigo_imo)}${x.registro_m && x.registro_m !== "None" ? ` · matrícula ${esc(x.registro_m)}` : ""} · ${esc(x.status)} ${x.parcela_co ? `<a class="botao secundario pequeno" href="${sigefUrl(x.parcela_co)}" target="_blank" rel="noopener" title="Abre a consulta pública do INCRA, que mostra o detentor">Consultar detentor no SIGEF</a>` : ""}`).join("<br>")}</p>` : ""}
     ${am.length ? `<p class="clima-leitura"><b>Espécies ameaçadas registradas no entorno</b> (Lista Vermelha da IUCN): ${am.slice(0, 12).map(a => `<i>${esc(a.nome)}</i> (${IUCN_TXT[a.categoria] || a.categoria}${a.classe ? ", " + esc(a.classe) : ""})`).join("; ")}${am.length > 12 ? `; e mais ${am.length - 12}` : ""}.</p>` : ""}
     <p class="nota">Florestas públicas: Serviço Florestal Brasileiro (CNFP 2025). SIGEF e assentamentos: INCRA (imóvel é pista para identificar o detentor, não prova autoria). PRODES: INPE. Aldeias: FUNAI. Mineração: MapBiomas (2023). Vias, pistas e bombeiros: OpenStreetMap, base colaborativa e incompleta (falta de ramal no mapa não prova falta de acesso). Sub-bacias: ANA (DNAEE). Biodiversidade: registros de ocorrência do GBIF, esparsos na Amazônia — ausência de registro não é ausência de espécie; serve para dimensionar o dano potencial.</p></div>`;
 }
@@ -579,7 +580,8 @@ async function iniciarMapa() {
   m.addLayer({id: "bombeiros", type: "circle", source: "bombeiros", layout: {visibility: "none"}, paint: {"circle-radius": 6, "circle-color": "#e53935", "circle-stroke-color": "#fff", "circle-stroke-width": 2}});
   const popCamada = (id, f) => m.on("click", id, ev => { if (Q.modoPonto) return; new maplibregl.Popup({maxWidth: "300px"}).setLngLat(ev.lngLat).setHTML(f(ev.features[0].properties)).addTo(m); });
   popCamada("fpnd", p => `<b>${esc(p.nome)}</b><br>Floresta pública não destinada · ${esc(p.categoria)} (${esc(p.governo)})<br>${br(+p.area_ha, 0)} ha · ${esc(p.municipio)}<br><span class="nota">Serviço Florestal Brasileiro, CNFP 2025</span>`);
-  popCamada("sigef", p => `<b>${esc(p.nome_area)}</b><br>SIGEF/INCRA · ${esc(p.status)} · ${esc(p.situacao_i)}<br>Código do imóvel ${esc(p.codigo_imo)} · aprovado em ${esc(p.data_aprov)}`);
+  popCamada("sigef", p => `<b>${esc(p.nome_area)}</b><br>SIGEF/INCRA · ${esc(p.status)} · ${esc(p.situacao_i)}<br>Código do imóvel ${esc(p.codigo_imo)}${p.registro_m && p.registro_m !== "None" ? ` · matrícula ${esc(p.registro_m)}` : ""}<br>Aprovado em ${esc(p.data_aprov)}<br>
+    <a class="botao secundario pequeno" style="margin-top:6px" href="${sigefUrl(p.parcela_co)}" target="_blank" rel="noopener">Consultar detentor no SIGEF</a>`);
   popCamada("aldeias", p => `<b>Aldeia ${esc(p.nome)}</b><br>${esc(p.municipio)} · ${esc(p.cr)}<br><span class="nota">FUNAI</span>`);
   popCamada("mineracao", p => `<b>${p.t === "garimpo" ? "Garimpo" : "Mineração industrial"}</b><br>${br(+p.ha, 1)} ha na célula de ~500 m (2023)<br><span class="nota">MapBiomas Coleção 9, código ${esc(p.cod)}</span>`);
   popCamada("pistas", p => `<b>${esc(p.nome)}</b><br>${p.tipo === "airstrip" ? "Pista de pouso" : "Aeródromo"}${p.icao ? " · " + esc(p.icao) : ""}${p.superficie ? " · " + esc(p.superficie) : ""}<br><span class="nota">OpenStreetMap (incompleto)</span>`);
@@ -1438,3 +1440,6 @@ function recolherBlocos(raiz) {
     h.remove(); d.append(sm, ...b.childNodes); b.replaceWith(d);
   });
 }
+
+// consulta pública do INCRA (o detentor aparece lá; acesso só por pessoa, no navegador)
+const sigefUrl = parcela => `https://sigef.incra.gov.br/geo/parcela/detalhe/${encodeURIComponent(parcela)}/`;

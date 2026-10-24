@@ -157,7 +157,7 @@ def marcar(eventos):
             imoveis = [sigef[int(i)][1] for i in arv_s.query(p.buffer(0.0045), predicate="intersects")]
             if imoveis:
                 dentro = [sigef[int(i)][1] for i in arv_s.query(p, predicate="intersects")]
-                e["det"]["sigef"] = {"no_ponto": [{k: x.get(k) for k in ("nome_area", "codigo_imo", "situacao_i", "status")} for x in dentro[:3]],
+                e["det"]["sigef"] = {"no_ponto": [{k: x.get(k) for k in ("nome_area", "codigo_imo", "situacao_i", "status", "registro_m", "parcela_co")} for x in dentro[:3]],
                                      "a_500m": len(imoveis)}
         al = aldeias.proximos(e, 10)
         if al:

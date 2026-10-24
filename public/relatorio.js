@@ -104,11 +104,11 @@ async function montar() {
     {k: "fpnd", nome: "Florestas públicas não destinadas (SFB)", l: fpndP, cor: "#7cb342", prox: true, alerta: "sim",
       desc: p => `${esc(p.nome)} · ${esc(p.categoria)} · ${esc(p.governo)} · ${br(+p.area_ha, 0)} ha · ${esc(p.municipio)}`},
     {k: "sigef", nome: "Imóveis certificados SIGEF (INCRA)", l: sigefP, cor: "#ffb300", prox: false, alerta: "atencao",
-      desc: p => `${esc(p.nome_area)} · código do imóvel ${esc(p.codigo_imo)} · ${esc(p.status)} · ${esc(p.situacao_i)} · aprovado em ${esc(p.data_aprov)}`},
+      desc: p => `${esc(p.nome_area)} · código do imóvel ${esc(p.codigo_imo)}${p.registro_m && p.registro_m !== "None" ? ` · matrícula ${esc(p.registro_m)}` : ""} · ${esc(p.status)} · ${esc(p.situacao_i)} · aprovado em ${esc(p.data_aprov)} · <a href="https://sigef.incra.gov.br/geo/parcela/detalhe/${encodeURIComponent(p.parcela_co)}/" target="_blank" rel="noopener">consultar detentor no SIGEF</a>`},
     {k: "assent", nome: "Assentamentos (INCRA)", l: assentP, cor: "#a1887f", prox: true, alerta: "atencao",
       desc: p => `${esc(p.nome_proje)} · ${esc(p.municipio)} · ${p.num_famili ?? "–"} famílias · ${br(+p.area_calc_, 0)} ha · fase ${esc(p.fase)} · código ${esc(p.cd_sipra)}`},
     {k: "emb", nome: "Embargos IBAMA", l: emb, cor: COR.emb, prox: true, alerta: "sim",
-      desc: p => `TAD ${esc(p.num_tad)}-${esc(p.serie_tad)} de ${p.dat_embargo ? new Date(p.dat_embargo).toLocaleDateString("pt-BR") : "–"} · ${br(p.qtd_area_embargada, 2)} ha · ${esc(p.des_infracao || "")} · processo ${esc(p.num_processo || "")}`},
+      desc: p => `${p.nome_embargado ? `<b>Embargado: ${esc(p.nome_embargado)}</b>${p.cpf_cnpj_embargado ? ` (${esc(p.cpf_cnpj_embargado)})` : ""} · ` : ""}${p.nome_imovel ? `imóvel ${esc(p.nome_imovel)} · ` : ""}TAD ${esc(p.num_tad)}-${esc(p.serie_tad)} de ${p.dat_embargo ? new Date(p.dat_embargo).toLocaleDateString("pt-BR") : "–"} · ${br(p.qtd_area_embargada, 2)} ha · ${esc(p.des_infracao || "")} · processo ${esc(p.num_processo || "")}`},
     {k: "icmbio", nome: "Embargos ICMBio", l: null, cor: COR.emb, prox: false, alerta: "sim", desc: () => ""},
     {k: "anm", nome: "Processos minerários (ANM/SIGMINE)", l: anm, cor: COR.anm, prox: true, alerta: "atencao",
       desc: p => `Processo ${esc(p.PROCESSO)} · ${esc(p.FASE)} · ${esc(p.SUBS)} (${esc(p.USO)}) · ${br(p.AREA_HA, 2)} ha`},
@@ -438,7 +438,7 @@ function render() {
     ${tab(["Base", "Distância (m)", "Resultado"], camadas.filter(c => c.prox).map(c => `<tr><td>${cab(c)}</td><td class="n">${!c.l ? "–" : c.min == null || c.min > PROX_KM * 1000 ? "Fora do raio" : br(c.min, 0)}</td>
       <td>${!c.l ? `<span class="res-nd">NÃO ANALISADO</span>` : c.min === 0 ? resultado(c) : c.min != null && c.min <= PROX_KM * 1000 ? `<span class="res-nd">NO ENTORNO</span>` : `<span class="res-nao">FORA DO RAIO</span>`}</td></tr>`))}
     <div class="leg-rel"><span class="res-sim">SOBREPÕE</span> área com restrição legal ao uso do fogo ou embargo · <span class="res-nd">SOBREPÕE / NO ENTORNO</span> requer atenção · <span class="res-nao">NÃO SOBREPÕE</span> · <span class="res-nd">NÃO ANALISADO</span> base indisponível</div>
-    <p class="nota">Resultados dependem da qualidade topológica de cada base e da data de consulta. CAR é autodeclaratório e não comprova posse ou propriedade. A base de embargos do ICMBio não oferece serviço público consultável.</p>`));
+    <p class="nota">Resultados dependem da qualidade topológica de cada base e da data de consulta. CAR é autodeclaratório e não comprova posse ou propriedade. Nome do embargado e documento vêm da base pública do IBAMA; o detentor do imóvel SIGEF é consultado na página pública do INCRA. Dados pessoais: uso restrito à investigação. A base de embargos do ICMBio não oferece serviço público consultável.</p>`));
   const det = camadas.filter(c => c.itens?.length);
   if (det.length) html.push(sec(N(), "Detalhamento das consultas", det.map(c => `<p class="rotulo">${esc(c.nome)}</p>
     ${tab(["Descrição", "Sobreposição com a AI (ha)", "Distância da AI (m)"], c.itens.slice(0, 25).map(x => `<tr><td>${c.desc(x.f.properties || {})}</td><td class="n">${br(x.ha, 2)}</td><td class="n">${x.m == null ? "–" : br(x.m, 0)}</td></tr>`))}
