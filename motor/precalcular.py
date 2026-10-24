@@ -119,7 +119,7 @@ def analisar(ev):
         "quebra": quebra, "dnbr": dn, "imagens": imagens,
         "cenas": med, "n_validas": len(validas),
         "metodo": "NDVI = mediana dos pixels válidos no círculo de 600 m; cena do mês escolhida pela limpeza sobre a área; "
-                  "quebra quando o NDVI fica abaixo de base − max(3σ; 0,15) em 6 observações consecutivas "
+                  "quebra quando o NDVI fica abaixo de base − 3σ robusto (MAD), entre 0,15 e 0,30 em 6 observações consecutivas "
                   "(critério do CCDC; Zhu & Woodcock, 2014a), com triagem Tmask (Zhu & Woodcock, 2014b) na linha de base; "
                   "severidade por dNBR (Key & Benson, 2006); "
                   "Sentinel-2 L2A + Landsat 8/9 C2 L2 Tier 1.",

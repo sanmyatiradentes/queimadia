@@ -144,8 +144,9 @@
     if (!baseIdx.length) baseIdx = d3.range(Math.max(3, Math.floor(serie.length / 3)));
     const bv = baseIdx.map(i => vals[i]);
     const base = d3.median(bv), media = d3.mean(bv);
-    const desv = bv.length > 1 ? Math.sqrt(d3.mean(bv, v => (v - media) ** 2)) : 0.05;   // desvio populacional (np.std)
-    const limiar = base - Math.max(3 * desv, 0.15);
+    // σ robusto = 1,4826 × MAD (Leys et al., 2013); queda exigida entre 0,15 e 0,30 (igual ao motor)
+    const desv = bv.length > 1 ? 1.4826 * d3.median(bv, v => Math.abs(v - base)) : 0.05;
+    const limiar = base - Math.min(Math.max(3 * desv, 0.15), 0.30);
     const r = {base, desv, limiar, n, nBase: bv.length, baseVals: bv, baseDatas: baseIdx.map(i => datas[i]), refIni, refFim, transitorias: []};
     let i = baseIdx[baseIdx.length - 1] + 1;
     while (i < vals.length) {
@@ -245,8 +246,8 @@
     let t = (rem.length ? `<b>0. Triagem Tmask</b> (CCDC): ${rem.length} observação(ões) da linha de base removidas por nuvem/névoa ou sombra residual: ${rem.map(m => `${dBR(m.data)} (${m.tmask}, NDVI ${br(m.ndvi, 3)})`).join("; ")}\n` : "")
       + `<b>1. Linha de base</b> (${dBR(q.refIni)} a ${dBR(q.refFim)}): ${q.nBase} observações válidas
    ${lista}
-<b>2. Mediana</b> = ${br(q.base, 4)}      <b>Desvio-padrão (σ)</b> = ${br(q.desv, 4)}
-<b>3. Limiar</b> = base − max(3σ ; 0,15) = ${br(q.base, 4)} − max(${br(3 * q.desv, 4)} ; 0,15) = <b>${br(q.limiar, 4)}</b>
+<b>2. Mediana</b> = ${br(q.base, 4)}      <b>σ robusto (1,4826 × MAD)</b> = ${br(q.desv, 4)}
+<b>3. Limiar</b> = base − (3σ robusto, entre 0,15 e 0,30) = ${br(q.base, 4)} − ${br(Math.min(Math.max(3 * q.desv, 0.15), 0.30), 4)} = <b>${br(q.limiar, 4)}</b>   (σ robusto = 1,4826 × MAD = ${br(q.desv, 4)}; Leys et al., 2013)
 <b>4. Busca</b> após o fim da linha de base: sequência de <b>${q.n}</b> observações consecutivas abaixo de ${br(q.limiar, 4)} (critério do CCDC; Zhu & Woodcock, 2014)
 `;
     for (const tr of q.transitorias || []) t += `   ${dBR(tr.de)} a ${dBR(tr.ate)}: ${tr.obs} abaixo, mas voltou acima em ${dBR(tr.volta)}  →  queda transitória, desconsiderada\n`;
@@ -372,7 +373,7 @@
     return {sistema: "Fogo Forense (NIPED/PCAM/DPTC)", gerado_em: new Date().toISOString(),
       area: {lat: +$("#aLat").value, lon: +$("#aLon").value, raio_m: +$("#aRaio").value, ...(A.poli ? {poligono: A.poli, forma: "desenho à mão livre"} : {})}, periodo: [$("#aIni").value, $("#aFim").value],
       linha_base: [$("#aRefIni").value, $("#aRefFim").value], modo: $("#aModo").value, min_fracao_valida: MIN_VALIDO,
-      metodo: "NDVI = mediana dos pixels válidos no círculo; cena do mês: >= 80% da área limpa e menor nuvem na cena; triagem Tmask na linha de base; quebra: limiar = base − max(3σ; 0,15), confirmada por 6 observações consecutivas (CCDC).",
+      metodo: "NDVI = mediana dos pixels válidos no círculo; cena do mês: >= 80% da área limpa e menor nuvem na cena; triagem Tmask na linha de base; quebra: limiar = base − 3σ robusto (MAD), limitado entre 0,15 e 0,30, confirmada por 6 observações consecutivas (CCDC).",
       fonte: "Microsoft Planetary Computer (STAC): sentinel-2-l2a, landsat-c2-l2 (Landsat 8/9, Tier 1)",
       quebra: A.quebra && {...A.quebra, baseVals: undefined}, dnbr: A.dnbrRes || null, evento: A.evento && {id: A.evento.id, municipio: A.evento.mun, inicio: A.evento.ini, fim: A.evento.fim, pontuacao: A.evento.score,
         indicadores: A.evento.ind, det: A.evento.det},

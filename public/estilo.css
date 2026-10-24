@@ -282,3 +282,4 @@ details.recolhivel[open]>summary .ver{font-size:0}
 details.recolhivel[open]>summary .ver::after{content:"ocultar ▴";font-size:12.5px}
 details.recolhivel[open]>summary .res{display:none}
 details.recolhivel[open]>summary{margin-bottom:8px}
+.area-sel{background:#fffbea;border:1px solid #ffdf00;border-radius:8px;padding:6px 8px;margin:0 0 6px;font-size:12.5px}

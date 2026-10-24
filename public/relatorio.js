@@ -165,6 +165,13 @@ async function montar() {
       try { R.ndvi = await analisarAgora(e, cenas); } catch (x) { console.error(x); R.erroAnalise = x.message; }
       R.analisando = false; render(); desenharMapas();
     }
+    // análise antiga (limiar pelo desvio-padrão comum): recalcula a quebra pelo critério atual (σ robusto pela MAD)
+    if (R.ndvi?.cenas?.length && !/MAD/.test(R.ndvi.quebra?.criterio || "") && usuario) {
+      try {
+        const li = R.ndvi.linha_base || [], s = await postar("api/serie", {cenas: R.ndvi.cenas, ref_ini: li[0], ref_fim: li[1], inicio: e.ini, fim: e.fim});
+        R.ndvi = {...R.ndvi, quebra: s.quebra, n_validas: s.n_validas}; R.parecer = null; render(); desenharMapas();
+      } catch (x) { console.warn("recalcular quebra", x); }
+    }
     if (R.ndvi && !R.parecer?.texto) await gerarParecer();
   })();
   await R.tarefas;
@@ -276,7 +283,7 @@ function leituraNDVI(ndvi, e) {
   const minimo = pts.filter(p => p.data >= ini).sort((a, b) => a.ndvi - b.ndvi)[0];
   const itens = [
     `<b>${pts.length} observações válidas</b> (${s2} Sentinel-2 e ${pts.length - s2} Landsat)${q.removidas_tmask?.length ? `; ${q.removidas_tmask.length} retirada(s) da linha de base pela triagem Tmask (névoa ou sombra residual)` : ""}.`,
-    q.ndvi_base != null ? `<b>Linha de base</b> (${dBR(ndvi.linha_base?.[0])} a ${dBR(ndvi.linha_base?.[1])}): NDVI mediano ${br(q.ndvi_base, 3)}, desvio-padrão ${br(q.desvio_base, 3)}, em ${q.n_base} observações. <b>Limiar</b> de perda: ${br(q.limiar, 3)} (base − max(3σ; 0,15)).` : "",
+    q.ndvi_base != null ? `<b>Linha de base</b> (${dBR(ndvi.linha_base?.[0])} a ${dBR(ndvi.linha_base?.[1])}): NDVI mediano ${br(q.ndvi_base, 3)}, σ robusto (MAD) ${br(q.desvio_base, 3)}, em ${q.n_base} observações. <b>Limiar</b> de perda: ${br(q.limiar, 3)} (base − 3σ robusto, entre 0,15 e 0,30).` : "",
     ma != null || md != null ? `<b>${e.ponto ? "Em torno da data de referência" : "Em torno do fogo"}</b>: NDVI mediano ${ma != null ? br(ma, 3) : "–"} nos 90 dias antes (${antes.length} obs.) e ${md != null ? br(md, 3) : "–"} nos 90 dias depois (${depois.length} obs.)${ma != null && md != null ? ` — variação de <b>${md - ma >= 0 ? "+" : ""}${br(md - ma, 3)}</b>${q.limiar != null && md < q.limiar ? ", abaixo do limiar" : ""}` : ""}.` : "",
     minimo ? `<b>Menor valor</b> ${e.ponto ? "após a referência" : "a partir do fogo"}: ${br(minimo.ndvi, 3)} em ${dBR(minimo.data)}${q.limiar != null ? (minimo.ndvi < q.limiar ? " (abaixo do limiar)" : " (acima do limiar)") : ""}.` : "",
     `<b>Situação</b>: ${textoQuebra(q)}`,
@@ -297,12 +304,13 @@ function textoQuebra(q) {
 }
 
 // ------------------------------------------------------------ método e parecer (literatura científica)
-const METODO_LIT = "NDVI (Rouse et al., 1974; Tucker, 1979) como mediana dos pixels válidos num círculo de 600 m; uma cena por mês, com ao menos 80% da área sem nuvem e a menor nuvem na cena; triagem Tmask de névoa e sombra residuais na linha de base (Zhu &amp; Woodcock, 2014b); quebra quando o NDVI fica abaixo de mediana − max(3σ; 0,15) em 6 observações consecutivas, critério de confirmação do CCDC (Zhu &amp; Woodcock, 2014a; Arévalo et al., 2020); severidade da queima por dNBR com as classes do USGS (Key &amp; Benson, 2006). Sentinel-2 L2A e Landsat 8/9 Coleção 2 Nível 2.";
+const METODO_LIT = "NDVI (Rouse et al., 1974; Tucker, 1979) como mediana dos pixels válidos num círculo de 600 m; uma cena por mês, com ao menos 80% da área sem nuvem e a menor nuvem na cena; triagem Tmask de névoa e sombra residuais na linha de base (Zhu &amp; Woodcock, 2014b); quebra quando o NDVI fica abaixo de mediana − 3σ robusto (1,4826 × MAD; Leys et al., 2013), limitado entre 0,15 e 0,30 em 6 observações consecutivas, critério de confirmação do CCDC (Zhu &amp; Woodcock, 2014a; Arévalo et al., 2020); severidade da queima por dNBR com as classes do USGS (Key &amp; Benson, 2006). Sentinel-2 L2A e Landsat 8/9 Coleção 2 Nível 2.";
 const REFS_LIT = [
   "Rouse, J. W.; Haas, R. H.; Schell, J. A.; Deering, D. W. (1974). Monitoring vegetation systems in the Great Plains with ERTS. NASA SP-351, p. 309–317.",
   "Tucker, C. J. (1979). Red and photographic infrared linear combinations for monitoring vegetation. <i>Remote Sensing of Environment</i>, 8, 127–150.",
   "Zhu, Z.; Woodcock, C. E. (2014a). Continuous change detection and classification of land cover using all available Landsat data. <i>Remote Sensing of Environment</i>, 144, 152–171.",
   "Zhu, Z.; Woodcock, C. E. (2014b). Automated cloud, cloud shadow, and snow detection in multitemporal Landsat data. <i>Remote Sensing of Environment</i>, 152, 217–234.",
+  "Leys, C.; Ley, C.; Klein, O.; Bernard, P.; Licata, L. (2013). Detecting outliers: do not use standard deviation around the mean, use absolute deviation around the median. <i>Journal of Experimental Social Psychology</i>, 49(4), 764–766.",
   "Arévalo, P.; Bullock, E. L.; Woodcock, C. E.; Olofsson, P. (2020). A suite of tools for continuous land change monitoring in Google Earth Engine. <i>Frontiers in Climate</i>, 2, 576740.",
   "Souza, C. M. et al. (2020). Reconstructing three decades of land use and land cover changes in Brazilian biomes with Landsat archive and Earth Engine. <i>Remote Sensing</i>, 12(17), 2735.",
   "Key, C. H.; Benson, N. C. (2006). Landscape Assessment: sampling and analysis methods. In: <i>FIREMON</i>. USDA Forest Service, RMRS-GTR-164-CD.",

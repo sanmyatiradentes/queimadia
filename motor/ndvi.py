@@ -294,6 +294,7 @@ def medir_cena(colecao, item_id, lat, lon, raio_m=600, poli=None):
 
 
 OBS_CONSECUTIVAS = 6   # critério do CCDC (Zhu & Woodcock, 2014; Arévalo et al., 2020)
+QUEDA_MIN, QUEDA_MAX = 0.15, 0.30   # queda de NDVI exigida abaixo da base (3·σ robusto, limitado a esse intervalo)
 TMASK_LIMIAR = 0.04    # reflectância; Tmask do CCDC (Zhu & Woodcock, 2014)
 
 
@@ -323,7 +324,7 @@ def tmask(serie, ref_ini, ref_fim):
 def detectar_quebra(serie, ref_ini=None, ref_fim=None, n_consec=None):
     """Limiar estatístico com a confirmação do CCDC (Zhu & Woodcock, 2014a;
     Arévalo et al., 2020): base = mediana do período de referência; limiar = base −
-    max(3·desvio, 0,15); quebra CONFIRMADA = 1ª de >= 6 observações consecutivas
+    clamp(3·σ robusto, 0,15; 0,30), com σ robusto = 1,4826·MAD (Leys et al., 2013); quebra CONFIRMADA = 1ª de >= 6 observações consecutivas
     abaixo do limiar. Queda no fim da série ainda sem as 6 = mudança PROVÁVEL.
     Quedas que se recuperam antes = transitórias. A data é dada como intervalo."""
     n = int(n_consec or OBS_CONSECUTIVAS)
@@ -339,11 +340,13 @@ def detectar_quebra(serie, ref_ini=None, ref_fim=None, n_consec=None):
         base_idx = list(range(max(3, len(serie) // 3)))
     base_vals = [vals[i] for i in base_idx] or vals[: len(vals) // 3]
     base = median(base_vals)
-    desv = float(np.std(base_vals)) if len(base_vals) > 1 else 0.05
-    limiar = base - max(3 * desv, 0.15)
+    # escala robusta: 1,4826 × mediana dos desvios absolutos (MAD; Leys et al., 2013), que não se deixa inflar
+    # por queimadas e desmatamentos antigos na linha de base; a queda exigida fica entre 0,15 e 0,30 de NDVI
+    desv = float(1.4826 * np.median(np.abs(np.array(base_vals) - base))) if len(base_vals) > 1 else 0.05
+    limiar = base - min(max(3 * desv, QUEDA_MIN), QUEDA_MAX)
     comum = {"ndvi_base": round(base, 4), "desvio_base": round(desv, 4), "limiar": round(limiar, 4),
              "n_base": len(base_vals), "obs_consecutivas": n,
-             "criterio": f"NDVI < {limiar:.3f} (base {base:.3f} − max(3·{desv:.3f}; 0,15)) em ≥{n} observações consecutivas (CCDC)"}
+             "criterio": f"NDVI < {limiar:.3f} (base {base:.3f} − entre 0,15 e 0,30 de 3·{desv:.3f}, σ robusto pela MAD) em ≥{n} observações consecutivas (CCDC)"}
     i = (base_idx[-1] + 1) if base_idx else len(vals) // 3
     transitorias = []
     while i < len(vals):
