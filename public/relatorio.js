@@ -33,6 +33,7 @@ function dms(v, pos, neg) {
   const a = Math.abs(v), g = Math.floor(a), m = Math.floor((a - g) * 60), s = ((a - g) * 60 - m) * 60;
   return `${g}°${m}'${br(s, 2)}"${v < 0 ? neg : pos}`;
 }
+const dataOk = s => /^\d{4}-\d{2}-\d{2}/.test(String(s || "")) ? dBR(s) : "–";
 const centroide = (la, lo) => `${dms(la, "N", "S")}; ${dms(lo, "E", "W")}`;
 const kmEntre = (la1, lo1, la2, lo2) => turf.distance([lo1, la1], [lo2, la2], {units: "kilometers"});
 
@@ -108,7 +109,7 @@ async function montar() {
     {k: "assent", nome: "Assentamentos (INCRA)", l: assentP, cor: "#a1887f", prox: true, alerta: "atencao",
       desc: p => `${esc(p.nome_proje)} · ${esc(p.municipio)} · ${p.num_famili ?? "–"} famílias · ${br(+p.area_calc_, 0)} ha · fase ${esc(p.fase)} · código ${esc(p.cd_sipra)}`},
     {k: "emb", nome: "Embargos IBAMA", l: emb, cor: COR.emb, prox: true, alerta: "sim",
-      desc: p => `${p.nome_embargado ? `<b>Embargado: ${esc(p.nome_embargado)}</b>${p.cpf_cnpj_embargado ? ` (${esc(p.cpf_cnpj_embargado)})` : ""} · ` : ""}${p.nome_imovel ? `imóvel ${esc(p.nome_imovel)} · ` : ""}TAD ${esc(p.num_tad)}-${esc(p.serie_tad)} de ${p.dat_embargo ? new Date(p.dat_embargo).toLocaleDateString("pt-BR") : "–"} · ${br(p.qtd_area_embargada, 2)} ha · ${esc(p.des_infracao || "")} · processo ${esc(p.num_processo || "")}`},
+      desc: p => `${p.nome_embargado ? `<b>Embargado: ${esc(p.nome_embargado)}</b>${p.cpf_cnpj_embargado ? ` (${esc(p.cpf_cnpj_embargado)})` : ""} · ` : ""}${p.nome_imovel ? `imóvel ${esc(p.nome_imovel)} · ` : ""}TAD ${esc(p.num_tad)}${p.serie_tad ? "-" + esc(p.serie_tad) : ""} de ${p.dat_embargo ? new Date(p.dat_embargo).toLocaleDateString("pt-BR") : "–"} · ${br(p.qtd_area_embargada, 2)} ha · ${p.des_infracao ? esc(p.des_infracao) + " · " : ""}processo ${esc(p.num_processo || "")}`},
     {k: "icmbio", nome: "Embargos ICMBio", l: null, cor: COR.emb, prox: false, alerta: "sim", desc: () => ""},
     {k: "anm", nome: "Processos minerários (ANM/SIGMINE)", l: anm, cor: COR.anm, prox: true, alerta: "atencao",
       desc: p => `Processo ${esc(p.PROCESSO)} · ${esc(p.FASE)} · ${esc(p.SUBS)} (${esc(p.USO)}) · ${br(p.AREA_HA, 2)} ha`},
@@ -150,7 +151,8 @@ async function montar() {
   // parecer: o mais recente entre o redigido no painel (memória do navegador) e o do motor
   let parecer = null; try { parecer = JSON.parse(localStorage.getItem("ff_parecer_" + ID) || "null"); } catch (x) {}
   if (!parecer?.texto && ndvi?.parecer?.texto) parecer = {...ndvi.parecer, gerado_em: ndvi.parecer.gerado_em || ndvi.gerado_em};
-  const antigo = parecer?.texto && /polic\s*ia|queimadia/i.test(parecer.texto);   // citava o sistema, não a literatura
+  // citava o sistema em vez da literatura, ou é anterior às bases novas (território, fundiário, entorno)
+  const antigo = parecer?.texto && (/polic\s*ia|queimadia/i.test(parecer.texto) || String(parecer.gerado_em || "") < "2026-10-23");
   R = {e, est, mun, ai, aiHa, raioM, centro, bb, camadas, brm, ndvi, usuario, guardado, parecer: antigo ? null : parecer};
   estado("Desenhando…");
   R.analisando = !ndvi;
@@ -398,12 +400,15 @@ function render() {
   const mud = guardado?.mudanca || "";
   const brTab = brm ? `
     <p class="rotulo">Alertas de queimada do Brasil MAIS a até ${RAIO_ALERTAS_KM} km (imagem posterior entre 30 dias antes do 1º foco e 60 dias depois do último) <span class="tarja">RESTRITO</span></p>
-    ${tab(["Nº", "ID do alerta", "Classe", "Antes", "Depois", "Centroide", "Distância", "Área (ha)"], brm.fogo.slice(0, 40).map(({a, km}, i) =>
-      `<tr><td class="n">${i + 1}</td><td class="mono">${esc(a[0])}</td><td>${esc(brm.idx.tipos[a[1]] || a[1])}</td><td class="mono">${dBR(a[3])}</td><td class="mono">${dBR(a[4])}</td><td class="mono">${centroide(a[5], a[6])}</td><td class="n">${br(km, 2)} km</td><td class="n">${br(a[2], 2)}</td></tr>`))}
+    ${(() => { const ia = brm.fogo.filter(x => x.a[1] === "I"), outros = brm.fogo.filter(x => x.a[1] !== "I");
+      return `${ia.length ? `<p><b>${ia.length} indício(s) de local de início por IA</b> (foco de queimada IA), o mais próximo a ${br(ia[0].km, 2)} km (${centroide(ia[0].a[5], ia[0].a[6])}), com imagem de ${dBR(ia[0].a[4])}.</p>` : ""}
+      ${tab(["Nº", "ID do alerta", "Classe", "Antes", "Depois", "Centroide", "Distância", "Área (ha)"], outros.slice(0, 15).map(({a, km}, i) =>
+      `<tr><td class="n">${i + 1}</td><td class="mono">${esc(a[0])}</td><td>${esc(brm.idx.tipos[a[1]] || a[1])}</td><td class="mono">${dataOk(a[3])}</td><td class="mono">${dataOk(a[4])}</td><td class="mono">${centroide(a[5], a[6])}</td><td class="n">${br(km, 2)} km</td><td class="n">${br(a[2], 2)}</td></tr>`))}
+      ${outros.length > 15 ? `<p class="nota">Tabela com os 15 mais próximos de ${outros.length} alertas de cicatriz e foco.</p>` : ""}`; })()}
     ${brm.dmeta ? `<p class="rotulo">Alertas de desmatamento e garimpo do Brasil MAIS a até ${RAIO_ALERTAS_KM} km (12 meses antes do 1º foco a 60 dias depois do último) <span class="tarja">RESTRITO</span></p>
-    ${tab(["Nº", "ID do alerta", "Classe", "Antes", "Depois", "Centroide", "Distância", "Área (ha)"], brm.desm.slice(0, 40).map(({a, km}, i) =>
-      `<tr><td class="n">${i + 1}</td><td class="mono">${esc(a[0])}</td><td>${esc(brm.dmeta.tipos[a[1]] || a[1])}</td><td class="mono">${dBR(a[3])}</td><td class="mono">${dBR(a[4])}</td><td class="mono">${centroide(a[5], a[6])}</td><td class="n">${br(km, 2)} km</td><td class="n">${br(a[2], 2)}</td></tr>`))}
-    <p class="nota">Área total: ${br(brm.desm.reduce((t, x) => t + x.a[2], 0), 2)} ha em ${brm.desm.length} alerta(s)${brm.desm.length > 40 ? " (tabela com os 40 mais próximos)" : ""}.</p>` : ""}
+    ${tab(["Nº", "ID do alerta", "Classe", "Antes", "Depois", "Centroide", "Distância", "Área (ha)"], brm.desm.slice(0, 15).map(({a, km}, i) =>
+      `<tr><td class="n">${i + 1}</td><td class="mono">${esc(a[0])}</td><td>${esc(brm.dmeta.tipos[a[1]] || a[1])}</td><td class="mono">${dataOk(a[3])}</td><td class="mono">${dataOk(a[4])}</td><td class="mono">${centroide(a[5], a[6])}</td><td class="n">${br(km, 2)} km</td><td class="n">${br(a[2], 2)}</td></tr>`))}
+    <p class="nota">Área total: ${br(brm.desm.reduce((t, x) => t + x.a[2], 0), 2)} ha em ${brm.desm.length} alerta(s)${brm.desm.length > 15 ? " (tabela com os 15 mais próximos)" : ""}.</p>` : ""}
     <p class="nota">As classes Degradação, Corte Seletivo e Cicatriz de Queimada têm delimitação generalizada no Brasil MAIS: o polígono abrange a região da ocorrência e pode conter vegetação remanescente. O "foco de queimada (IA)" indica a área provável de início segundo o produto (só em vegetação primária): é hipótese espacial a confrontar, não ponto de ignição demonstrado.</p>` : "";
   html.push(sec(N(), "Alertas na área e no entorno", `${mud || `<p class="nota">Sem alertas automáticos de mudança (Sentinel-2 e radar Sentinel-1) calculados para este evento.</p>`}${brTab}
     ${!usuario ? `<p class="nota">Alertas do Brasil MAIS (Planet, 3 m) aparecem apenas para usuários com login aprovado.</p>` : ""}`, brm ? "restrito" : ""));
@@ -421,7 +426,7 @@ function render() {
     const dn = ndvi.dnbr;
     html.push(sec(N(), "Imagens de satélite e vegetação (NDVI e dNBR)", `
       <div class="figs">${graficoNDVI(ndvi, e)}</div>${leituraNDVI(ndvi, e)}
-      <div class="figs">${img.map((i, k) => `<figure><img src="${i.src || DADOS + "analises/" + encodeURIComponent(i.arquivo)}" alt="Imagem ${esc(i.rotulo)}"><figcaption><b>Figura ${4 + k}</b> — ${esc(i.rotulo)}: ${dBR(i.data)} · ${esc(i.colecao)} · NDVI médio ${br(i.ndvi, 3)}</figcaption></figure>`).join("")}
+      <div class="figs">${img.map((i, k) => `<figure><img src="${i.src || DADOS + "analises/" + encodeURIComponent(i.arquivo)}" alt="Imagem ${esc(i.rotulo)}"><figcaption><b>Figura ${4 + k}</b> — ${i.rotulo ? esc(i.rotulo) + ": " : ""}${dBR(i.data)} · ${esc(i.colecao)} · NDVI médio ${br(i.ndvi, 3)}</figcaption></figure>`).join("")}
       ${dn?.arquivo || dn?.src ? `<figure><img src="${dn.src || DADOS + "analises/" + encodeURIComponent(dn.arquivo)}" alt="dNBR"><figcaption><b>Figura ${4 + img.length}</b> — Severidade da queima (dNBR) entre ${dBR(dn.antes)} e ${dBR(dn.depois)}: ${br(dn.queimado_ha, 1)} ha queimados.</figcaption></figure>` : ""}</div>
       ${dn?.areas_ha ? `<p class="rotulo">Área por classe de severidade (dNBR)</p>${tab(["Classe", "Área (ha)"], Object.entries(dn.areas_ha).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="n">${br(v, 1)}</td></tr>`))}` : ""}
       <p class="nota">Período analisado: ${dBR(ndvi.periodo?.[0])} a ${dBR(ndvi.periodo?.[1])} · ${ndvi.n_validas ?? "–"} cenas válidas.</p>
@@ -445,11 +450,11 @@ function render() {
     ${c.itens.length > 25 ? `<p class="nota">Mostrando 25 de ${c.itens.length}.</p>` : ""}`).join("")));
 
   // 6. contexto do painel (clima, cronologia, ERBs) e matriz
-  if (guardado?.entorno) html.push(sec(N(), "Entorno: acesso, fundiário, água e biodiversidade", guardado.entorno));
-  if (guardado?.territorio) html.push(sec(N(), "Território: uso da terra, fogo histórico e relevo", guardado.territorio));
+  const semTitulo = h => h.replace(/<h3>[\s\S]*?<\/h3>/, "");
+  if (guardado?.entorno) html.push(sec(N(), "Entorno: acesso, fundiário, água e biodiversidade", semTitulo(guardado.entorno)));
+  if (guardado?.territorio) html.push(sec(N(), "Território: uso da terra, fogo histórico e relevo", semTitulo(guardado.territorio)));
   const ctx = [guardado?.clima, guardado?.cronologia, guardado?.erbs].filter(Boolean).join("");
   if (ctx) html.push(sec(N(), "Clima, cronologia das detecções e telefonia", ctx));
-  if (guardado?.brmais && usuario) html.push(sec(N(), "Alertas Brasil MAIS próximos (ficha do painel)", guardado.brmais, "restrito"));
   html.push(sec(N(), "Matriz de hipóteses", guardado?.confronto || (e.ponto
     ? `<p class="nota">Não há evento de foco de calor associado a este ponto, então a matriz de hipóteses (que confronta focos, clima, desmatamento e área protegida de um evento) não se aplica. A análise de satélite, o parecer e a consulta às bases acima orientam o exame de local.</p>`
     : `<p class="nota">Abra o relatório pelo botão da ficha para incluir a matriz de hipóteses calculada no painel.</p>`)));

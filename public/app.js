@@ -289,7 +289,11 @@ function blocoConfronto(e) {
   else if (d.uc && d.uc_grupo !== "PI") acid.push("Reserva de uso sustentável: a roça tradicional das comunidades com fogo é permitida");
   if (!d.desmatamento && an?.relacao !== "antes_do_fogo") acid.push("Sem desmatamento prévio detectado");
   if (e.n <= 2 && (f.dias_com_fogo || 1) <= 1 && (f.frp_max == null || f.frp_max < 20)) acid.push("Fogo pequeno e curto, de baixa intensidade");
-  if (an && !an.quebra) acid.push("A vegetação não foi perdida de forma sustentada (NDVI)");
+  const frac = d.territorio?.cobertura?.fracao, jaSemFloresta = !!frac && (frac.floresta || 0) < 0.3;
+  if (an && !an.quebra) {
+    if (jaSemFloresta) inconc.push(`A área já não era floresta antes do fogo (MapBiomas ${d.territorio.cobertura.ano}: ${d.territorio.cobertura.classe_dominante.toLowerCase()}): o critério de perda de vegetação do NDVI, feito para floresta, não discrimina as hipóteses aqui`);
+    else acid.push("A vegetação não foi perdida de forma sustentada (NDVI)");
+  }
   if (!(e.maxDia >= 3) && e.n > 2) acid.push("Focos espalhados ao longo dos dias, sem detecções simultâneas");
   if (d.lixao) acid.push(`A ${br(d.lixao.dist_m, 0)} m de um lixão/vazadouro (${d.lixao.nome}): possível fonte térmica não vegetal ou queima de resíduos; fumaça tóxica`);
   // inconclusivos e lacunas: o que ainda não permite discriminar
