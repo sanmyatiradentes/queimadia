@@ -274,6 +274,11 @@ function blocoConfronto(e) {
     acid.push(`Uso agropecuário consolidado (MapBiomas ${tr.cobertura.ano}: ${tr.cobertura.classe_dominante.toLowerCase()}): compatível com queima de manejo de pasto ou roça; verificar autorização de queima`);
   if (tr && (c1.floresta || 0) >= 0.8 && !fh.anos_max)
     inconc.push(`Floresta natural sem queima registrada desde 1985 (MapBiomas): floresta úmida raramente queima sem fonte humana; falta discriminar ignição no local de escape de queima vizinha`);
+  const cc = d.car_camadas || {};
+  if (cc.app?.no_ponto) intenc.push(`Fogo em APP declarada no CAR (imóvel ${cc.app.imovel}): uso do fogo vedado`);
+  else if (cc.app?.ha_500m) inconc.push(`APP declarada no CAR a até 500 m (${br(cc.app.ha_500m, 1)} ha): conferir se o fogo a atingiu`);
+  if (cc.rl?.no_ponto) intenc.push(`Fogo em Reserva Legal declarada no CAR (imóvel ${cc.rl.imovel}): supressão vedada sem plano de manejo`);
+  if (cc.consolidada?.no_ponto && !cc.app?.no_ponto && !cc.rl?.no_ponto) acid.push(`Área consolidada declarada no CAR (imóvel ${cc.consolidada.imovel}): uso agropecuário já existente; verificar autorização de queima`);
   if (tr?.app?.dentro) intenc.push(`Fogo em provável APP de margem (água a ${fmt(tr.app.dist_agua_m)} m de rio ou lago com ~${fmt(tr.app.largura_m)} m de largura; faixa de ${tr.app.faixa_m} m pela Lei 12.651/2012, art. 4º): uso do fogo vedado — APP estimada, confirmar com o CAR e em campo`);
   if (tr?.relevo?.declividade_p90_graus >= 12) inconc.push(`Relevo inclinado (declividade de até ${br(tr.relevo.declividade_p90_graus, 0)}°): o fogo tende a subir a encosta; na perícia, procurar a região de início na parte baixa`);
   if (d.estrada?.km != null && d.estrada.km <= 1) inconc.push(`Via a ${br(d.estrada.km * 1000, 0)} m (${d.estrada.tipo}${d.estrada.nome ? " " + d.estrada.nome : ""}; OpenStreetMap): acesso humano fácil, compatível tanto com ignição deliberada quanto com escape de queima à beira da via`);
@@ -396,6 +401,8 @@ function blocoEntorno(e) {
       <div><span>Assentamento (INCRA)</span><b>${as ? `${esc(as.nome)} · ${as.familias ?? "–"} famílias` : "fora de assentamento"}</b></div>
       ${ba ? `<div><span>Sub-bacia (ANA)</span><b>${esc(ba.nome)}</b></div>` : ""}
       <div><span>Floresta pública não destinada</span><b>${fp ? `${esc(fp.nome)} (${esc(fp.governo || "").toLowerCase()})` : "não"}</b></div>
+      ${e.det.car_camadas ? `<div><span>CAR declarado no ponto</span><b>${[["app", "APP"], ["rl", "Reserva Legal"], ["consolidada", "área consolidada"], ["rvn", "vegetação nativa"], ["uso_restrito", "uso restrito"], ["pousio", "pousio"]]
+        .filter(([k]) => e.det.car_camadas[k]?.no_ponto).map(([, t]) => t).join(", ") || "nenhuma camada no ponto"}</b></div>` : ""}
       ${sg ? `<div><span>Imóveis SIGEF a até 500 m</span><b>${sg.a_500m}${sg.no_ponto?.length ? ` · no ponto: ${esc(sg.no_ponto[0].nome_area)}` : ""}</b></div>` : ""}
       ${pr ? `<div><span>PRODES a até 1 km, antes do fogo</span><b>${pr.total_ha ? `${br(pr.total_ha, 1)} ha (${Object.keys(pr.anos_ha).length} ano(s))` : "nenhum"}</b></div>` : ""}
       ${al ? `<div><span>Aldeias a até 10 km (FUNAI)</span><b>${al.n_10km} · mais perto: ${esc(al.nome)}, ${br(al.mais_perto_km, 1)} km</b></div>` : ""}

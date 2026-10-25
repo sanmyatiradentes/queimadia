@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 
-from . import (ar, biodiversidade, clima, contexto, erbs, estradas, goes, ingest, eventos, lixoes, mudanca, publicar,
+from . import (ar, biodiversidade, car_camadas, clima, contexto, erbs, estradas, goes, ingest, eventos, lixoes, mudanca, publicar,
                precalcular, riscoprev, territorio)
 
 
@@ -31,6 +31,7 @@ def ciclo(rapido=False):
     territorio.MAX_SEGUNDOS = 15 if rapido else 90
     biodiversidade.TEMPO_S = 10 if rapido else 60
     contexto.PRODES_TEMPO_S = 10 if rapido else 60
+    car_camadas.TEMPO_S = 10 if rapido else 60
     ar.MAX_NOVOS = 50 if rapido else 300
     try:   # alertas de tempo real primeiro: são os que importam agora
         print("clima de eventos:", clima.enriquecer(alertas + evs))
@@ -54,6 +55,7 @@ def ciclo(rapido=False):
                     ("fundiário, água e infraestrutura", lambda: contexto.marcar(evs + alertas)),
                     ("floresta pública (prioridade)", lambda: len(contexto.aplicar(evs + alertas))),
                     ("PRODES", lambda: contexto.prodes(alertas + evs)),
+                    ("CAR declarado (APP, Reserva Legal)", lambda: car_camadas.enriquecer(alertas + evs)),
                     ("biodiversidade (GBIF)", lambda: biodiversidade.enriquecer(alertas + evs)),
                     ("risco previsto (INPE)", lambda: len(riscoprev.atualizar().get("dias", [])))):
         try:
