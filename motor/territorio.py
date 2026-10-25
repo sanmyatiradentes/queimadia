@@ -134,6 +134,10 @@ def analisar(e):
     u, _, _ = _recorte(ULTIMO_FOGO.format(ano=ano_fogo), lat, lon)
     ul = u[m]
     ul = ul[ul > 0]
+    try:
+        r["app"] = _app(lat, lon)
+    except Exception:
+        pass
     r["fogo_historico"] = {"ate": ano_fogo, "anos_max": int(f.max()) if f.size else 0, "anos_mediana": float(np.median(f)) if f.size else 0,
                            "anos_p90": float(np.percentile(f, 90)) if f.size else 0,
                            "fracao_ja_queimada": round(float((f > 0).mean()), 3) if f.size else 0,
@@ -153,11 +157,46 @@ def analisar(e):
     return r
 
 
+# APP de margem estimada (Lei 12.651/2012, art. 4º, I): faixa conforme a largura do curso d'água
+FAIXAS_APP = [(10, 30), (50, 50), (200, 100), (600, 200), (1e9, 500)]   # (largura até, faixa em m)
+AGUA = (33, 31)   # MapBiomas: rio, lago e oceano; aquicultura
+
+
+def _app(lat, lon):
+    """Distância do centro do evento à água mais próxima (MapBiomas, 30 m) e largura estimada do corpo d'água.
+    Rios com menos de ~30 m de largura não aparecem no MapBiomas: a ausência de água no recorte não descarta APP."""
+    a, _, px_m2 = _recorte(COBERTURA.format(ano=ANO_MAX_COB), lat, lon, 1500)   # recorte de 3 km para medir a largura
+    px = math.sqrt(px_m2)
+    agua_toda = np.isin(a, AGUA)
+    ny, nx = a.shape
+    yy0, xx0 = np.mgrid[0:ny, 0:nx]
+    dist_px = np.hypot((yy0 - (ny - 1) / 2) * px, (xx0 - (nx - 1) / 2) * px)
+    agua = agua_toda & (dist_px <= 600)   # água mais próxima procurada até 600 m (faixa máxima de APP é 500 m)
+    if not agua.any():
+        return {"dist_agua_m": None, "busca_m": 600, "fonte": f"MapBiomas Coleção 10 ({ANO_MAX_COB}), água"}
+    yy, xx = np.nonzero(agua)
+    d = dist_px[yy, xx]
+    k = int(d.argmin()); y0, x0 = int(yy[k]), int(xx[k])
+    # largura = diâmetro do maior círculo inscrito no corpo d'água mais próximo (transformada de distância)
+    from scipy import ndimage
+    rot, _ = ndimage.label(agua_toda)
+    corpo = rot == rot[y0, x0]
+    largura = 2 * float(ndimage.distance_transform_edt(corpo).max()) * px
+    # corpo d'água que sai do recorte de 3 km e já tem ≥ 600 m: rio largo (faixa de 500 m)
+    toca_borda = corpo[0, :].any() or corpo[-1, :].any() or corpo[:, 0].any() or corpo[:, -1].any()
+    if toca_borda and largura >= 600:
+        largura = max(largura, 601)
+    faixa = next(f for lim, f in FAIXAS_APP if largura <= lim)
+    dist = float(d[k])
+    return {"dist_agua_m": round(dist), "largura_m": round(largura), "faixa_m": faixa, "dentro": dist <= faixa,
+            "fonte": f"MapBiomas Coleção 10 ({ANO_MAX_COB}), água; faixas do art. 4º, I, da Lei 12.651/2012"}
+
+
 def _enxuto(r):
     """Só o que o painel e o relatório usam (o arquivo de eventos vai para o celular)."""
     cob = lambda c: c and {k: c[k] for k in ("ano", "classe_dominante", "fracao")}
     return {"raio_m": r.get("raio_m"), "cobertura": cob(r.get("cobertura")), "cobertura_antes": cob(r.get("cobertura_antes")),
-            "fogo_historico": r.get("fogo_historico"), "relevo": r.get("relevo"), "conversao": r.get("conversao")}
+            "fogo_historico": r.get("fogo_historico"), "relevo": r.get("relevo"), "conversao": r.get("conversao"), "app": r.get("app")}
 
 
 def _tentar_dem(e):
@@ -195,6 +234,20 @@ def enriquecer(eventos, score_min=50):
             if r:
                 cache[e["id"]] = r
                 feitos += 1
+        # APP estimada para eventos que já tinham território (calculados antes desta versão)
+        sem_app = [e for e in eventos if e["id"] in cache and "app" not in cache[e["id"]]]
+        sem_app.sort(key=lambda e: (e.get("trilha") != "tempo_real", -e["score"]))
+
+        def app_um(e):
+            if time.time() - t0 > MAX_SEGUNDOS * 1.5:
+                return e, None
+            try:
+                return e, _app(e["lat"], e["lon"])
+            except Exception:
+                return e, None
+        for e, ap in ex.map(app_um, sem_app[:300]):
+            if ap:
+                cache[e["id"]]["app"] = ap
         # relevo que falhou por rede: tenta de novo (leitura barata)
         sem_relevo = [e for e in eventos if e["id"] in cache and cache[e["id"]].get("erro_relevo")][:60]
         for e, rv in ex.map(lambda e: (e, _tentar_dem(e)), sem_relevo):

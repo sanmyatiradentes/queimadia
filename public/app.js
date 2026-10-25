@@ -274,6 +274,7 @@ function blocoConfronto(e) {
     acid.push(`Uso agropecuário consolidado (MapBiomas ${tr.cobertura.ano}: ${tr.cobertura.classe_dominante.toLowerCase()}): compatível com queima de manejo de pasto ou roça; verificar autorização de queima`);
   if (tr && (c1.floresta || 0) >= 0.8 && !fh.anos_max)
     inconc.push(`Floresta natural sem queima registrada desde 1985 (MapBiomas): floresta úmida raramente queima sem fonte humana; falta discriminar ignição no local de escape de queima vizinha`);
+  if (tr?.app?.dentro) intenc.push(`Fogo em provável APP de margem (água a ${fmt(tr.app.dist_agua_m)} m de rio ou lago com ~${fmt(tr.app.largura_m)} m de largura; faixa de ${tr.app.faixa_m} m pela Lei 12.651/2012, art. 4º): uso do fogo vedado — APP estimada, confirmar com o CAR e em campo`);
   if (tr?.relevo?.declividade_p90_graus >= 12) inconc.push(`Relevo inclinado (declividade de até ${br(tr.relevo.declividade_p90_graus, 0)}°): o fogo tende a subir a encosta; na perícia, procurar a região de início na parte baixa`);
   if (d.estrada?.km != null && d.estrada.km <= 1) inconc.push(`Via a ${br(d.estrada.km * 1000, 0)} m (${d.estrada.tipo}${d.estrada.nome ? " " + d.estrada.nome : ""}; OpenStreetMap): acesso humano fácil, compatível tanto com ignição deliberada quanto com escape de queima à beira da via`);
   else if (d.estrada && (d.estrada.km == null || d.estrada.km > 10)) inconc.push(`Sem estrada ou ramal mapeado a até ${d.estrada.km == null ? d.estrada.busca_km : br(d.estrada.km, 0)} km (OpenStreetMap incompleto): acesso provável por rio ou trilha`);
@@ -378,8 +379,10 @@ function blocoTerritorio(e) {
       <div><span>Área que já queimou</span><b>${pct(fh.fracao_ja_queimada)}</b></div>
       <div><span>Última queima registrada</span><b>${fh.ultimo_ano || "nenhuma"}</b></div>
       ${rv ? `<div><span>Altitude</span><b>${br(rv.altitude_m, 0)} m</b></div><div><span>Declividade média</span><b>${br(rv.declividade_media_graus, 1)}°</b></div>` : ""}
+      ${t.app ? `<div><span>APP de margem (estimada)</span><b>${t.app.dist_agua_m == null ? "sem rio ou lago visível a até 600 m" : `${t.app.dentro ? "DENTRO" : "fora"} · água a ${fmt(t.app.dist_agua_m)} m · faixa de ${t.app.faixa_m} m`}</b></div>` : ""}
     </div>
-    <p class="nota">Círculo de ${t.raio_m} m no centro do evento. Uso da terra no ano anterior ao fogo e 5 anos antes: MapBiomas Coleção 10 (Souza et al., 2020), 30 m. Fogo histórico até ${fh.ate}: MapBiomas Fogo Coleção 5. Relevo: Copernicus DEM GLO-30. Classificações de satélite têm erro e não substituem a verificação de campo.</p></div>`;
+    ${t.app?.dentro ? `<p class="clima-leitura"><b>Provável APP de margem</b>: o centro do evento está a ${fmt(t.app.dist_agua_m)} m de um corpo d'água com cerca de ${fmt(t.app.largura_m)} m de largura; pelo art. 4º, I, da Lei 12.651/2012, a faixa de preservação seria de ${t.app.faixa_m} m. O uso do fogo em APP é vedado.</p>` : ""}
+    <p class="nota">APP estimada: água do MapBiomas (30 m) e faixas do Código Florestal pela largura do rio; rios com menos de ~30 m e nascentes não aparecem, e lagos têm faixa própria (100 m em área rural). É cálculo, não a APP declarada no CAR. Círculo de ${t.raio_m} m no centro do evento. Uso da terra no ano anterior ao fogo e 5 anos antes: MapBiomas Coleção 10 (Souza et al., 2020), 30 m. Fogo histórico até ${fh.ate}: MapBiomas Fogo Coleção 5. Relevo: Copernicus DEM GLO-30. Classificações de satélite têm erro e não substituem a verificação de campo.</p></div>`;
 }
 const IUCN_TXT = {CR: "Criticamente em perigo", EN: "Em perigo", VU: "Vulnerável"};
 function blocoEntorno(e) {
@@ -1021,7 +1024,8 @@ function metodologia() {
       GOES-16/19 (10 min, pixel ~2 km): 1ª detecção a até 4 km, de 48 h antes do 1º foco ao último foco<br>
       Copernicus CAMS: PM2,5 médio diário no local e em Manaus nos dias do evento, comparado à OMS (15 µg/m³)<br>
       OpenStreetMap: distância até a via mais próxima (rodovia, vicinal ou ramal), busca até 30 km<br>
-      INCRA: dentro de assentamento · ANA: sub-bacia hidrográfica · GBIF: espécies a até 10 km e as ameaçadas (IUCN CR, EN, VU)</div>
+      INCRA: dentro de assentamento · ANA: sub-bacia hidrográfica · GBIF: espécies a até 10 km e as ameaçadas (IUCN CR, EN, VU)<br>
+      APP de margem estimada: água do MapBiomas (até 600 m); largura = diâmetro do maior círculo inscrito no corpo d'água; faixa pelo art. 4º, I, da Lei 12.651/2012 (30, 50, 100, 200 ou 500 m)</div>
       <p class="nota">Na matriz: conversão e fogo recorrente apoiam a ignição intencional; uso agropecuário consolidado é compatível com queima de manejo; floresta sem queima desde 1985 e declividade alta orientam a perícia; o GOES estreita o horário, sem marcar a ignição. A fumaça mede o impacto e não entra na hipótese. Os eventos novos recebem o território aos poucos, a cada ciclo.</p></div>
     <div class="cartao"><h2>Limitações</h2><ul>
       <li>O satélite detecta calor, não autoria. A prioridade orienta diligências, nunca é prova nem grau de certeza.</li>
