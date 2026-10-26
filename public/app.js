@@ -524,6 +524,9 @@ const CAMADAS = [
   ["mineracao", "Garimpo e mineração (MapBiomas 2023)", "#d50000", false],
   ["pistas", "Pistas de pouso (OpenStreetMap; borda vermelha = sem registro no DECEA)", "#37474f", false],
   ["aerodromos", "Aeródromos e helipontos registrados (DECEA)", "#1565c0", false],
+  ["autos", "Autos de infração IBAMA (laranja = uso de fogo)", "#ff6d00", false],
+  ["apreensoes", "Termos de apreensão IBAMA", "#ffab00", false],
+  ["icmbio", "Embargos ICMBio em UC federal", "#ad1457", false],
   ["bombeiros", "Bombeiros (OpenStreetMap)", "#e53935", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
   ["lixoes", "Lixões e vazadouros (fumaça tóxica)", "#8e24aa", true],
   ["mudancas", "Alertas de mudança (Sentinel-2 + radar)", "#00b8d4", true],
@@ -534,6 +537,7 @@ const CAMADAS = [
 const GRUPOS_CAMADAS = [
   ["Fogo e desmatamento", ["eventos", "alertas", "focos", "calor", "mudancas", "riscoprev", "desmat", "cicat", "prodes"]],
   ["Áreas protegidas e fundiário", ["tis", "ucs", "aldeias", "locind", "assentamentos", "fpnd", "sigef"]],
+  ["Fiscalização (IBAMA, ICMBio)", ["autos", "apreensoes", "icmbio"]],
   ["Meio ambiente", ["fauna", "flora", "bacias", "rios"]],
   ["Tempo e fumaça", ["vento", "fumaca", "chuva", "nuvens", "imerg"]],
   ["Pressão e infraestrutura", ["estradas", "mineracao", "pistas", "aerodromos", "lixoes", "erbs", "bombeiros"]],
@@ -603,7 +607,7 @@ async function iniciarMapa() {
     tiles: ["https://terrabrasilis.dpi.inpe.br/geoserver/ows?service=WMS&version=1.1.1&request=GetMap&layers=prodes-legal-amz:yearly_deforestation&styles=&bbox={bbox-epsg-3857}&srs=EPSG:3857&width=256&height=256&format=image/png&transparent=true"]});
   m.addLayer({id: "prodes", type: "raster", source: "prodes", minzoom: 7, layout: {visibility: "none"}, paint: {"raster-opacity": .75}}, "eventos");
   // bases estáticas carregadas só quando ligadas
-  for (const k of ["fpnd", "sigef", "aldeias", "mineracao", "pistas", "bombeiros", "aerodromos", "locind"]) m.addSource(k, {type: "geojson", data: vazio});
+  for (const k of ["fpnd", "sigef", "aldeias", "mineracao", "pistas", "bombeiros", "aerodromos", "locind", "fiscal"]) m.addSource(k, {type: "geojson", data: vazio});
   m.addLayer({id: "fpnd", type: "fill", source: "fpnd", layout: {visibility: "none"}, paint: {"fill-color": "#7cb342", "fill-opacity": .14}}, "eventos");
   m.addLayer({id: "fpnd-l", type: "line", source: "fpnd", layout: {visibility: "none"}, paint: {"line-color": "#9ccc65", "line-width": 1.2}}, "eventos");
   m.addLayer({id: "sigef", type: "line", source: "sigef", minzoom: 9, layout: {visibility: "none"}, paint: {"line-color": "#ffb300", "line-width": 1}}, "eventos");
@@ -615,6 +619,13 @@ async function iniciarMapa() {
   m.addLayer({id: "aerodromos", type: "symbol", source: "aerodromos", layout: {visibility: "none", "text-field": ["case", ["==", ["get", "tipo"], "heliponto"], "H", "✈"], "text-size": 14, "text-allow-overlap": true},
     paint: {"text-color": "#1565c0", "text-halo-color": "#fff", "text-halo-width": 1.5}});
   m.addLayer({id: "locind", type: "circle", source: "locind", layout: {visibility: "none"}, paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 2, 12, 5], "circle-color": "#8d6e63", "circle-stroke-color": "#fff", "circle-stroke-width": .8}});
+  // fiscalização (SISCOM/IBAMA e ICMBio, via INDE): uma fonte, três camadas
+  m.addLayer({id: "icmbio", type: "fill", source: "fiscal", filter: ["==", ["get", "k"], "icmbio"], layout: {visibility: "none"}, paint: {"fill-color": "#ad1457", "fill-opacity": .3, "fill-outline-color": "#ad1457"}}, "eventos");
+  m.addLayer({id: "apreensoes", type: "circle", source: "fiscal", filter: ["==", ["get", "k"], "apreensao"], layout: {visibility: "none"},
+    paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 2, 12, 5], "circle-color": "#ffab00", "circle-stroke-color": "#5d4037", "circle-stroke-width": .8}});
+  m.addLayer({id: "autos", type: "circle", source: "fiscal", filter: ["==", ["get", "k"], "auto"], layout: {visibility: "none", "circle-sort-key": ["case", ["get", "fogo"], 1, 0]},
+    paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, ["case", ["get", "fogo"], 3, 1.8], 12, ["case", ["get", "fogo"], 7, 4.5]],
+      "circle-color": ["case", ["get", "fogo"], "#ff6d00", "#8d8d8d"], "circle-stroke-color": "#fff", "circle-stroke-width": ["case", ["get", "fogo"], 1, .5]}});
   m.addLayer({id: "bombeiros", type: "circle", source: "bombeiros", layout: {visibility: "none"}, paint: {"circle-radius": 6, "circle-color": "#e53935", "circle-stroke-color": "#fff", "circle-stroke-width": 2}});
   const popCamada = (id, f) => m.on("click", id, ev => { if (Q.modoPonto) return; new maplibregl.Popup({maxWidth: "300px"}).setLngLat(ev.lngLat).setHTML(f(ev.features[0].properties)).addTo(m); });
   popCamada("fpnd", p => `<b>${esc(p.nome)}</b><br>Floresta pública não destinada · ${esc(p.categoria)} (${esc(p.governo)})<br>${br(+p.area_ha, 0)} ha · ${esc(p.municipio)}<br><span class="nota">Serviço Florestal Brasileiro, CNFP 2025</span>`);
@@ -626,6 +637,10 @@ async function iniciarMapa() {
     return `<b>${esc(p.nome)}</b><br>${p.tipo === "airstrip" ? "Pista de pouso" : "Aeródromo"}${p.icao ? " · " + esc(p.icao) : ""}${p.superficie ? " · " + esc(p.superficie) : ""}<br>${dc.homologada === false ? `<b style="color:#c62828">Sem aeródromo registrado no DECEA a até 3 km</b> (possível pista não registrada)` : dc.homologada ? `Registrada no DECEA (${esc(dc.ciad)} · ${esc(dc.nome)})` : ""}<br><span class="nota">OpenStreetMap (incompleto) · DECEA via INDE</span>`; });
   popCamada("aerodromos", p => `<b>${esc(p.nome)}</b><br>${esc(p.tipo)} · ${esc(p.ciad || "")}${p.icao ? " / " + esc(p.icao) : ""} · uso ${esc(p.uso || "–")}<br>${esc(p.cidade || "")} · ${esc(p.operacao || "")}<br><span class="nota">DECEA/AISWEB via INDE</span>`);
   popCamada("locind", p => `<b>${esc(p.nome)}</b><br>${esc(p.municipio)} · ${esc(p.situacao || "")}<br>${p.ti ? "TI " + esc(p.ti) : "Fora de terra indígena"}<br><span class="nota">IBGE, Censo 2022 (via INDE)</span>`);
+  const reais = v => v ? "R$ " + br(+v, 2) : "–";
+  popCamada("autos", p => `<b>Auto de infração ${esc(p.num)}</b><br>${dBR(p.data)} · ${esc(p.tipo || "")}${p.fogo ? ` · <b style="color:#e65100">uso de fogo</b>` : ""}<br>Valor ${reais(p.valor)}${+p.area_ha ? ` · ${br(+p.area_ha, 1)} ha` : ""}<br>Processo ${esc(p.processo || "–")}<br><span class="nota">IBAMA SISCOM, via INDE · nome do autuado só no relatório (logado)</span>`);
+  popCamada("apreensoes", p => `<b>Termo de apreensão ${esc(p.num)}</b><br>${dBR(p.data)}${p.itens ? " · " + esc(p.itens) : ""}<br>Processo ${esc(p.processo || "–")}<br><span class="nota">IBAMA SISCOM, via INDE</span>`);
+  popCamada("icmbio", p => `<b>Embargo ICMBio ${esc(p.num)}</b><br>${esc(p.uc || "")}<br>${dBR(p.data)} · ${esc(p.tipo || "")}${p.fogo ? ` · <b style="color:#e65100">uso de fogo</b>` : ""}<br>Processo ${esc(p.processo || "–")}<br><span class="nota">ICMBio, via INDE</span>`);
   popCamada("bombeiros", p => `<b>${esc(p.nome)}</b><br>${esc(p.operador || "")}<br><span class="nota">OpenStreetMap (incompleto)</span>`);
   // assentamentos (INCRA) e estradas (OSM): carregados só quando ligados
   m.addSource("assentamentos", {type: "geojson", data: vazio}); m.addSource("estradas", {type: "geojson", data: vazio});
@@ -1379,6 +1394,9 @@ async function sobDemanda(k) {
   try {
     const BASE = {assentamentos: "assentamentos_am", fpnd: "fpnd_am", sigef: "sigef_am", aldeias: "aldeias_am", mineracao: "mineracao_am", pistas: "pistas_am", bombeiros: "bombeiros_am", aerodromos: "aerodromos_am", locind: "localidades_indigenas_am"};
     if (BASE[k]) { if (["sigef", "fpnd", "mineracao"].includes(k)) toast("Carregando a camada…", 2500); Q.mapa.getSource(k).setData(await (await fetch(`bases/${BASE[k]}.json`)).json()); }
+    else if (["autos", "apreensoes", "icmbio"].includes(k)) {
+      if (!carregadas.has("fiscal")) { toast("Carregando a fiscalização…", 2500); Q.mapa.getSource("fiscal").setData(await json("dados/fiscalizacao.json")); carregadas.add("fiscal"); }
+    }
     else if (k === "estradas") { toast("Carregando estradas e ramais…", 3000); Q.mapa.getSource("estradas").setData(await json("dados/estradas.json")); }
     else if (k === "riscoprev") await riscoPrevisto();
     else return;

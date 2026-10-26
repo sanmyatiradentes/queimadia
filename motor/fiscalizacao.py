@@ -20,6 +20,7 @@ from shapely.strtree import STRtree
 from . import config
 
 CACHE = config.ESTADO / "fiscalizacao_am.json"
+PUB = config.PUBLICO / "fiscalizacao.json"   # camadas do mapa (sem dados pessoais)
 VALIDADE_S = 7 * 86400
 SISCOM = "https://pamgia.ibama.gov.br/server/rest/services/SISCOM/publico/MapServer"
 ICMBIO = "https://geoservicos.inde.gov.br/geoserver/ICMBio/ows"
@@ -112,8 +113,25 @@ def baixar():
     d = {"t": time.time(), "autos": autos, "apreensoes": apre, "embargos_icmbio": emb,
          "fonte": "IBAMA SISCOM e ICMBio, via INDE (sem dados pessoais)"}
     CACHE.write_text(json.dumps(d, ensure_ascii=False, separators=(",", ":")))
+    publicar_camada(d)
     print(f"fiscalização: {len(autos)} autos ({sum(a['fogo'] for a in autos)} por fogo), {len(apre)} apreensões, {len(emb)} embargos ICMBio")
     return d
+
+
+def publicar_camada(d):
+    """Autos, apreensões e embargos ICMBio do AM como GeoJSON para o mapa (números, datas, categorias e processo)."""
+    ponto = lambda x, props: {"type": "Feature", "geometry": {"type": "Point", "coordinates": x["c"]}, "properties": props}
+    fs = [ponto(a, {"k": "auto", "num": a["num"].rstrip("-"), "data": a["data"], "tipo": a["tipo"], "fogo": a["fogo"],
+                    "valor": a["valor"], "area_ha": a["area_ha"], "processo": a["processo"]}) for a in d["autos"]]
+    fs += [ponto(a, {"k": "apreensao", "num": a["num"].rstrip("-"), "data": a["data"], "processo": a["processo"],
+                     "itens": ", ".join(a["itens"])}) for a in d["apreensoes"]]
+    for x in d["embargos_icmbio"]:
+        g = shape(x["g"]).simplify(0.0002, preserve_topology=True)
+        fs.append({"type": "Feature", "geometry": g.__geo_interface__,
+                   "properties": {"k": "icmbio", "num": x["num"].rstrip("-"), "data": x["data"], "uc": x["uc"], "processo": x["processo"],
+                                  "tipo": x["tipo"], "fogo": x["fogo"]}})
+    PUB.write_text(json.dumps({"type": "FeatureCollection", "features": fs, "fonte": d.get("fonte"), "baixado": d.get("t")},
+                              ensure_ascii=False, separators=(",", ":")))
 
 
 def _carregar(atualizar=True):
@@ -154,6 +172,8 @@ def marcar(eventos, atualizar=True):
     d = _carregar(atualizar)
     if not d:
         return "sem base"
+    if not PUB.exists():   # garante a camada do mapa mesmo quando a base veio do cache
+        publicar_camada(d)
     ga, gp = _Grade(d["autos"]), _Grade(d["apreensoes"])
     emb = [(shape(x["g"]), x) for x in d["embargos_icmbio"]]
     arv = STRtree([g for g, _ in emb]) if emb else None
