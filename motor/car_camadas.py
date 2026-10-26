@@ -3,6 +3,7 @@ uso restrito, pousio), lidas das quadrículas que car_sicar.py enviou ao armazen
 
 Sem as camadas enviadas, não faz nada. Resultado em cache por evento.
 """
+import gzip
 import json
 import math
 import os
@@ -21,8 +22,10 @@ TEMPO_S = 60
 
 
 def _get(caminho):
-    r = requests.get(BASE + caminho, headers={"Authorization": "Bearer " + os.environ.get("BLOB_READ_WRITE_TOKEN", "")}, timeout=60)
-    return r.json() if r.ok else None
+    r = requests.get(BASE + caminho, headers={"Authorization": "Bearer " + os.environ.get("BLOB_READ_WRITE_TOKEN", "")}, timeout=120)
+    if not r.ok:
+        return None
+    return json.loads(gzip.decompress(r.content) if r.content[:2] == b"\x1f\x8b" else r.content)
 
 
 def enriquecer(eventos, score_min=50):
@@ -30,19 +33,19 @@ def enriquecer(eventos, score_min=50):
         cache = json.load(open(CACHE))
     except Exception:
         cache = {}
-    indice = None
+    try:
+        indice = _get("indice.json")
+    except Exception:
+        indice = None
+    if indice and cache.get("_versao") != indice.get("gerado"):  # camadas reprocessadas: refaz o cruzamento
+        cache = {"_versao": indice.get("gerado")}
     faltam = [e for e in eventos if e["id"] not in cache and (e["score"] >= score_min or e.get("trilha") == "tempo_real")]
-    if faltam:
-        try:
-            indice = _get("indice.json")
-        except Exception:
-            indice = None
-    if indice:
+    if indice and faltam:
         celulas, t0, feitos = {}, time.time(), 0
 
         def cel(cod, c):
             if (cod, c) not in celulas:
-                fc = _get(f"{cod}/c_{c}.json") if c in indice["camadas"][cod]["celulas"] else None
+                fc = _get(f"{cod}/c_{c}.json" + (".gz" if indice.get("gz") else "")) if c in indice["camadas"][cod]["celulas"] else None
                 celulas[(cod, c)] = [(shape(f["geometry"]), f["properties"]) for f in (fc or {}).get("features", [])]
             return celulas[(cod, c)]
 
@@ -56,7 +59,7 @@ def enriquecer(eventos, score_min=50):
             r = {}
             for cod in indice["camadas"]:
                 cs = {f"{math.floor(y / CEL)}_{math.floor(x / CEL)}" for x in (e["lon"] - raio, e["lon"] + raio) for y in (e["lat"] - raio, e["lat"] + raio)}
-                no_ponto, frac, imoveis = None, 0.0, set()
+                no_ponto, tema, frac, imoveis = None, None, 0.0, set()
                 for c in cs:
                     for g, pr in cel(cod, c):
                         if not g.intersects(circ):
@@ -64,10 +67,12 @@ def enriquecer(eventos, score_min=50):
                         frac += g.intersection(circ).area / area_circ
                         imoveis.add(pr.get("cod"))
                         if no_ponto is None and g.contains(p):
-                            no_ponto = pr.get("cod")
+                            no_ponto, tema = pr.get("cod"), pr.get("tema")
                 if frac > 0 or no_ponto:
                     ha_circ = math.pi * RAIO_M ** 2 / 1e4
                     r[cod] = {"no_ponto": bool(no_ponto), "imovel": no_ponto, "ha_500m": round(min(frac, 1) * ha_circ, 1), "imoveis": len(imoveis)}
+                    if tema:
+                        r[cod]["tema"] = indice.get("temas", {}).get(tema, tema)
             cache[e["id"]] = r
             feitos += 1
         print("CAR (camadas declaradas):", feitos, "novos")

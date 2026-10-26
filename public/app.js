@@ -402,7 +402,8 @@ function blocoEntorno(e) {
       ${ba ? `<div><span>Sub-bacia (ANA)</span><b>${esc(ba.nome)}</b></div>` : ""}
       <div><span>Floresta pública não destinada</span><b>${fp ? `${esc(fp.nome)} (${esc(fp.governo || "").toLowerCase()})` : "não"}</b></div>
       ${e.det.car_camadas ? `<div><span>CAR declarado no ponto</span><b>${[["app", "APP"], ["rl", "Reserva Legal"], ["consolidada", "área consolidada"], ["rvn", "vegetação nativa"], ["uso_restrito", "uso restrito"], ["pousio", "pousio"]]
-        .filter(([k]) => e.det.car_camadas[k]?.no_ponto).map(([, t]) => t).join(", ") || "nenhuma camada no ponto"}</b></div>` : ""}
+        .filter(([k]) => e.det.car_camadas[k]?.no_ponto).map(([k, t]) => t + (e.det.car_camadas[k].tema ? ` (${esc(e.det.car_camadas[k].tema.toLowerCase())})` : "")).join(", ") || "nenhuma camada no ponto"}${e.det.car_camadas.app?.no_ponto || e.det.car_camadas.rl?.no_ponto ? ` · imóvel ${esc(e.det.car_camadas.app?.imovel || e.det.car_camadas.rl?.imovel || "")}` : ""}</b></div>
+      ${e.det.car_camadas.app || e.det.car_camadas.rl ? `<div><span>APP / RL declaradas a até 500 m</span><b>${br(e.det.car_camadas.app?.ha_500m || 0, 1)} ha de APP · ${br(e.det.car_camadas.rl?.ha_500m || 0, 1)} ha de RL</b></div>` : ""}` : ""}
       ${sg ? `<div><span>Imóveis SIGEF a até 500 m</span><b>${sg.a_500m}${sg.no_ponto?.length ? ` · no ponto: ${esc(sg.no_ponto[0].nome_area)}` : ""}</b></div>` : ""}
       ${pr ? `<div><span>PRODES a até 1 km, antes do fogo</span><b>${pr.total_ha ? `${br(pr.total_ha, 1)} ha (${Object.keys(pr.anos_ha).length} ano(s))` : "nenhum"}</b></div>` : ""}
       ${al ? `<div><span>Aldeias a até 10 km (FUNAI)</span><b>${al.n_10km} · mais perto: ${esc(al.nome)}, ${br(al.mais_perto_km, 1)} km</b></div>` : ""}
