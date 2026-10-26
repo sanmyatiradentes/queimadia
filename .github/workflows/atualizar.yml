@@ -47,6 +47,7 @@ jobs:
       - name: Ciclo de atualização
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}  # leitura das camadas do CAR (restrito/car)
         run: |
           MIN=$(date -u +%M)
           if [ "$MIN" -lt 10 ] || [ ! -f motor/dados/estado/status.json ]; then
