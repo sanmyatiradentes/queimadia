@@ -7,7 +7,7 @@
       "destination": "https://portal1.snirh.gov.br/server/rest/services/dados_abertos/:serv/MapServer/export"
     },
     {
-      "source": "/api/:rota((?!conta|restrito|bases|dados).*)",
+      "source": "/api/:rota((?!conta|restrito|bases|dados|custodia).*)",
       "destination": "/api/index?__rota=:rota"
     }
   ],

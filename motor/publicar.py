@@ -1,5 +1,6 @@
 """Gera os arquivos JSON consumidos pelo painel (public/dados)."""
 import json
+import os
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -87,6 +88,7 @@ def publicar(df, eventos, alertas):
         "mosaico": mosaico,
         "analises": analises,
         "gerado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "versao_motor": os.environ.get("GITHUB_SHA", "")[:7] or None,
         "focos_por_mes": focos_mes,
         "total_focos_ref": {int(a): int(n) for a, n in ref.groupby("ano").size().items()},
         "focos_por_municipio": {int(a): {m: int(n) for m, n in por_mun.loc[a].sort_values(ascending=False).items()}

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Verificar integridade — Fogo Forense</title>
+<link rel="icon" href="img/dptc.png">
+<link rel="stylesheet" href="estilo.css">
+<style>
+.ver{max-width:760px;margin:0 auto;padding:16px}
+.soltar{border:2px dashed var(--grade);border-radius:12px;padding:28px 16px;text-align:center;cursor:pointer}
+.soltar.sobre{border-color:var(--azul)}
+.mono{font-family:ui-monospace,Menlo,monospace;word-break:break-all}
+.ok{color:#1b8a3a;font-weight:700}.nao{color:#c8302f;font-weight:700}
+#res table td:first-child{white-space:nowrap;color:var(--cinza-texto);padding-right:12px}
+#res table td{padding:4px 0;vertical-align:top}
+</style>
+</head>
+<body>
+<header class="topo">
+  <a class="marca" href="./"><img src="img/pcam.png" alt="Polícia Civil do Amazonas"><img src="img/dptc.png" alt="Departamento de Polícia Técnico-Científica">
+    <span class="nome">Fogo Forense<small>NIPED · PCAM/DPTC · Verificação de integridade</small></span></a>
+</header>
+<main class="ver">
+  <section class="cartao">
+    <h2>Verificar um relatório ou pacote de dados</h2>
+    <p>Escolha o PDF do relatório ou o pacote de dados (JSON). O SHA-256 é calculado <b>no seu computador</b>, sem enviar o arquivo, e comparado com os registros do Fogo Forense.</p>
+    <label class="soltar" id="soltar">Clique para escolher o arquivo ou arraste-o aqui<input type="file" id="arq" hidden></label>
+    <p style="margin-top:14px">Ou cole um hash SHA-256: <input id="hash" class="mono" size="66" maxlength="64" placeholder="64 caracteres hexadecimais"> <button class="botao claro pequeno" id="conferir">Conferir</button></p>
+    <div id="res"></div>
+  </section>
+</main>
+<script src="config.js"></script>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const dHora = s => s ? new Date(s).toLocaleString("pt-BR", {timeZone: "America/Manaus"}) + " (Manaus)" : "–";
+async function sha256(buf) { return [...new Uint8Array(await crypto.subtle.digest("SHA-256", buf))].map(x => x.toString(16).padStart(2, "0")).join(""); }
+async function conferir(h, arquivo) {
+  $("#res").innerHTML = "<p>Consultando…</p>";
+  try {
+    const r = await fetch("api/custodia?acao=verificar&sha256=" + h, {credentials: "same-origin"});
+    const d = await r.json(); if (!r.ok) throw new Error(d.erro || r.status);
+    const cab = `<p>${arquivo ? `Arquivo <b>${esc(arquivo.name)}</b> (${arquivo.size.toLocaleString("pt-BR")} bytes)<br>` : ""}SHA-256: <span class="mono">${h}</span></p>`;
+    if (!d.registrado) { $("#res").innerHTML = cab + `<p class="nao">Hash não registrado no Fogo Forense.</p><p class="nota">O arquivo pode ter sido alterado depois do registro, ou nunca foi registrado (botão <b>Registrar PDF</b> do relatório).</p>`; return; }
+    const g = d.registro;
+    $("#res").innerHTML = cab + `<p class="ok">✔ Registro encontrado: o arquivo é idêntico ao registrado.</p><table><tbody>
+      <tr><td>Tipo</td><td>${g.tipo === "pdf" ? "PDF do relatório" : "Pacote de dados (conteúdo)"}</td></tr>
+      <tr><td>Relatório</td><td class="mono">${esc(g.relatorio_id)}</td></tr>
+      ${g.sha256_conteudo && g.sha256_conteudo !== g.sha256 ? `<tr><td>SHA-256 do conteúdo</td><td class="mono">${esc(g.sha256_conteudo)}</td></tr>` : ""}
+      <tr><td>Arquivo registrado</td><td>${esc(g.nome_arquivo || "–")}${g.tamanho_bytes ? ` · ${g.tamanho_bytes.toLocaleString("pt-BR")} bytes` : ""}</td></tr>
+      <tr><td>Registrado em</td><td>${dHora(g.registrado_em_utc)} · ${esc(g.registrado_em_utc)}</td></tr>
+      <tr><td>Registrado por</td><td>${esc(g.registrado_por?.nome)} · ${esc(g.registrado_por?.cargo || "")} · ${esc(g.registrado_por?.orgao)}</td></tr></tbody></table>`;
+  } catch (x) { $("#res").innerHTML = `<p class="nao">Não foi possível consultar: ${esc(x.message)}</p>`; }
+}
+async function arquivo(f) { if (!f) return; $("#res").innerHTML = "<p>Calculando SHA-256…</p>"; const h = await sha256(await f.arrayBuffer()); $("#hash").value = h; conferir(h, f); }
+$("#arq").onchange = e => arquivo(e.target.files[0]);
+const z = $("#soltar");
+z.ondragover = e => { e.preventDefault(); z.classList.add("sobre"); };
+z.ondragleave = () => z.classList.remove("sobre");
+z.ondrop = e => { e.preventDefault(); z.classList.remove("sobre"); arquivo(e.dataTransfer.files[0]); };
+$("#conferir").onclick = () => { const h = $("#hash").value.trim().toLowerCase(); if (/^[0-9a-f]{64}$/.test(h)) conferir(h); else $("#res").innerHTML = `<p class="nao">Hash inválido.</p>`; };
+const q = new URLSearchParams(location.search).get("sha256"); if (q) { $("#hash").value = q; $("#conferir").click(); }
+</script>
+</body>
+</html>

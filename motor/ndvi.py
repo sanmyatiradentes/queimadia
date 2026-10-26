@@ -192,6 +192,14 @@ def buscar_cenas(lat, lon, inicio, fim, colecoes=("sentinel-2-l2a", "landsat-c2-
                           "nuvem_cena": round(it.properties.get("eo:cloud_cover", 0), 1),
                           "plataforma": it.properties.get("platform"),
                           "baseline": it.properties.get("s2:processing_baseline"),
+                          # cadeia de custódia: produto de origem e versão de processamento
+                          "produto": it.properties.get("s2:product_uri") or it.properties.get("landsat:scene_id"),
+                          "versao": (f"L2A baseline {it.properties['s2:processing_baseline']}" if it.properties.get("s2:processing_baseline")
+                                     else "Collection {} {} Tier {}".format(it.properties.get("landsat:collection_number", "02"),
+                                                                           it.properties.get("landsat:correction", "L2SP"),
+                                                                           str(it.properties.get("landsat:collection_category", "T1"))[-1:])
+                                     if col == "landsat-c2-l2" else None),
+                          "atualizado_stac": it.properties.get("updated") or it.properties.get("s2:generation_time"),
                           "limpo_area": round(limpeza[it.id], 3) if it.id in limpeza else None})
     return sorted(saida, key=lambda c: (c["data"], c["colecao"]))
 

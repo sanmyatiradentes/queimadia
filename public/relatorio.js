@@ -153,7 +153,9 @@ async function montar() {
   if (!parecer?.texto && ndvi?.parecer?.texto) parecer = {...ndvi.parecer, gerado_em: ndvi.parecer.gerado_em || ndvi.gerado_em};
   // citava o sistema em vez da literatura, ou é anterior às bases novas (território, fundiário, entorno)
   const antigo = parecer?.texto && (/polic\s*ia|queimadia/i.test(parecer.texto) || String(parecer.gerado_em || "") < "2026-10-23");
-  R = {e, est, mun, ai, aiHa, raioM, centro, bb, camadas, brm, ndvi, usuario, guardado, parecer: antigo ? null : parecer};
+  const geradoEm = R.geradoEm && R.e?.id === e.id ? R.geradoEm : new Date().toISOString().slice(0, 19) + "Z";
+  const relId = `${String(ID).replace(/[^\w.-]+/g, "_")}-${geradoEm.replace(/\D/g, "").slice(0, 14)}`;
+  R = {e, est, mun, ai, aiHa, raioM, centro, bb, camadas, brm, ndvi, usuario, guardado, parecer: antigo ? null : parecer, geradoEm, relId};
   estado("Desenhando…");
   R.analisando = !ndvi;
   render();
@@ -371,7 +373,7 @@ function render() {
     <h1>${e.ponto ? "Relatório analítico de ponto de interesse" : "Relatório analítico de evento de fogo"}</h1>
     <p class="sub">Documento automatizado gerado pelo Fogo Forense a partir de focos de calor por satélite, imagens Sentinel-2/Landsat e bases públicas${restrito ? ", com alertas do Brasil MAIS (imagens Planet de 3 m)" : ""}. Não substitui laudo pericial.</p>
     <div class="linha-meta"><span><b>${e.ponto ? "Ponto" : "Evento"}:</b> ${e.ponto ? `${e.lat.toFixed(5)}, ${e.lon.toFixed(5)}` : esc(e.id)}</span><span><b>Município:</b> ${esc(e.mun)} - AM</span>
-      <span><b>${e.ponto ? "Data de referência" : "Período dos focos"}:</b> ${e.ponto ? dBR(e.ini) : `${dBR(e.ini)} a ${dBR(e.fim)}`}</span><span><b>Data do relatório:</b> ${hoje}</span>
+      <span><b>${e.ponto ? "Data de referência" : "Período dos focos"}:</b> ${e.ponto ? dBR(e.ini) : `${dBR(e.ini)} a ${dBR(e.fim)}`}</span><span><b>Data do relatório:</b> ${hoje}</span><span><b>Nº do relatório:</b> <span class="mono">${esc(R.relId)}</span></span>
       ${usuario ? `<span><b>Gerado por:</b> ${esc(usuario.nome)} (${esc(usuario.orgao)})</span>` : ""}</div></section>`);
 
   // 1. área de interesse
@@ -467,6 +469,8 @@ function render() {
     ? `<p class="nota">Não há evento de foco de calor associado a este ponto, então a matriz de hipóteses (que confronta focos, clima, desmatamento e área protegida de um evento) não se aplica. A análise de satélite, o parecer e a consulta às bases acima orientam o exame de local.</p>`
     : `<p class="nota">Abra o relatório pelo botão da ficha para incluir a matriz de hipóteses calculada no painel.</p>`)));
 
+  html.push(secCustodia(N, tab));
+
   // 7. limitações, referências e glossário
   html.push(sec(N(), "Limitações", `<ul>
     <li>Foco de calor indica fogo ativo no pixel no instante da passagem do satélite; a primeira detecção <b>não</b> marca a hora nem o ponto de ignição.</li>
@@ -497,10 +501,148 @@ function render() {
     <div><dt>ERB</dt><dd>Estação rádio base de telefonia móvel.</dd></div>
     <div><dt>RAA</dt><dd>Relatório de Alerta Analítico da plataforma Brasil MAIS.</dd></div>
     <div><dt>Hipótese espacial</dt><dd>Local provável indicado por um produto, a ser confrontado em campo.</dd></div></dl>`));
-  html.push(`<p class="rodape-rel">Fogo Forense · Desenvolvido pelo NIPED/PCAM · DPTC — documento automatizado, não substitui laudo pericial · gerado em ${new Date().toLocaleString("pt-BR", {timeZone: "America/Manaus"})}</p>`);
+  html.push(`<p class="rodape-rel">Fogo Forense · Desenvolvido pelo NIPED/PCAM · DPTC — documento automatizado, não substitui laudo pericial · gerado em ${dHora(R.geradoEm)} · relatório ${esc(R.relId)} · SHA-256 do conteúdo <span class="mono hash-conteudo">calculando…</span></p>`);
   $("#folha").innerHTML = html.join("");
   document.title = `Relatório ${e.id} — Fogo Forense`;
+  atualizarHash().catch(x => console.warn("hash", x));
 }
+
+// ------------------------------------------------------------ cadeia de custódia e reprodutibilidade
+// Pacote de dados canônico (chaves em ordem, sem espaços): o SHA-256 dele é o "hash do conteúdo" impresso no relatório
+// e é idêntico ao do arquivo JSON baixado. O hash do PDF é calculado depois de salvo e registrado no servidor.
+const STAC_URL = "https://planetarycomputer.microsoft.com/api/stac/v1";
+const BASES_VERSOES = est => [
+  ["Focos de calor — INPE BDQueimadas (todos os satélites)", "Base operacional", `Dados do painel de ${dHora(est.gerado_em)} · último foco ${est.ultimo_foco_utc || "–"} UTC`],
+  ["Focos de calor — NASA FIRMS VIIRS 375 m (S-NPP, NOAA-20, NOAA-21) e MODIS", "NRT (quase tempo real)", `Dados do painel de ${dHora(est.gerado_em)}`],
+  ["GOES-16/19 ABI — focos geoestacionários (via INPE)", "Base operacional", `Dados do painel de ${dHora(est.gerado_em)}`],
+  ["DETER Amazônia — INPE/TerraBrasilis", "Base operacional", `Dados do painel de ${dHora(est.gerado_em)}`],
+  ["PRODES Amazônia — INPE/TerraBrasilis (WFS)", "Série anual", "Consultado no ciclo do motor"],
+  ["Sentinel-2 L2A (ESA) e Landsat 8/9 Collection 2 Level-2 Tier 1 (USGS)", "Versão por cena (tabela abaixo)", `Catálogo STAC ${STAC_URL}`],
+  ["Mosaico Sentinel-2 da Figura 3", "Mediana sem nuvens", `${dBR(est.mosaico?.periodo?.[0])} a ${dBR(est.mosaico?.periodo?.[1])}`],
+  ["MapBiomas — uso e cobertura da terra", "Coleção 10 (1985–2024)", "Arquivos anuais oficiais"],
+  ["MapBiomas Fogo", "Coleção 5 (1985–2025)", "Frequência e ano do último fogo"],
+  ["APP de margem estimada (água do MapBiomas, art. 4º da Lei 12.651/2012)", "Coleção 10", "Estimativa do sistema"],
+  ["Copernicus DEM — relevo", "GLO-30", "AWS Open Data"],
+  ["Clima — Open-Meteo (ERA5/GFS); risco de fogo — INPE", "Reanálise e previsão", "Consultado no ciclo do motor"],
+  ["Fumaça — Copernicus CAMS (via Open-Meteo Air Quality)", "Global, desde 08/2022", "Consultado no ciclo do motor"],
+  ["CAR — imóveis (SICAR)", "Consulta online", `Consultado em ${dHora(R.geradoEm)}`],
+  ["CAR — APP, Reserva Legal e demais camadas declaradas (SICAR)", "Base de downloads do Amazonas", "Arquivos de 03/10/2026"],
+  ["Embargos IBAMA e processos minerários ANM/SIGMINE", "Consulta online", `Consultado em ${dHora(R.geradoEm)}`],
+  ["SIGEF, assentamentos (INCRA); florestas públicas não destinadas (SFB); aldeias (FUNAI); mineração (MapBiomas); pistas e bombeiros", "Extração", "23/10/2026"],
+  ["Comunidades quilombolas (INCRA)", "Extração", "19/10/2026"],
+  ["Terras indígenas (FUNAI) e unidades de conservação (MMA/CNUC)", "Extração", "18/10/2026"],
+  ["Estradas — OpenStreetMap (Overpass)", "Atualização semanal", "Consultado no ciclo do motor"],
+  ["Biodiversidade — GBIF", "Ocorrências", "Consultado no ciclo do motor"],
+  ...(R.brm ? [["Brasil MAIS — alertas (Polícia Federal / convênio, Planet 3 m) — RESTRITO", "Arquivos do convênio", "IDs dos alertas e das imagens Planet no pacote de dados"]] : []),
+];
+const dHora = s => s ? new Date(s).toLocaleString("pt-BR", {timeZone: "America/Manaus"}) + " (Manaus)" : "–";
+function canonico(v) {  // JSON com chaves ordenadas: o mesmo conteúdo gera sempre o mesmo texto (e o mesmo hash)
+  if (Array.isArray(v)) return "[" + v.map(canonico).join(",") + "]";
+  if (v && typeof v === "object") return "{" + Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => JSON.stringify(k) + ":" + canonico(v[k])).join(",") + "}";
+  return JSON.stringify(v ?? null);
+}
+async function sha256(dados) {
+  const b = typeof dados === "string" ? new TextEncoder().encode(dados) : dados;
+  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", b))].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+// cenas medidas antes do registro da versão: o identificador Landsat já traz coleção, correção e tier
+const versaoPeloId = id => { const m = /^L[COT]0\d_(L2SP|L2SR)_\d{6}_\d{8}_(\d{8}_)?(\d{2})_(T\d|RT)$/.exec(id || ""); return m ? `Collection ${+m[3]} ${m[1]} Tier ${m[4].slice(1)}` : null; };
+const idCamada = p => p.cod_imovel || p.num_tad || p.PROCESSO || p.codigo_imo || p.cd_sipra || p.nr_process || p.terrai_nom || p.nome || p.nome_area || p.nm_comunid || null;
+function pacote() {
+  const {e, est, aiHa, raioM, camadas, brm, ndvi, usuario, parecer} = R;
+  const n = ndvi || {};
+  return {
+    sistema: "Fogo Forense — NIPED/PCAM · DPTC", formato: "pacote-relatorio/1",
+    relatorio_id: R.relId, gerado_em_utc: R.geradoEm, gerado_por: usuario ? {nome: usuario.nome, orgao: usuario.orgao, email: usuario.email} : null,
+    pagina: location.href.split("#")[0],
+    evento: {id: e.id, ponto: !!e.ponto, lat: e.lat, lon: e.lon, municipio: e.mun, inicio_utc: e.ini, fim_utc: e.fim, focos: e.n, satelites: e.sats, prioridade: e.score},
+    area_interesse: {tipo: POLI ? "poligono" : "circulo", raio_m: POLI ? null : raioM, poligono_lonlat: POLI, area_ha: +aiHa.toFixed(4), crs: "EPSG:4326"},
+    dados_painel: {gerado_em_utc: est.gerado_em, ultimo_foco_utc: est.ultimo_foco_utc, versao_motor: est.versao_motor || null},
+    analise_satelite: ndvi ? {
+      catalogo: STAC_URL, periodo: n.periodo, linha_base: n.linha_base, area: n.area, gerado_em: n.gerado_em, cenas_validas: n.n_validas,
+      criterio_quebra: n.quebra?.criterio || null, quebra: n.quebra || null,
+      cenas: (n.cenas || []).map(c => ({id: c.id, colecao: c.colecao, data: c.data, plataforma: c.plataforma || null, produto: c.produto || null,
+        versao: c.versao || (c.baseline ? "L2A baseline " + c.baseline : null) || versaoPeloId(c.id), atualizado_stac: c.atualizado_stac || null,
+        nuvem_cena: c.nuvem_cena ?? null, ndvi: c.ndvi ?? null, frac_valida: c.frac_valida ?? null})).sort((a, b) => (a.data + a.id).localeCompare(b.data + b.id)),
+      imagens: (n.imagens || []).filter(i => i.produto === "rgb").map(i => ({data: i.data, colecao: i.colecao, rotulo: i.rotulo, ndvi: i.ndvi})),
+      dnbr: n.dnbr ? {cena_antes: n.dnbr.cena_antes, cena_depois: n.dnbr.cena_depois, antes: n.dnbr.antes, depois: n.dnbr.depois, queimado_ha: n.dnbr.queimado_ha, areas_ha: n.dnbr.areas_ha} : null,
+    } : null,
+    consultas: camadas.map(c => ({base: c.nome, analisada: !!c.l, sobreposicao_ha: c.l ? +(c.ha || 0).toFixed(4) : null, menor_distancia_m: c.min == null ? null : Math.round(c.min),
+      itens: (c.itens || []).map(x => ({id: idCamada(x.f.properties || {}), sobreposicao_ha: x.ha == null ? null : +x.ha.toFixed(4), distancia_m: x.m == null ? null : Math.round(x.m)}))})),
+    brasil_mais: brm ? {restrito: true,
+      fogo: brm.fogo.map(({a, km}) => ({id: a[0], tipo: a[1], data_antes: a[3], data_depois: a[4], imagem_antes: a[8], imagem_depois: a[9], distancia_km: +km.toFixed(3)})),
+      desmatamento: brm.desm.map(({a, km}) => ({id: a[0], tipo: a[1], data_antes: a[3], data_depois: a[4], distancia_km: +km.toFixed(3)}))} : null,
+    parecer: parecer?.texto ? {gerado_em: parecer.gerado_em || null, texto: parecer.texto} : null,
+    bases: BASES_VERSOES(est).map(([nome, versao, referencia]) => ({nome, versao, referencia})),
+  };
+}
+function secCustodia(N, tab) {
+  const n = R.ndvi, cenas = n ? pacote().analise_satelite.cenas : [];
+  return sec(N(), "Cadeia de custódia e reprodutibilidade", `
+    <table class="tabela kv"><tbody>
+      <tr><td>Identificador do relatório</td><td class="mono">${esc(R.relId)}</td></tr>
+      <tr><td>Gerado em</td><td>${dHora(R.geradoEm)} · ${esc(R.geradoEm)} UTC${R.usuario ? ` · por ${esc(R.usuario.nome)} (${esc(R.usuario.orgao)})` : ""}</td></tr>
+      <tr><td>Dados do painel</td><td>Atualizados em ${dHora(R.est.gerado_em)}${R.est.versao_motor ? ` · versão do motor <span class="mono">${esc(R.est.versao_motor)}</span>` : ""}</td></tr>
+      <tr><td>Hash SHA-256 do conteúdo</td><td class="mono hash-conteudo">calculando…</td></tr>
+    </tbody></table>
+    <p class="nota">O hash do conteúdo é calculado sobre o pacote de dados do relatório (evento, área, cenas, medições, consultas, parecer e versões das bases), em JSON canônico. O pacote pode ser baixado pelo botão <b>Pacote de dados</b> e tem exatamente esse hash. Depois de salvar o PDF, use <b>Registrar PDF</b>: o sistema calcula o SHA-256 do arquivo e grava data, hora e autor do registro, que podem ser conferidos em <b>verificar.html</b>.</p>
+    ${n ? `<p class="rotulo">Tabela — Cenas de satélite usadas na análise (${cenas.length})</p>
+    ${tab(["Data", "Coleção / plataforma", "Identificador da cena (STAC)", "Versão de processamento", "Nuvem na cena", "NDVI"], cenas.map(c =>
+      `<tr><td class="mono">${dBR(c.data)}</td><td>${esc(c.colecao)}${c.plataforma ? " · " + esc(c.plataforma) : ""}</td><td class="mono pequena">${esc(c.id)}${c.produto && c.produto !== c.id ? `<br>${esc(c.produto)}` : ""}</td><td>${esc(c.versao || "–")}</td><td class="n">${c.nuvem_cena == null ? "–" : br(c.nuvem_cena, 0) + "%"}</td><td class="n">${br(c.ndvi, 3)}</td></tr>`))}
+    <p class="nota">Catálogo: ${STAC_URL} (coleções sentinel-2-l2a e landsat-c2-l2). Período ${dBR(n.periodo?.[0])} a ${dBR(n.periodo?.[1])} · linha de base ${dBR(n.linha_base?.[0])} a ${dBR(n.linha_base?.[1])} · ${n.area?.poligono ? "polígono desenhado" : `círculo de ${fmt(n.area?.raio_m)} m`}${n.dnbr ? ` · dNBR entre <span class="mono">${esc(n.dnbr.cena_antes)}</span> e <span class="mono">${esc(n.dnbr.cena_depois)}</span>` : ""}. Critério de quebra: ${esc(n.quebra?.criterio || "–")}.</p>` : ""}
+    <p class="rotulo">Tabela — Versões das bases de dados</p>
+    ${tab(["Base", "Versão / edição", "Referência temporal"], BASES_VERSOES(R.est).map(([a, b, c]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td><td>${esc(c)}</td></tr>`))}
+    <p class="nota">Bases consultadas online refletem o estado da fonte na data indicada; repetir a consulta depois pode dar resultado diferente se a fonte for atualizada. Os identificadores das cenas permitem refazer as medições sobre as mesmas imagens.</p>`, "custodia-sec");
+}
+async function atualizarHash() {
+  const txt = canonico(pacote()), h = await sha256(txt);
+  R.pacoteTxt = txt; R.hashConteudo = h;
+  document.querySelectorAll(".hash-conteudo").forEach(el => el.textContent = h);
+  const rod = `Fogo Forense · relatório ${R.relId} · SHA-256 do conteúdo ${h}`;
+  $("#rodapeCustodia").textContent = rod;
+  document.documentElement.style.setProperty("--rodape-custodia", JSON.stringify(rod));  // rodapé de cada página impressa
+  return h;
+}
+async function registrar(tipo, sha, extra = {}) {
+  return postar("api/custodia?acao=registrar", {tipo, sha256: sha, relatorio_id: R.relId, sha256_conteudo: R.hashConteudo, ...extra});
+}
+$("#baixarPacote").onclick = async () => {
+  if (R.tarefas) { estado("Concluindo análise e parecer…"); await R.tarefas; }
+  const h = await atualizarHash();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([R.pacoteTxt], {type: "application/json"}));
+  a.download = `pacote_${R.relId}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  if (R.usuario) registrar("conteudo", h, {nome_arquivo: a.download, tamanho: new TextEncoder().encode(R.pacoteTxt).length}).catch(x => console.warn("registro", x));
+  estado("Pacote baixado · SHA-256 " + h.slice(0, 12) + "…");
+};
+$("#registrarPdf").onclick = () => {
+  if (!R.usuario) return alert("Faça login para registrar o PDF.");
+  $("#arqPdf").value = ""; $("#arqPdf").click();
+};
+$("#arqPdf").onchange = async ev => {
+  const f = ev.target.files[0]; if (!f) return;
+  estado("Calculando SHA-256 do PDF…");
+  try {
+    const h = await sha256(await f.arrayBuffer());
+    await atualizarHash();
+    const r = await registrar("pdf", h, {nome_arquivo: f.name, tamanho: f.size});
+    registrar("conteudo", R.hashConteudo).catch(() => {});
+    const g = r.registro;
+    $("#termo").hidden = false;
+    $("#termo").innerHTML = `<h3>${r.novo ? "PDF registrado" : "Este PDF já estava registrado"}</h3>
+      <table class="tabela kv"><tbody>
+        <tr><td>Arquivo</td><td>${esc(g.nome_arquivo)} · ${fmt(g.tamanho_bytes)} bytes</td></tr>
+        <tr><td>SHA-256 do PDF</td><td class="mono">${esc(g.sha256)}</td></tr>
+        <tr><td>Relatório</td><td class="mono">${esc(g.relatorio_id)}</td></tr>
+        <tr><td>SHA-256 do conteúdo</td><td class="mono">${esc(g.sha256_conteudo || "–")}</td></tr>
+        <tr><td>Registrado em</td><td>${dHora(g.registrado_em_utc)} · ${esc(g.registrado_em_utc)}</td></tr>
+        <tr><td>Registrado por</td><td>${esc(g.registrado_por?.nome)} (${esc(g.registrado_por?.orgao)})</td></tr></tbody></table>
+      <p class="nota">Cite o SHA-256 do PDF no documento de encaminhamento (ofício, SEI ou laudo). Qualquer alteração no arquivo muda o hash. Conferência: <a href="verificar.html?sha256=${g.sha256}" target="_blank">verificar.html</a>.</p>
+      <button type="button" class="botao claro pequeno" onclick="navigator.clipboard.writeText('${g.sha256}');this.textContent='Copiado'">Copiar hash</button>
+      <button type="button" class="botao claro pequeno" onclick="this.closest('#termo').hidden=true">Fechar</button>`;
+    estado(r.novo ? "PDF registrado" : "PDF já registrado");
+  } catch (x) { console.error(x); estado("Falha ao registrar o PDF", false); alert("Não foi possível registrar: " + x.message); }
+};
 
 // ------------------------------------------------------------ mapas
 function desenharMapas() {
@@ -549,7 +691,7 @@ function quandoProntos() {
   return Promise.all(mapas.map(m => new Promise(r => { if (m.loaded() && m.areTilesLoaded()) return r(); m.once("idle", r); setTimeout(r, 15000); })));
 }
 $("#imprimir").onclick = async () => { if (R.tarefas) { estado("Concluindo análise e parecer…"); await R.tarefas; } estado("Aguardando mapas e imagens…"); await quandoProntos();
-  await Promise.all([...document.querySelectorAll("#folha img")].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; setTimeout(r, 20000); }))); estado("Pronto para imprimir"); window.print(); };
+  await Promise.all([...document.querySelectorAll("#folha img")].map(im => im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; setTimeout(r, 20000); }))); await atualizarHash(); estado("Pronto para imprimir"); window.print(); };
 $("#refazer").onclick = () => montar().catch(erro);
 function erro(x) { console.error(x); estado("Erro ao montar", false); $("#folha").innerHTML = `<div class="cartao"><p>Não foi possível montar o relatório: ${esc(x.message)}</p></div>`; }
 montar().catch(erro);

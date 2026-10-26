@@ -59,14 +59,19 @@
 ul.leitura{margin:4px 0 8px;padding-left:20px;font-size:13.5px;line-height:1.55}
 ul.leitura li{margin:0 0 4px}
 .rodape-rel{font-size:12px;color:var(--cinza-texto);text-align:center;margin:10px 0 30px}
+.rodape-rel .mono,.hash-conteudo{word-break:break-all}
+td.pequena{font-size:11px;word-break:break-all}
+.custodia-sec .tabela td{vertical-align:top}
+#termo{position:fixed;right:16px;top:70px;z-index:50;max-width:min(560px,calc(100vw - 32px));background:var(--fundo-cartao,#fff);border:1px solid var(--grade);border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:14px 16px}
+#termo h3{margin:0 0 8px}#termo .tabela td.mono{word-break:break-all;font-size:12px}
 @page{size:A4;margin:14mm 11mm 15mm 11mm;
-  @bottom-left{content:"Fogo Forense · NIPED/PCAM · DPTC — documento automatizado, não substitui laudo pericial";font:7.5pt "Segoe UI",sans-serif;color:#5b6675}
+  @bottom-left{content:var(--rodape-custodia, "Fogo Forense · NIPED/PCAM · DPTC — documento automatizado, não substitui laudo pericial");font:6.5pt "Segoe UI",sans-serif;color:#5b6675}
   @bottom-right{content:"Pág. " counter(page) " / " counter(pages);font:8pt "Segoe UI",sans-serif;color:#5b6675}}
 @media print{
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   body{background:#fff;font-size:12.5px}
   .topo{position:static}
-  .topo .nao-imprime{display:none!important}
+  .topo .nao-imprime,#termo{display:none!important}
   .rel{padding:10px 0 0;max-width:none}
   .cartao{break-inside:auto;padding:12px 14px;margin-bottom:10px}
   .cartao.inteiro,figure,.tabela tr,.indicador{break-inside:avoid}
@@ -89,7 +94,12 @@ ul.leitura li{margin:0 0 4px}
   <button type="button" class="botao claro pequeno nao-imprime" id="refazer">Recalcular</button>
   <span class="ao-vivo nao-imprime" id="estado"><i></i><span id="estadoTxt">Montando…</span></span>
   <button type="button" class="botao claro pequeno nao-imprime" id="imprimir">Imprimir / salvar PDF</button>
+  <button type="button" class="botao claro pequeno nao-imprime" id="registrarPdf" title="Depois de salvar o PDF, escolha o arquivo: o sistema calcula o SHA-256 e registra data, hora e autor">Registrar PDF</button>
+  <button type="button" class="botao claro pequeno nao-imprime" id="baixarPacote" title="Pacote de dados do relatório (JSON) com as cenas, consultas e versões das bases; o SHA-256 dele é o impresso no relatório">Pacote de dados</button>
+  <input type="file" id="arqPdf" accept="application/pdf,.pdf" hidden>
 </header>
+<div id="termo" hidden></div>
+<span id="rodapeCustodia" hidden></span>
 <main class="conteudo rel" id="folha"><div class="cartao"><p class="carregando">Montando o relatório…</p></div></main>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
