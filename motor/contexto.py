@@ -1,7 +1,8 @@
 """Contexto fundiário, hidrográfico e de infraestrutura de cada evento.
 
   Assentamentos e SIGEF: INCRA (public/bases). Florestas públicas não destinadas: Serviço Florestal Brasileiro, CNFP 2025.
-  Sub-bacias: ANA/SNIRH (DNAEE). Aldeias: FUNAI. Mineração: MapBiomas (2023). Pistas e bombeiros: OpenStreetMap.
+  Sub-bacias: ANA/SNIRH (DNAEE). Aldeias: FUNAI. Localidades indígenas: IBGE, Censo 2022. Mineração: MapBiomas (2023).
+  Pistas e bombeiros: OpenStreetMap; registro da pista no DECEA (motor/bases_inde.py).
   PRODES (desmatamento anual, INPE/TerraBrasilis): consulta por evento, em cache.
 """
 import json
@@ -125,7 +126,8 @@ def prodes(eventos, score_min=50, max_novos=150):
 def marcar(eventos):
     arv_f, fpnd = _indice(_base("fpnd_am.json"))
     arv_s, sigef = _indice(_base("sigef_am.json"))
-    aldeias, mina, pistas, bomb = (_Pontos(_base(n)) for n in ("aldeias_am.json", "mineracao_am.json", "pistas_am.json", "bombeiros_am.json"))
+    aldeias, mina, pistas, bomb, locind = (_Pontos(_base(n)) for n in ("aldeias_am.json", "mineracao_am.json", "pistas_am.json", "bombeiros_am.json",
+                                                                     "localidades_indigenas_am.json"))
     arv_a, assent = _indice(json.load(open(ASSENT)) if ASSENT.exists() else None)
     arv_b, bacias = _indice(_bacias())
     na = nb = 0
@@ -146,7 +148,7 @@ def marcar(eventos):
                 e["det"]["bacia"] = {"nome": pr.get("DNS_NM"), "codigo": pr.get("DNS_NU_SUB"), "fonte": "ANA — sub-bacias DNAEE"}
                 nb += 1
                 break
-        for k in ("fpnd", "sigef", "aldeias", "mineracao", "pista", "bombeiros"):
+        for k in ("fpnd", "sigef", "aldeias", "mineracao", "pista", "bombeiros", "loc_indigenas"):
             e["det"].pop(k, None)
         if arv_f is not None:
             for i in arv_f.query(p, predicate="intersects"):
@@ -169,7 +171,13 @@ def marcar(eventos):
                                      "mais_perto_km": round(mi[0][0], 1), "tipo_mais_perto": mi[0][1].get("t")}
         pi = pistas.proximos(e, 20)
         if pi:
-            e["det"]["pista"] = {"km": round(pi[0][0], 1), "nome": pi[0][1].get("nome"), "tipo": pi[0][1].get("tipo")}
+            dc = pi[0][1].get("decea") or {}
+            e["det"]["pista"] = {"km": round(pi[0][0], 1), "nome": pi[0][1].get("nome"), "tipo": pi[0][1].get("tipo"),
+                                 "homologada": dc.get("homologada"), "decea": dc.get("ciad")}
+        li = locind.proximos(e, 10)
+        if li:
+            e["det"]["loc_indigenas"] = {"n_10km": len(li), "mais_perto_km": round(li[0][0], 1), "nome": li[0][1].get("nome"),
+                                         "fora_ti_10km": sum(1 for _, x in li if not x.get("ti")), "ti": li[0][1].get("ti")}
         bo = bomb.proximos(e, 300)
         if bo:
             e["det"]["bombeiros"] = {"km": round(bo[0][0]), "nome": bo[0][1].get("nome")}

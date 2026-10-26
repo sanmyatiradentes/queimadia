@@ -7,7 +7,7 @@ import sys
 import time
 import traceback
 
-from . import (ar, biodiversidade, car_camadas, clima, contexto, erbs, estradas, goes, ingest, eventos, lixoes, mudanca, publicar,
+from . import (ar, biodiversidade, car_camadas, fiscalizacao, clima, contexto, erbs, estradas, goes, ingest, eventos, lixoes, mudanca, publicar,
                precalcular, riscoprev, territorio)
 
 
@@ -56,6 +56,8 @@ def ciclo(rapido=False):
                     ("floresta pública (prioridade)", lambda: len(contexto.aplicar(evs + alertas))),
                     ("PRODES", lambda: contexto.prodes(alertas + evs)),
                     ("CAR declarado (APP, Reserva Legal)", lambda: car_camadas.enriquecer(alertas + evs)),
+                    ("fiscalização (IBAMA, ICMBio)", lambda: fiscalizacao.marcar(evs + alertas, atualizar=not rapido)),
+                    ("autuação anterior por fogo (prioridade)", lambda: len(fiscalizacao.aplicar(evs + alertas))),
                     ("biodiversidade (GBIF)", lambda: biodiversidade.enriquecer(alertas + evs)),
                     ("risco previsto (INPE)", lambda: len(riscoprev.atualizar().get("dias", [])))):
         try:

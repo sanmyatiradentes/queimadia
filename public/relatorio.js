@@ -38,11 +38,18 @@ const centroide = (la, lo) => `${dms(la, "N", "S")}; ${dms(lo, "E", "W")}`;
 const kmEntre = (la1, lo1, la2, lo2) => turf.distance([lo1, la1], [lo2, la2], {units: "kilometers"});
 
 // ------------------------------------------------------------ geometria: sobreposição e proximidade
+const ehPonto = f => /Point/.test(f?.geometry?.type || "");
 function sobreposicaoHa(f, ai) {
+  if (ehPonto(f)) return null;
   try { const i = turf.intersect(turf.featureCollection([f, ai])); return i ? turf.area(i) / 1e4 : 0; } catch (e) { return null; }
 }
-function distanciaM(f, centro, raioM) {   // da borda da AI até o polígono (0 se sobrepõe)
+function distanciaM(f, centro, raioM) {   // da borda da AI até o polígono ou ponto (0 se sobrepõe ou está dentro)
   try {
+    if (ehPonto(f)) {
+      const pt = turf.point(turf.getCoords(turf.flatten(f).features[0]));
+      if (R.aiAtual && turf.booleanPointInPolygon(pt, R.aiAtual)) return 0;
+      return Math.max(0, turf.distance(centro, pt, {units: "meters"}) - raioM);
+    }
     if (turf.booleanPointInPolygon(centro, f)) return 0;
     const linhas = turf.flatten(turf.polygonToLine(f)).features;
     const d = Math.min(...linhas.map(l => turf.pointToLineDistance(centro, l, {units: "meters"})));
@@ -87,7 +94,11 @@ async function montar() {
 
   estado("Consultando bases públicas…");
   const remota = n => api(`api/bases?base=${n}&bbox=${bbStr}`).then(d => d.features).catch(() => null);
-  const [car, emb, anm] = await Promise.all([remota("car"), remota("embargos"), remota("anm")]);
+  R.aiAtual = ai;
+  const [car, emb, anm, autos, apre, icmb, aerod, locind] = await Promise.all([remota("car"), remota("embargos"), remota("anm"), remota("autos"), remota("apreensoes"), remota("icmbio"),
+    fetch("bases/aerodromos_am.json").then(r => r.json()).catch(() => null), fetch("bases/localidades_indigenas_am.json").then(r => r.json()).catch(() => null)]);
+  const dataMs = v => v == null ? "–" : typeof v === "number" ? dBR(new Date(v).toISOString()) : dBR(v);
+  const FOGO_RX = /\bfogo\b|queimad|inc[eê]ndi/i;
 
   const tisP = noRetangulo(tis, bb), ucsP = noRetangulo(ucs, bb), quilP = quil ? noRetangulo(quil, bb) : null, assentP = assent ? noRetangulo(assent, bb) : null,
     fpndP = fpnd ? noRetangulo(fpnd, bb) : null, sigefP = sigef ? noRetangulo(sigef, bb) : null;
@@ -110,7 +121,16 @@ async function montar() {
       desc: p => `${esc(p.nome_proje)} · ${esc(p.municipio)} · ${p.num_famili ?? "–"} famílias · ${br(+p.area_calc_, 0)} ha · fase ${esc(p.fase)} · código ${esc(p.cd_sipra)}`},
     {k: "emb", nome: "Embargos IBAMA", l: emb, cor: COR.emb, prox: true, alerta: "sim",
       desc: p => `${p.nome_embargado ? `<b>Embargado: ${esc(p.nome_embargado)}</b>${p.cpf_cnpj_embargado ? ` (${esc(p.cpf_cnpj_embargado)})` : ""} · ` : ""}${p.nome_imovel ? `imóvel ${esc(p.nome_imovel)} · ` : ""}TAD ${esc(p.num_tad)}${p.serie_tad ? "-" + esc(p.serie_tad) : ""} de ${p.dat_embargo ? new Date(p.dat_embargo).toLocaleDateString("pt-BR") : "–"} · ${br(p.qtd_area_embargada, 2)} ha · ${p.des_infracao ? esc(p.des_infracao) + " · " : ""}processo ${esc(p.num_processo || "")}`},
-    {k: "icmbio", nome: "Embargos ICMBio", l: null, cor: COR.emb, prox: false, alerta: "sim", desc: () => ""},
+    {k: "icmbio", nome: "Embargos ICMBio (via INDE)", l: icmb, cor: COR.emb, prox: true, alerta: "sim",
+      desc: p => `${p.autuado ? `<b>Autuado: ${esc(p.autuado)}</b>${p.cpf_cnpj ? ` (${esc(p.cpf_cnpj)})` : ""} · ` : ""}Embargo ${esc(p.numero_emb)}${p.serie ? "-" + esc(p.serie) : ""} · ${dBR(p.data)} · ${esc(p.nome_uc || "")} · ${esc(p.desc_inf_1 || p.tipo_infra || "")}${FOGO_RX.test(p.desc_inf_1 || "") ? " · <b>USO DE FOGO</b>" : ""} · processo ${esc(p.processo || "–")}`},
+    {k: "autos", nome: "Autos de infração IBAMA (SISCOM, via INDE)", l: autos, cor: "#ff6d00", prox: true, alerta: "atencao", pontos: true,
+      desc: p => `${p.nome_infrator ? `<b>Autuado: ${esc(p.nome_infrator)}</b>${p.cpf_cnpj_infrator ? ` (${esc(p.cpf_cnpj_infrator)})` : ""} · ` : ""}Auto ${esc(p.num_auto_infracao)}${p.ser_auto_infracao ? "-" + esc(p.ser_auto_infracao) : ""} · ${dataMs(p.dt_fato_infracional || p.dat_hora_auto_infracao)} · ${esc(p.tipo_infracao || "")}${FOGO_RX.test(p.des_auto_infracao || "") ? " · <b>USO DE FOGO</b>" : ""} · ${esc(p.des_status_formulario || "")}${p.sit_cancelado === "S" ? " (cancelado)" : ""} · R$ ${br(p.val_auto_infracao, 2)} · processo ${esc(p.nu_processo_formatado || "–")}${p.des_auto_infracao ? `<br><span class="nota">${esc(String(p.des_auto_infracao).slice(0, 220))}</span>` : ""}`},
+    {k: "apre", nome: "Termos de apreensão IBAMA (SISCOM, via INDE)", l: apre, cor: "#ffab00", prox: true, alerta: "atencao", pontos: true,
+      desc: p => `${p.no_pessoa_apreensao ? `<b>${esc(p.no_pessoa_apreensao)}</b>${p.nu_cpf_cnpj_pessoa_apreensao ? ` (${esc(p.nu_cpf_cnpj_pessoa_apreensao)})` : ""} · ` : ""}TAD ${esc(p.cd_tad)}${p.cd_serie_tad ? "-" + esc(p.cd_serie_tad) : ""} · ${dataMs(p.dt_apreensao)} · ${esc(p.ds_sit_apreensao || "")}${p.st_cancelado === "S" ? " (cancelado)" : ""} · processo ${esc(p.nu_processo_formatado || "–")}${p.ds_tad ? `<br><span class="nota">${esc(String(p.ds_tad).slice(0, 220))}</span>` : ""}`},
+    {k: "locind", nome: "Localidades indígenas (IBGE, Censo 2022)", l: locind ? noRetangulo(locind, bb) : null, cor: COR.ti, prox: true, alerta: "atencao", pontos: true,
+      desc: p => `${esc(p.nome)} · ${esc(p.municipio)} · ${esc(p.situacao || "")}${p.ti ? ` · TI ${esc(p.ti)}` : " · fora de terra indígena"}`},
+    {k: "aerod", nome: "Aeródromos e helipontos registrados (DECEA)", l: aerod ? noRetangulo(aerod, bb) : null, cor: "#90caf9", prox: true, alerta: "nao", pontos: true,
+      desc: p => `${esc(p.nome)} · ${esc(p.tipo)} · ${esc(p.ciad || "")}${p.icao ? " / " + esc(p.icao) : ""} · uso ${esc(p.uso || "–")} · ${esc(p.operacao || "")}`},
     {k: "anm", nome: "Processos minerários (ANM/SIGMINE)", l: anm, cor: COR.anm, prox: true, alerta: "atencao",
       desc: p => `Processo ${esc(p.PROCESSO)} · ${esc(p.FASE)} · ${esc(p.SUBS)} (${esc(p.USO)}) · ${br(p.AREA_HA, 2)} ha`},
   ];
@@ -357,6 +377,8 @@ document.addEventListener("click", ev => { if (ev.target.id === "gerarParecer") 
 const sec = (n, t, corpo, extra = "") => `<section class="cartao ${extra}"><h2><span class="num-sec">${n}</span>${t}</h2>${corpo}</section>`;
 const resultado = c => {
   if (!c.l) return `<span class="res-nd">NÃO ANALISADO</span>`;
+  if (c.pontos) { const n = (c.itens || []).filter(x => x.m === 0).length;
+    return n ? `<span class="${c.alerta === "sim" ? "res-sim" : "res-nd"}">${n} NA AI</span>` : `<span class="res-nao">NENHUM NA AI</span>`; }
   if (c.ha > 0) return `<span class="${c.alerta === "sim" ? "res-sim" : "res-nd"}">SOBREPÕE</span>`;
   return `<span class="res-nao">NÃO SOBREPÕE</span>`;
 };
@@ -448,7 +470,7 @@ function render() {
   const cab = c => `${esc(c.nome)}`;
   html.push(sec(N(), "Consulta às bases de dados", `
     <p class="rotulo">Tabela — Resultado da consulta por sobreposição com a AI (${br(aiHa, 2)} ha)</p>
-    ${tab(["Base", "Área de sobreposição com a AI (ha)", "Resultado"], camadas.map(c => `<tr><td>${cab(c)}</td><td class="n">${c.l ? br(c.ha, 2) : "–"}</td><td>${resultado(c)}</td></tr>`))}
+    ${tab(["Base", "Área de sobreposição com a AI (ha)", "Resultado"], camadas.map(c => `<tr><td>${cab(c)}</td><td class="n">${c.l && !c.pontos ? br(c.ha, 2) : "–"}</td><td>${resultado(c)}</td></tr>`))}
     <p class="rotulo">Tabela — Resultado da consulta por proximidade (até ${PROX_KM} km da borda da AI)</p>
     ${tab(["Base", "Distância (m)", "Resultado"], camadas.filter(c => c.prox).map(c => `<tr><td>${cab(c)}</td><td class="n">${!c.l ? "–" : c.min == null || c.min > PROX_KM * 1000 ? "Fora do raio" : br(c.min, 0)}</td>
       <td>${!c.l ? `<span class="res-nd">NÃO ANALISADO</span>` : c.min === 0 ? resultado(c) : c.min != null && c.min <= PROX_KM * 1000 ? `<span class="res-nd">NO ENTORNO</span>` : `<span class="res-nao">FORA DO RAIO</span>`}</td></tr>`))}
@@ -528,6 +550,10 @@ const BASES_VERSOES = est => [
   ["CAR — imóveis (SICAR)", "Consulta online", `Consultado em ${dHora(R.geradoEm)}`],
   ["CAR — APP, Reserva Legal e demais camadas declaradas (SICAR)", "Base de downloads do Amazonas", "Arquivos de 03/10/2026"],
   ["Embargos IBAMA e processos minerários ANM/SIGMINE", "Consulta online", `Consultado em ${dHora(R.geradoEm)}`],
+  ["Autos de infração e termos de apreensão IBAMA (SISCOM, via INDE)", "Consulta online", `Consultado em ${dHora(R.geradoEm)}; histórico do motor atualizado semanalmente`],
+  ["Embargos ICMBio (via INDE)", "Consulta online", `Consultado em ${dHora(R.geradoEm)}`],
+  ["Aeródromos e helipontos registrados — DECEA/AISWEB (via INDE)", "Extração", "26/10/2026"],
+  ["Localidades indígenas — IBGE, Censo Demográfico 2022 (via INDE)", "Versão 02/06/2025", "Extração de 26/10/2026"],
   ["SIGEF, assentamentos (INCRA); florestas públicas não destinadas (SFB); aldeias (FUNAI); mineração (MapBiomas); pistas e bombeiros", "Extração", "23/10/2026"],
   ["Comunidades quilombolas (INCRA)", "Extração", "19/10/2026"],
   ["Terras indígenas (FUNAI) e unidades de conservação (MMA/CNUC)", "Extração", "18/10/2026"],
@@ -547,7 +573,8 @@ async function sha256(dados) {
 }
 // cenas medidas antes do registro da versão: o identificador Landsat já traz coleção, correção e tier
 const versaoPeloId = id => { const m = /^L[COT]0\d_(L2SP|L2SR)_\d{6}_\d{8}_(\d{8}_)?(\d{2})_(T\d|RT)$/.exec(id || ""); return m ? `Collection ${+m[3]} ${m[1]} Tier ${m[4].slice(1)}` : null; };
-const idCamada = p => p.cod_imovel || p.num_tad || p.PROCESSO || p.codigo_imo || p.cd_sipra || p.nr_process || p.terrai_nom || p.nome || p.nome_area || p.nm_comunid || null;
+const idCamada = p => p.cod_imovel || p.num_tad || (p.num_auto_infracao && `${p.num_auto_infracao}-${p.ser_auto_infracao || ""}`) || (p.cd_tad && `TAD ${p.cd_tad}-${p.cd_serie_tad || ""}`) ||
+  (p.numero_emb && `${p.numero_emb}-${p.serie || ""}`) || p.ciad || p.cod || p.PROCESSO || p.codigo_imo || p.cd_sipra || p.nr_process || p.terrai_nom || p.nome || p.nome_area || p.nm_comunid || null;
 function pacote() {
   const {e, est, aiHa, raioM, camadas, brm, ndvi, usuario, parecer} = R;
   const n = ndvi || {};
@@ -659,7 +686,8 @@ function desenharMapas() {
   const sobre = m => {
     for (const c of camadas) if (c.itens?.length) {
       m.addSource(c.k, {type: "geojson", data: fc(c.itens.map(x => x.f))});
-      m.addLayer({id: c.k, type: "line", source: c.k, paint: {"line-color": c.cor, "line-width": 1.6}});
+      m.addLayer(c.pontos ? {id: c.k, type: "circle", source: c.k, paint: {"circle-radius": 3.5, "circle-color": c.cor, "circle-stroke-color": "#000", "circle-stroke-width": .6}}
+        : {id: c.k, type: "line", source: c.k, paint: {"line-color": c.cor, "line-width": 1.6}});
     }
     if (brm) {
       const pts = [...brm.fogo.map(x => ["br" + x.a[1], x.a]), ...brm.desm.map(x => [x.a[1] === "G" ? "brG" : "brD", x.a])];

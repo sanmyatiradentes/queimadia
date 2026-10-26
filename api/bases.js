@@ -1,7 +1,7 @@
 // Fogo Forense — consulta bases fundiárias e ambientais públicas para o relatório do evento.
 // Os serviços oficiais não liberam acesso direto pelo navegador (CORS); esta função repassa só as
 // bases listadas abaixo, para um retângulo pequeno, e devolve GeoJSON.
-//   GET /api/bases?base=car|embargos|anm&bbox=oeste,sul,leste,norte
+//   GET /api/bases?base=car|embargos|anm|autos|apreensoes|icmbio&bbox=oeste,sul,leste,norte
 import { json, usuarioAtual } from "./_conta.js";
 
 const ARCGIS = (url, campos) => b =>
@@ -12,10 +12,23 @@ const BASES = {
   // IBAMA: áreas embargadas. Nome e CPF/CNPJ do embargado (publicados pelo IBAMA) só para usuário logado
   embargos: ARCGIS("https://pamgia.ibama.gov.br/server/rest/services/01_Publicacoes_Bases/adm_embargos_ibama_a/MapServer/0",
     "num_tad,serie_tad,dat_embargo,municipio,des_infracao,num_auto_infracao,num_processo,qtd_area_embargada,unid_controle,sit_desmatamento,nome_imovel,nome_embargado,cpf_cnpj_embargado"),
+  // IBAMA (SISCOM, via INDE): autos de infração e termos de apreensão. Autuado e documento só para usuário logado
+  autos: ARCGIS("https://pamgia.ibama.gov.br/server/rest/services/SISCOM/publico/MapServer/0",
+    "num_auto_infracao,ser_auto_infracao,dat_hora_auto_infracao,dt_fato_infracional,tipo_infracao,des_auto_infracao,val_auto_infracao,sit_cancelado,des_status_formulario,nu_processo_formatado,qt_area,municipio,nome_infrator,cpf_cnpj_infrator"),
+  apreensoes: ARCGIS("https://pamgia.ibama.gov.br/server/rest/services/SISCOM/publico/MapServer/1",
+    "cd_tad,cd_serie_tad,dt_apreensao,ds_sit_apreensao,st_cancelado,nu_processo_formatado,ds_tad,no_municipio,no_pessoa_apreensao,nu_cpf_cnpj_pessoa_apreensao"),
+  // ICMBio (via INDE): áreas embargadas em UC federais (WFS 1.0: bbox em lon,lat)
+  icmbio: b => `https://geoservicos.inde.gov.br/geoserver/ICMBio/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=ICMBio:embargos_icmbio&outputFormat=application/json&maxFeatures=200&bbox=${b.join(",")}`,
   // ANM: processos minerários (SIGMINE)
   anm: ARCGIS("https://geo.anm.gov.br/arcgis/rest/services/SIGMINE/dados_anm/MapServer/0", "PROCESSO,FASE,SUBS,USO,AREA_HA,ULT_EVENTO"),
 };
-const PRIVADOS = ["nome_embargado", "cpf_cnpj_embargado", "NOME"];
+// dados pessoais publicados pelos órgãos: [campos só para logado, campo de documento a mascarar]
+const PESSOAIS = {
+  embargos: [["nome_embargado", "cpf_cnpj_embargado"], "cpf_cnpj_embargado"],
+  autos: [["nome_infrator", "cpf_cnpj_infrator", "des_auto_infracao"], "cpf_cnpj_infrator"],
+  apreensoes: [["no_pessoa_apreensao", "nu_cpf_cnpj_pessoa_apreensao", "ds_tad"], "nu_cpf_cnpj_pessoa_apreensao"],
+  icmbio: [["autuado", "cpf_cnpj", "obs"], "cpf_cnpj"],
+};
 // CPF (pessoa física) mascarado; CNPJ (empresa) completo
 function documento(v) {
   const d = String(v || "").replace(/\D/g, "");
@@ -37,16 +50,18 @@ export default async function handler(req, res) {
     clearTimeout(t);
     if (!r.ok) return json(res, 502, { erro: `Serviço respondeu ${r.status}.` });
     const d = await r.json();
-    const logado = base === "embargos" && await usuarioAtual(req).catch(() => null);
+    const pes = PESSOAIS[base], logado = pes && await usuarioAtual(req).catch(() => null);
     for (const f of d.features || []) {
       if (!f.properties) continue;
-      if (logado) f.properties.cpf_cnpj_embargado = documento(f.properties.cpf_cnpj_embargado);
-      else for (const k of PRIVADOS) delete f.properties[k];
+      if (pes && logado) f.properties[pes[1]] = documento(f.properties[pes[1]]);
+      else if (pes) for (const k of pes[0]) delete f.properties[k];
       delete f.properties.NOME;
     }
-    return json(res, 200, { type: "FeatureCollection", features: d.features || [], consultado_em: new Date().toISOString() },
-      // embargos nunca no cache compartilhado: a resposta depende de quem está logado
-      { "Cache-Control": base === "embargos" ? "private, no-store" : "public, s-maxage=86400, stale-while-revalidate=604800" });
+    // autos e apreensões: sem coordenada no serviço, ficam fora (não dá para posicionar)
+    const feats = (d.features || []).filter(f => f.geometry || !["autos", "apreensoes"].includes(base));
+    return json(res, 200, { type: "FeatureCollection", features: feats, consultado_em: new Date().toISOString() },
+      // bases com dados pessoais nunca no cache compartilhado: a resposta depende de quem está logado
+      { "Cache-Control": pes ? "private, no-store" : "public, s-maxage=86400, stale-while-revalidate=604800" });
   } catch (e) {
     return json(res, 504, { erro: "Serviço indisponível no momento." });
   }

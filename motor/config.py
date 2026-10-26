@@ -49,6 +49,7 @@ PESOS = {
     "ignicao_desfavoravel": 10,
     "conversao_florestal": 15,
     "floresta_publica_nd": 15,
+    "autuacao_fogo_previa": 10,
 }
 INDICADORES = list(PESOS)
 DESCRICAO_INDICADORES = {
@@ -74,6 +75,9 @@ DESCRICAO_INDICADORES = {
     "floresta_publica_nd": ("Floresta pública não destinada",
                             "centro do evento em gleba pública sem destinação (Cadastro Nacional de Florestas Públicas 2025, tipo B): "
                             "desmatamento e fogo nessas áreas são associados à grilagem de terras públicas"),
+    "autuacao_fogo_previa": ("Autuação anterior por uso de fogo",
+                             "auto de infração do IBAMA por uso de fogo a até 3 km do evento, nos 10 anos anteriores (SISCOM, via INDE): "
+                             "uso ilícito do fogo já constatado no local; não identifica o autor deste evento"),
 }
 
 CREDITO = "Desenvolvido pelo NIPED/PCAM"

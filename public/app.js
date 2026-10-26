@@ -18,7 +18,7 @@ const IND_TXT = {
   uso_sustentavel: "UC de uso sustentável", reincidencia: "Reincidência", multiplos_focos_dia: "≥3 focos no mesmo dia",
   periodo_proibitivo: "Período proibitivo", cicatriz_deter: "Cicatriz DETER",
   ignicao_desfavoravel: "Ignição em tempo desfavorável", conversao_florestal: "Conversão de floresta (MapBiomas)",
-  floresta_publica_nd: "Floresta pública não destinada",
+  floresta_publica_nd: "Floresta pública não destinada", autuacao_fogo_previa: "Autuação anterior por fogo (IBAMA)",
 };
 // nome curto de um indicador; tolera indicadores novos vindos do motor (nunca quebra a tela)
 const indTxt = k => IND_TXT[k] || window.Q?.est?.descricao_indicadores?.[k]?.[0] || String(k).replace(/_/g, " ");
@@ -287,7 +287,18 @@ function blocoConfronto(e) {
   if (d.prodes?.total_ha) intenc.push(`PRODES: ${br(d.prodes.total_ha, 1)} ha desmatados a até 1 km em ${Object.keys(d.prodes.anos_ha).join(", ")}: histórico de conversão (não independente do DETER e do MapBiomas)`);
   if (d.sigef?.no_ponto?.length) inconc.push(`Imóvel certificado no SIGEF no ponto: ${d.sigef.no_ponto[0].nome_area} (código ${d.sigef.no_ponto[0].codigo_imo}): pista para identificar o detentor, não prova autoria`);
   if (d.mineracao?.garimpo_ha_3km) inconc.push(`Garimpo mapeado a ${br(d.mineracao.mais_perto_km, 1)} km (${br(d.mineracao.garimpo_ha_3km, 1)} ha a até 3 km; MapBiomas 2023): contexto de atividade ilícita a esclarecer`);
-  if (d.pista?.km <= 5) inconc.push(`Pista de pouso a ${br(d.pista.km, 1)} km (${d.pista.nome}; OpenStreetMap): acesso aéreo ao local`);
+  if (d.pista?.km <= 5) inconc.push(`Pista de pouso a ${br(d.pista.km, 1)} km (${d.pista.nome}; OpenStreetMap)${d.pista.homologada === false ? ", não encontrada no cadastro de aeródromos do DECEA: pista possivelmente não registrada, contexto a esclarecer (garimpo, transporte ilícito)" : d.pista.homologada ? `, registrada no DECEA (${d.pista.decea})` : ""}: acesso aéreo ao local`);
+  const fz = d.fiscalizacao || {}, au = fz.autos;
+  if (au?.fogo_antes) intenc.push(`IBAMA autuou o uso de fogo a até ${au.raio_km} km em ${[...new Set(au.lista.filter(x => x.fogo && x.quando === "antes").map(x => x.data.slice(0, 4)))].join(", ")} (${au.fogo_antes} auto(s); processo ${au.lista.find(x => x.fogo)?.processo || "–"}): uso ilícito do fogo já constatado no local; não identifica o autor deste evento`);
+  else if (au?.antes) inconc.push(`${au.antes} auto(s) de infração do IBAMA a até ${au.raio_km} km nos 10 anos anteriores (${au.tipos.join(", ").toLowerCase()}): histórico de fiscalização no entorno`);
+  if (au?.depois) inconc.push(`${au.depois} auto(s) do IBAMA a até ${au.raio_km} km depois do início do fogo: pode haver autuação ligada a este evento (requisitar o processo)`);
+  const apz = fz.apreensoes;
+  if (apz?.itens && (apz.itens.motosserra || apz.itens.maquinas)) intenc.push(`Apreensão de ${[apz.itens.motosserra && "motosserra", apz.itens.maquinas && "trator ou máquina"].filter(Boolean).join(" e ")} pelo IBAMA a até ${apz.raio_km} km: indício de derrubada no entorno`);
+  else if (apz?.n) inconc.push(`${apz.n} termo(s) de apreensão do IBAMA a até ${apz.raio_km} km (${Object.keys(apz.itens).join(", ") || "bens diversos"})`);
+  const ei = fz.embargo_icmbio;
+  if (ei?.no_ponto) intenc.push(`Dentro de área embargada pelo ICMBio (${ei.uc}, embargo ${ei.num} de ${dBR(ei.data)}): atividade proibida no local${ei.fogo ? ", embargo por uso de fogo" : ""}`);
+  else if (ei) inconc.push(`Área embargada pelo ICMBio a ${br(ei.km * 1000, 0)} m (${ei.uc}, embargo ${ei.num})`);
+  if (d.loc_indigenas?.fora_ti_10km && !d.ti) acid.push(`${d.loc_indigenas.fora_ti_10km} localidade(s) indígena(s) fora de TI a até 10 km (IBGE, Censo 2022; mais perto: ${d.loc_indigenas.nome}, ${br(d.loc_indigenas.mais_perto_km, 1)} km): roças tradicionais com fogo são comuns; verificar`);
   if (d.assentamento) acid.push(`Dentro do assentamento ${d.assentamento.nome} (INCRA, ${d.assentamento.familias ?? "?"} famílias): o fogo na agricultura familiar é comum; verificar o lote e a autorização de queima`);
   if (d.goes?.antecede_h > 0) inconc.push(`GOES: fogo já detectável ${br(d.goes.antecede_h, 1)} h antes do satélite de referência (${manaus(d.goes.primeira)}, Manaus): estreita o horário, mas não é a hora da ignição`);
   if (ctx.includes("escape_plausivel")) acid.push("Seca forte e vento acima de 10 km/h: uma queima pode ter escapado do controle");
@@ -393,7 +404,8 @@ const IUCN_TXT = {CR: "Criticamente em perigo", EN: "Em perigo", VU: "Vulneráve
 function blocoEntorno(e) {
   const es = e.det.estrada, as = e.det.assentamento, ba = e.det.bacia, bio = e.det.biodiversidade;
   const fp = e.det.fpnd, sg = e.det.sigef, al = e.det.aldeias, mi = e.det.mineracao, pi = e.det.pista, bo = e.det.bombeiros, pr = e.det.prodes;
-  if (!es && !as && !ba && !bio && !fp && !sg) return "";
+  const fz = e.det.fiscalizacao || {}, li = e.det.loc_indigenas;
+  if (!es && !as && !ba && !bio && !fp && !sg && !e.det.fiscalizacao && !e.det.loc_indigenas) return "";
   const am = bio?.ameacadas || [];
   return `<div class="clima-bloco"><h3>Entorno: acesso, fundiário, água e biodiversidade</h3>
     <div class="fatos">
@@ -406,13 +418,18 @@ function blocoEntorno(e) {
       ${e.det.car_camadas.app || e.det.car_camadas.rl ? `<div><span>APP / RL declaradas a até 500 m</span><b>${br(e.det.car_camadas.app?.ha_500m || 0, 1)} ha de APP · ${br(e.det.car_camadas.rl?.ha_500m || 0, 1)} ha de RL</b></div>` : ""}` : ""}
       ${sg ? `<div><span>Imóveis SIGEF a até 500 m</span><b>${sg.a_500m}${sg.no_ponto?.length ? ` · no ponto: ${esc(sg.no_ponto[0].nome_area)}` : ""}</b></div>` : ""}
       ${pr ? `<div><span>PRODES a até 1 km, antes do fogo</span><b>${pr.total_ha ? `${br(pr.total_ha, 1)} ha (${Object.keys(pr.anos_ha).length} ano(s))` : "nenhum"}</b></div>` : ""}
+      ${fz.autos ? `<div><span>Autos de infração IBAMA a até ${fz.autos.raio_km} km</span><b>${fz.autos.antes} antes (${fz.autos.fogo_antes} por uso de fogo)${fz.autos.depois ? ` · ${fz.autos.depois} depois` : ""}</b></div>` : ""}
+      ${fz.apreensoes ? `<div><span>Apreensões IBAMA a até ${fz.apreensoes.raio_km} km</span><b>${fz.apreensoes.n}${Object.keys(fz.apreensoes.itens).length ? " · " + Object.entries(fz.apreensoes.itens).map(([k, v]) => `${v} ${({maquinas: "máquinas", veiculos: "veículos", embarcacoes: "embarcações", combustivel: "combustível"})[k] || k}`).join(", ") : ""}</b></div>` : ""}
+      ${fz.embargo_icmbio ? `<div><span>Embargo ICMBio</span><b>${fz.embargo_icmbio.no_ponto ? "NO PONTO" : `a ${fmt(Math.round(fz.embargo_icmbio.km * 1000))} m`} · ${esc(fz.embargo_icmbio.uc)} · ${dBR(fz.embargo_icmbio.data)}</b></div>` : ""}
+      ${li ? `<div><span>Localidades indígenas a até 10 km (IBGE 2022)</span><b>${li.n_10km} (${li.fora_ti_10km} fora de TI) · mais perto: ${esc(li.nome)}, ${br(li.mais_perto_km, 1)} km</b></div>` : ""}
       ${al ? `<div><span>Aldeias a até 10 km (FUNAI)</span><b>${al.n_10km} · mais perto: ${esc(al.nome)}, ${br(al.mais_perto_km, 1)} km</b></div>` : ""}
       ${mi ? `<div><span>Mineração a até 3 km (MapBiomas)</span><b>${mi.garimpo_ha_3km ? br(mi.garimpo_ha_3km, 1) + " ha de garimpo" : ""}${mi.garimpo_ha_3km && mi.industrial_ha_3km ? " · " : ""}${mi.industrial_ha_3km ? br(mi.industrial_ha_3km, 1) + " ha industrial" : ""}</b></div>` : ""}
-      ${pi ? `<div><span>Pista de pouso mais próxima (OSM)</span><b>${br(pi.km, 1)} km · ${esc(pi.nome)}</b></div>` : ""}
+      ${pi ? `<div><span>Pista de pouso mais próxima (OSM)</span><b>${br(pi.km, 1)} km · ${esc(pi.nome)}${pi.homologada === false ? " · <span style=\"color:var(--vermelho)\">sem registro no DECEA</span>" : pi.homologada ? " · registrada no DECEA" : ""}</b></div>` : ""}
       ${bo ? `<div><span>Bombeiros mais próximos (OSM)</span><b>${fmt(bo.km)} km · ${esc(bo.nome)}</b></div>` : ""}
       ${bio ? `<div><span>Espécies registradas a até ${bio.raio_km} km (GBIF)</span><b>${fmt(bio.especies)} · ${am.length} ameaçada(s)</b></div>` : ""}
     </div>
     ${sg?.no_ponto?.length ? `<p class="clima-leitura"><b>Imóvel certificado no ponto (SIGEF/INCRA)</b>: ${sg.no_ponto.map(x => `${esc(x.nome_area)} · código ${esc(x.codigo_imo)}${x.registro_m && x.registro_m !== "None" ? ` · matrícula ${esc(x.registro_m)}` : ""} · ${esc(x.status)} ${x.parcela_co ? `<a class="botao secundario pequeno" href="${sigefUrl(x.parcela_co)}" target="_blank" rel="noopener" title="Abre a consulta pública do INCRA, que mostra o detentor">Consultar detentor no SIGEF</a>` : ""}`).join("<br>")}</p>` : ""}
+    ${fz.autos?.lista?.length ? `<p class="clima-leitura"><b>Autos do IBAMA no entorno</b> (SISCOM, via INDE): ${fz.autos.lista.map(x => `${esc(x.num.replace(/-$/, ""))} de ${dBR(x.data)}${x.fogo ? " (<b>uso de fogo</b>)" : ""}, ${esc(x.tipo || "")}, ${br(x.km, 1)} km, processo ${esc(x.processo || "–")}`).join("; ")}. Nome do autuado no relatório (usuário logado).</p>` : ""}
     ${am.length ? `<p class="clima-leitura"><b>Espécies ameaçadas registradas no entorno</b> (Lista Vermelha da IUCN): ${am.slice(0, 12).map(a => `<i>${esc(a.nome)}</i> (${IUCN_TXT[a.categoria] || a.categoria}${a.classe ? ", " + esc(a.classe) : ""})`).join("; ")}${am.length > 12 ? `; e mais ${am.length - 12}` : ""}.</p>` : ""}
     <p class="nota">Florestas públicas: Serviço Florestal Brasileiro (CNFP 2025). SIGEF e assentamentos: INCRA (imóvel é pista para identificar o detentor, não prova autoria). PRODES: INPE. Aldeias: FUNAI. Mineração: MapBiomas (2023). Vias, pistas e bombeiros: OpenStreetMap, base colaborativa e incompleta (falta de ramal no mapa não prova falta de acesso). Sub-bacias: ANA (DNAEE). Biodiversidade: registros de ocorrência do GBIF, esparsos na Amazônia — ausência de registro não é ausência de espécie; serve para dimensionar o dano potencial.</p></div>`;
 }
@@ -503,8 +520,10 @@ const CAMADAS = [
   ["fpnd", "Florestas públicas não destinadas (SFB)", "#7cb342", false],
   ["sigef", "Imóveis certificados SIGEF (INCRA, zoom 9+)", "#ffb300", false],
   ["aldeias", "Aldeias indígenas (FUNAI)", "#6d4c41", false],
+  ["locind", "Localidades indígenas (IBGE, Censo 2022)", "#8d6e63", false],
   ["mineracao", "Garimpo e mineração (MapBiomas 2023)", "#d50000", false],
-  ["pistas", "Pistas de pouso (OpenStreetMap)", "#37474f", false],
+  ["pistas", "Pistas de pouso (OpenStreetMap; borda vermelha = sem registro no DECEA)", "#37474f", false],
+  ["aerodromos", "Aeródromos e helipontos registrados (DECEA)", "#1565c0", false],
   ["bombeiros", "Bombeiros (OpenStreetMap)", "#e53935", false], ["fumaca", "Fumaça rumo a Manaus", "#6d4c41", true],
   ["lixoes", "Lixões e vazadouros (fumaça tóxica)", "#8e24aa", true],
   ["mudancas", "Alertas de mudança (Sentinel-2 + radar)", "#00b8d4", true],
@@ -514,10 +533,10 @@ const CAMADAS = [
 // grupos do menu de camadas (abrem e fecham; o primeiro começa aberto)
 const GRUPOS_CAMADAS = [
   ["Fogo e desmatamento", ["eventos", "alertas", "focos", "calor", "mudancas", "riscoprev", "desmat", "cicat", "prodes"]],
-  ["Áreas protegidas e fundiário", ["tis", "ucs", "aldeias", "assentamentos", "fpnd", "sigef"]],
+  ["Áreas protegidas e fundiário", ["tis", "ucs", "aldeias", "locind", "assentamentos", "fpnd", "sigef"]],
   ["Meio ambiente", ["fauna", "flora", "bacias", "rios"]],
   ["Tempo e fumaça", ["vento", "fumaca", "chuva", "nuvens", "imerg"]],
-  ["Pressão e infraestrutura", ["estradas", "mineracao", "pistas", "lixoes", "erbs", "bombeiros"]],
+  ["Pressão e infraestrutura", ["estradas", "mineracao", "pistas", "aerodromos", "lixoes", "erbs", "bombeiros"]],
   ["Referência", ["mun", "sel"]],
 ];
 async function iniciarMapa() {
@@ -584,14 +603,18 @@ async function iniciarMapa() {
     tiles: ["https://terrabrasilis.dpi.inpe.br/geoserver/ows?service=WMS&version=1.1.1&request=GetMap&layers=prodes-legal-amz:yearly_deforestation&styles=&bbox={bbox-epsg-3857}&srs=EPSG:3857&width=256&height=256&format=image/png&transparent=true"]});
   m.addLayer({id: "prodes", type: "raster", source: "prodes", minzoom: 7, layout: {visibility: "none"}, paint: {"raster-opacity": .75}}, "eventos");
   // bases estáticas carregadas só quando ligadas
-  for (const k of ["fpnd", "sigef", "aldeias", "mineracao", "pistas", "bombeiros"]) m.addSource(k, {type: "geojson", data: vazio});
+  for (const k of ["fpnd", "sigef", "aldeias", "mineracao", "pistas", "bombeiros", "aerodromos", "locind"]) m.addSource(k, {type: "geojson", data: vazio});
   m.addLayer({id: "fpnd", type: "fill", source: "fpnd", layout: {visibility: "none"}, paint: {"fill-color": "#7cb342", "fill-opacity": .14}}, "eventos");
   m.addLayer({id: "fpnd-l", type: "line", source: "fpnd", layout: {visibility: "none"}, paint: {"line-color": "#9ccc65", "line-width": 1.2}}, "eventos");
   m.addLayer({id: "sigef", type: "line", source: "sigef", minzoom: 9, layout: {visibility: "none"}, paint: {"line-color": "#ffb300", "line-width": 1}}, "eventos");
   m.addLayer({id: "aldeias", type: "circle", source: "aldeias", layout: {visibility: "none"}, paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 2.5, 12, 6], "circle-color": "#6d4c41", "circle-stroke-color": "#fff", "circle-stroke-width": 1}});
   m.addLayer({id: "mineracao", type: "circle", source: "mineracao", layout: {visibility: "none"}, paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 1.5, 12, 6],
     "circle-color": ["match", ["get", "t"], "garimpo", "#d50000", "#78909c"], "circle-opacity": .8}});
-  m.addLayer({id: "pistas", type: "circle", source: "pistas", layout: {visibility: "none"}, paint: {"circle-radius": 5, "circle-color": "#37474f", "circle-stroke-color": "#ffeb3b", "circle-stroke-width": 2}});
+  m.addLayer({id: "pistas", type: "circle", source: "pistas", layout: {visibility: "none"}, paint: {"circle-radius": 5, "circle-color": "#37474f",
+    "circle-stroke-color": ["case", ["==", ["get", "homologada"], false], "#ff1744", "#ffeb3b"], "circle-stroke-width": 2}});
+  m.addLayer({id: "aerodromos", type: "symbol", source: "aerodromos", layout: {visibility: "none", "text-field": ["case", ["==", ["get", "tipo"], "heliponto"], "H", "✈"], "text-size": 14, "text-allow-overlap": true},
+    paint: {"text-color": "#1565c0", "text-halo-color": "#fff", "text-halo-width": 1.5}});
+  m.addLayer({id: "locind", type: "circle", source: "locind", layout: {visibility: "none"}, paint: {"circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 2, 12, 5], "circle-color": "#8d6e63", "circle-stroke-color": "#fff", "circle-stroke-width": .8}});
   m.addLayer({id: "bombeiros", type: "circle", source: "bombeiros", layout: {visibility: "none"}, paint: {"circle-radius": 6, "circle-color": "#e53935", "circle-stroke-color": "#fff", "circle-stroke-width": 2}});
   const popCamada = (id, f) => m.on("click", id, ev => { if (Q.modoPonto) return; new maplibregl.Popup({maxWidth: "300px"}).setLngLat(ev.lngLat).setHTML(f(ev.features[0].properties)).addTo(m); });
   popCamada("fpnd", p => `<b>${esc(p.nome)}</b><br>Floresta pública não destinada · ${esc(p.categoria)} (${esc(p.governo)})<br>${br(+p.area_ha, 0)} ha · ${esc(p.municipio)}<br><span class="nota">Serviço Florestal Brasileiro, CNFP 2025</span>`);
@@ -599,7 +622,10 @@ async function iniciarMapa() {
     <a class="botao secundario pequeno" style="margin-top:6px" href="${sigefUrl(p.parcela_co)}" target="_blank" rel="noopener">Consultar detentor no SIGEF</a>`);
   popCamada("aldeias", p => `<b>Aldeia ${esc(p.nome)}</b><br>${esc(p.municipio)} · ${esc(p.cr)}<br><span class="nota">FUNAI</span>`);
   popCamada("mineracao", p => `<b>${p.t === "garimpo" ? "Garimpo" : "Mineração industrial"}</b><br>${br(+p.ha, 1)} ha na célula de ~500 m (2023)<br><span class="nota">MapBiomas Coleção 9, código ${esc(p.cod)}</span>`);
-  popCamada("pistas", p => `<b>${esc(p.nome)}</b><br>${p.tipo === "airstrip" ? "Pista de pouso" : "Aeródromo"}${p.icao ? " · " + esc(p.icao) : ""}${p.superficie ? " · " + esc(p.superficie) : ""}<br><span class="nota">OpenStreetMap (incompleto)</span>`);
+  popCamada("pistas", p => { const dc = typeof p.decea === "string" ? JSON.parse(p.decea) : p.decea || {};
+    return `<b>${esc(p.nome)}</b><br>${p.tipo === "airstrip" ? "Pista de pouso" : "Aeródromo"}${p.icao ? " · " + esc(p.icao) : ""}${p.superficie ? " · " + esc(p.superficie) : ""}<br>${dc.homologada === false ? `<b style="color:#c62828">Sem aeródromo registrado no DECEA a até 3 km</b> (possível pista não registrada)` : dc.homologada ? `Registrada no DECEA (${esc(dc.ciad)} · ${esc(dc.nome)})` : ""}<br><span class="nota">OpenStreetMap (incompleto) · DECEA via INDE</span>`; });
+  popCamada("aerodromos", p => `<b>${esc(p.nome)}</b><br>${esc(p.tipo)} · ${esc(p.ciad || "")}${p.icao ? " / " + esc(p.icao) : ""} · uso ${esc(p.uso || "–")}<br>${esc(p.cidade || "")} · ${esc(p.operacao || "")}<br><span class="nota">DECEA/AISWEB via INDE</span>`);
+  popCamada("locind", p => `<b>${esc(p.nome)}</b><br>${esc(p.municipio)} · ${esc(p.situacao || "")}<br>${p.ti ? "TI " + esc(p.ti) : "Fora de terra indígena"}<br><span class="nota">IBGE, Censo 2022 (via INDE)</span>`);
   popCamada("bombeiros", p => `<b>${esc(p.nome)}</b><br>${esc(p.operador || "")}<br><span class="nota">OpenStreetMap (incompleto)</span>`);
   // assentamentos (INCRA) e estradas (OSM): carregados só quando ligados
   m.addSource("assentamentos", {type: "geojson", data: vazio}); m.addSource("estradas", {type: "geojson", data: vazio});
@@ -1351,7 +1377,7 @@ const carregadas = new Set();
 async function sobDemanda(k) {
   if (carregadas.has(k)) return;
   try {
-    const BASE = {assentamentos: "assentamentos_am", fpnd: "fpnd_am", sigef: "sigef_am", aldeias: "aldeias_am", mineracao: "mineracao_am", pistas: "pistas_am", bombeiros: "bombeiros_am"};
+    const BASE = {assentamentos: "assentamentos_am", fpnd: "fpnd_am", sigef: "sigef_am", aldeias: "aldeias_am", mineracao: "mineracao_am", pistas: "pistas_am", bombeiros: "bombeiros_am", aerodromos: "aerodromos_am", locind: "localidades_indigenas_am"};
     if (BASE[k]) { if (["sigef", "fpnd", "mineracao"].includes(k)) toast("Carregando a camada…", 2500); Q.mapa.getSource(k).setData(await (await fetch(`bases/${BASE[k]}.json`)).json()); }
     else if (k === "estradas") { toast("Carregando estradas e ramais…", 3000); Q.mapa.getSource("estradas").setData(await json("dados/estradas.json")); }
     else if (k === "riscoprev") await riscoPrevisto();
