@@ -47,9 +47,68 @@ def _feicoes(z, base):
         yield sr.shape, dict(zip(campos, sr.record))
 
 
+def _geometria(shp):
+    """Monta o polígono a partir dos anéis do shapefile em código nativo (shapely), sem a organização de furos
+    do pyshp, que é lenta e gasta muita memória em polígonos com milhares de anéis. Anéis no sentido horário
+    são externos e anti-horários são furos (padrão do shapefile); anéis degenerados são descartados."""
+    import shapely
+    pts, partes = shp.points, list(shp.parts) + [len(shp.points)]
+    aneis = [pts[a:b] for a, b in zip(partes[:-1], partes[1:]) if b - a >= 4]
+    if not aneis:
+        return None
+    lr = [shapely.linearrings(r) for r in aneis]
+    ccw = shapely.is_ccw(lr)
+    pol = shapely.make_valid(shapely.simplify(shapely.polygons(lr), 0.0001, preserve_topology=True))
+    ext = [p for p, c in zip(pol, ccw) if not c and not p.is_empty]
+    fur = [p for p, c in zip(pol, ccw) if c and not p.is_empty]
+    if not ext:  # só "furos": o shapefile está com a orientação invertida
+        ext, fur = fur, []
+    g = ext[0] if len(ext) == 1 else shapely.union_all(ext)
+    if fur:
+        g = shapely.difference(g, shapely.union_all(fur))
+    return g
+
+
+def _partes(g):
+    """Recorta a geometria pelas quadrículas, dividindo a caixa ao meio recursivamente (clip_by_rect é rápido
+    mesmo com polígonos de milhões de vértices). Cada pedaço fica numa só quadrícula, sem área duplicada."""
+    import shapely
+    from shapely.geometry import MultiPolygon
+    if g is None or g.is_empty:
+        return
+    x0, y0, x1, y1 = g.bounds
+
+    def rec(g, i0, i1, j0, j1):
+        if g.is_empty:
+            return
+        if i0 == i1 and j0 == j1:
+            if g.geom_type == "GeometryCollection":
+                g = MultiPolygon([q for q in g.geoms if q.geom_type == "Polygon"])
+            if not g.is_empty and g.geom_type in ("Polygon", "MultiPolygon"):
+                yield f"{i0}_{j0}", g
+            return
+        if i1 - i0 >= j1 - j0:
+            m = (i0 + i1) // 2
+            partes = [(i0, m, j0, j1), (m + 1, i1, j0, j1)]
+        else:
+            m = (j0 + j1) // 2
+            partes = [(i0, i1, j0, m), (i0, i1, m + 1, j1)]
+        for a, b, c, d in partes:
+            ret = (c * CEL, a * CEL, (d + 1) * CEL, (b + 1) * CEL)
+            try:
+                h = shapely.clip_by_rect(g, *ret)
+            except shapely.errors.GEOSException:
+                try:
+                    h = shapely.clip_by_rect(shapely.make_valid(g), *ret)
+                except shapely.errors.GEOSException:
+                    continue
+            yield from rec(h, a, b, c, d)
+
+    yield from rec(g, math.floor(y0 / CEL), math.floor(y1 / CEL), math.floor(x0 / CEL), math.floor(x1 / CEL))
+
+
 def processar(pasta, saida):
     import shapely
-    from shapely.geometry import MultiPolygon, box, shape
     os.makedirs(saida, exist_ok=True)
     try:  # processa camada a camada sem perder as já feitas
         indice = json.load(open(f"{saida}/indice.json"))
@@ -72,7 +131,7 @@ def processar(pasta, saida):
             continue
         shutil.rmtree(f"{saida}/{cod}", ignore_errors=True)
         os.makedirs(f"{saida}/{cod}")
-        celulas, buf, tam, n, cancelados = set(), defaultdict(list), 0, 0, 0
+        celulas, buf, tam, n, cancelados, fora = set(), defaultdict(list), 0, 0, 0, 0
 
         def descarrega():
             for c, linhas in buf.items():
@@ -90,12 +149,14 @@ def processar(pasta, saida):
                     cancelados += 1
                     continue
                 try:
-                    g = shape(shp.__geo_interface__).simplify(0.0001, preserve_topology=True)
-                    if not g.is_valid:
-                        g = shapely.make_valid(g)
+                    g = _geometria(shp)
                 except Exception:
                     continue
-                if g.is_empty:
+                if g is None or g.is_empty:
+                    continue
+                x0, y0, x1, y1 = g.bounds
+                if x0 < -75 or x1 > -55 or y0 < -11 or y1 > 4:  # fora do Amazonas (ex.: gravado em UTM, em metros)
+                    fora += 1
                     continue
                 props = {"cod": str(a.get("cod_imovel") or a.get("codigo") or a.get("cod_imov") or ""),
                          "ha": round(float(a.get("num_area") or a.get("area") or 0) or 0, 2),
@@ -103,37 +164,31 @@ def processar(pasta, saida):
                 if props["tema"]:
                     temas.setdefault(props["tema"], str(a.get("nom_tema") or ""))
                 pr = json.dumps(props, separators=(",", ":"), ensure_ascii=False)
-                x0, y0, x1, y1 = g.bounds
-                ci, cj = range(math.floor(y0 / CEL), math.floor(y1 / CEL) + 1), range(math.floor(x0 / CEL), math.floor(x1 / CEL) + 1)
-                for i in ci:
-                    for j in cj:
-                        # recorta pela quadrícula: cada pedaço fica numa só (sem duplicar área nem memória)
-                        try:
-                            p = g if len(ci) == 1 and len(cj) == 1 else g.intersection(box(j * CEL, i * CEL, (j + 1) * CEL, (i + 1) * CEL))
-                        except Exception:
-                            continue
-                        if p.is_empty or p.geom_type not in ("Polygon", "MultiPolygon", "GeometryCollection"):
-                            continue
-                        if p.geom_type == "GeometryCollection":
-                            p = MultiPolygon([q for q in getattr(p, "geoms", []) if q.geom_type == "Polygon"])
-                            if p.is_empty:
-                                continue
-                        linha = '{"type":"Feature","properties":' + pr + ',"geometry":' + shapely.to_geojson(shapely.set_precision(p, 1e-5)) + "}"
-                        buf[f"{i}_{j}"].append(linha)
-                        tam += len(linha)
+                try:
+                    pedacos = list(_partes(g))
+                except Exception:
+                    continue
+                for c, p in pedacos:
+                    try:
+                        geo = shapely.to_geojson(shapely.set_precision(p, 1e-5))
+                    except Exception:
+                        geo = shapely.to_geojson(p, indent=None)
+                    linha = '{"type":"Feature","properties":' + pr + ',"geometry":' + geo + "}"
+                    buf[c].append(linha)
+                    tam += len(linha)
                 n += 1
                 if tam > 150_000_000:
                     descarrega()
                     tam = 0
-                if n % 50000 == 0:
+                if n % 20000 == 0:
                     print(f"  {cod}: {n} polígonos...", flush=True)
         descarrega()
         for c in celulas:
             with gzip.open(f"{saida}/{cod}/c_{c}.json.gz", "at") as f:
                 f.write("]}")
         indice["camadas"][cod] = {"nome": dict((c[0], c[1]) for c in CAMADAS)[cod], "arquivo": arq, "poligonos": n,
-                                  "cancelados_ignorados": cancelados, "celulas": sorted(celulas)}
-        print(f"{cod}: {n} polígonos em {len(celulas)} quadrículas ({arq}; {cancelados} cancelados ignorados)", flush=True)
+                                  "cancelados_ignorados": cancelados, "fora_do_estado": fora, "celulas": sorted(celulas)}
+        print(f"{cod}: {n} polígonos em {len(celulas)} quadrículas ({arq}; {cancelados} cancelados e {fora} fora do estado ignorados)", flush=True)
         json.dump(indice, open(f"{saida}/indice.json", "w"), ensure_ascii=False)
     return indice
 

@@ -22,7 +22,10 @@ TEMPO_S = 60
 
 
 def _get(caminho):
-    r = requests.get(BASE + caminho, headers={"Authorization": "Bearer " + os.environ.get("BLOB_READ_WRITE_TOKEN", "")}, timeout=120)
+    try:
+        r = requests.get(BASE + caminho, headers={"Authorization": "Bearer " + os.environ.get("BLOB_READ_WRITE_TOKEN", "")}, timeout=60)
+    except requests.RequestException:
+        return None
     if not r.ok:
         return None
     return json.loads(gzip.decompress(r.content) if r.content[:2] == b"\x1f\x8b" else r.content)
